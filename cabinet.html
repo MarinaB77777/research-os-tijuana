@@ -7,9 +7,14 @@
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
         .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; flex: 1; width: 100%; box-sizing: border-box; }
         
-        .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 16px 24px; }
-        .logo { font-weight: 700; color: #38bdf8; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; }
+        .logo { font-weight: 700; color: #38bdf8; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+        .header-right { display: flex; align-items: center; gap: 16px; }
         
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn { background: transparent; border: none; color: #94a3b8; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .lang-btn.active { background: #38bdf8; color: #0f172a; }
+
         .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
         @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
 
@@ -31,54 +36,71 @@
         .chat-input-area { display: flex; gap: 8px; }
         .chat-input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
         .chat-input:focus { border-color: #38bdf8; }
+
+        .research-footer {
+            text-align: center;
+            padding: 30px 20px;
+            font-size: 0.85rem;
+            color: #6e6e73;
+            border-top: 1px solid #334155;
+            margin-top: auto;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div class="logo">🔬 Research OS — Кабинет Участника</div>
-        <button class="btn btn-logout" onclick="handleLogout()">Выйти</button>
+        <div class="logo" data-i18n="logo">🔬 Research OS — Кабинет Участника</div>
+        <div class="header-right">
+            <div class="lang-picker">
+                <button class="lang-btn" onclick="setLang('ru', event)">🇷🇺 RU</button>
+                <button class="lang-btn" onclick="setLang('es', event)">🇲🇽 ES</button>
+                <button class="lang-btn" onclick="setLang('en', event)">🇬🇧 EN</button>
+            </div>
+            <button class="btn btn-logout" onclick="handleLogout()" data-i18n="logout">Выйти</button>
+        </div>
     </div>
 
     <div class="container">
         <div id="cabinetContent">
-            <div class="status-badge">● Сессия активна</div>
+            <div class="status-badge" data-i18n="status_active">● Сессия активна</div>
             <h1 id="welcomeTitle">Личный кабинет сессии</h1>
-            <p>Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.</p>
+            <p data-i18n="cabinet_desc">Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.</p>
             
             <div class="grid">
                 <!-- Левая колонка: Опросники и прогресс -->
                 <div>
                     <div class="card">
-                        <h3>📋 Активные опросники</h3>
-                        <p>Доступные для заполнения методики в рамках вашего текущего этапа:</p>
-                        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                        <h3 data-i18n="sec_surveys">📋 Активные опросники</h3>
+                        <p data-i18n="surveys_desc">Доступные для заполнения методики в рамках вашего текущего этапа:</p>
+                        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                             <div>
-                                <strong style="color: #f8fafc; display: block; margin-bottom: 4px;">Психометрический скрининг шкал</strong>
-                                <span style="font-size: 12px; color: #94a3b8;">Статус: Готов к прохождению (~10 мин)</span>
+                                <strong style="color: #f8fafc; display: block; margin-bottom: 4px;" data-i18n="survey_name">Психометрический скрининг шкал</strong>
+                                <span style="font-size: 12px; color: #94a3b8;" data-i18n="survey_status">Статус: Готов к прохождению (~10 мин)</span>
                             </div>
-                            <a href="survey.html" class="btn">Пройти →</a>
+                            <a href="survey.html" class="btn" data-i18n="btn_take">Пройти →</a>
                         </div>
                     </div>
 
                     <div class="card">
-                        <h3>📊 История и результаты</h3>
-                        <p style="color: #64748b; font-size: 13px; margin: 0;">У вас пока нет завершенных сессий. История появится после отправки ответов.</p>
+                        <h3 data-i18n="sec_history">📊 История и результаты</h3>
+                        <p style="color: #64748b; font-size: 13px; margin: 0;" data-i18n="history_empty">У вас пока нет завершенных сессий. История появится после отправки ответов.</p>
                     </div>
                 </div>
 
                 <!-- Правая колонка: ИИ-ассистент -->
                 <div>
                     <div class="card" style="height: 100%; display: flex; flex-direction: column; box-sizing: border-box;">
-                        <h3>🤖 ИИ-Ассистент</h3>
-                        <p style="font-size: 12px; margin-bottom: 12px;">Задайте вопрос по процедуре прохождения опросников.</p>
+                        <h3 data-i18n="sec_ai">🤖 ИИ-Ассистент</h3>
+                        <p style="font-size: 12px; margin-bottom: 12px;" data-i18n="ai_desc">Задайте вопрос по процедуре прохождения опросников.</p>
                         
                         <div class="chat-box" id="chatContainer">
-                            <div class="chat-msg ai">Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?</div>
+                            <div class="chat-msg ai" data-i18n="ai_welcome">Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?</div>
                         </div>
                         
                         <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="chat-input" placeholder="Введите вопрос..." onkeydown="if(event.key==='Enter') sendMsg()">
+                            <input type="text" id="chatInput" class="chat-input" data-i18n-placeholder="chat_placeholder" placeholder="Введите вопрос..." onkeydown="if(event.key==='Enter') sendMsg()">
                             <button class="btn" style="padding: 8px 12px;" onclick="sendMsg()">➤</button>
                         </div>
                     </div>
@@ -87,54 +109,162 @@
         </div>
     </div>
 
+    <div class="research-footer">
+      ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+    </div>
+
 <script>
-    // Обработка бесшовного входа и токена
-    window.addEventListener('DOMContentLoaded', () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const token = urlParams.get('token');
+const i18n = {
+    ru: {
+        logo: "🔬 Research OS — Кабинет Участника",
+        logout: "Выйти",
+        status_active: "● Сессия активна",
+        cabinet_title: "Личный кабинет сессии",
+        cabinet_desc: "Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.",
+        sec_surveys: "📋 Активные опросники",
+        surveys_desc: "Доступные для заполнения методики в рамках вашего текущего этапа:",
+        survey_name: "Психометрический скрининг шкал",
+        survey_status: "Статус: Готов к прохождению (~10 мин)",
+        btn_take: "Пройти →",
+        sec_history: "📊 История и результаты",
+        history_empty: "У вас пока нет завершенных сессий. История появится после отправки ответов.",
+        sec_ai: "🤖 ИИ-Ассистент",
+        ai_desc: "Задайте вопрос по процедуре прохождения опросников.",
+        chat_placeholder: "Введите вопрос...",
+        ai_welcome: "Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?",
+        ai_reply: "Спасибо за вопрос! Ваши данные фиксируются в системе Research OS автоматически. Если возникнут технические трудности при прохождении шкал, обратитесь к исследователю.",
+        no_token_title: "🔒 Требуется персональная ссылка.",
+        no_token_desc: "Для доступа к личному кабинету перейдите по уникальной ссылке, предоставленной исследователем."
+    },
+    es: {
+        logo: "🔬 Research OS — Panel de Participante",
+        logout: "Salir",
+        status_active: "● Sesión activa",
+        cabinet_title: "Panel personal de la sesión",
+        cabinet_desc: "Aquí puede completar los cuestionarios psicométricos asignados y comunicarse con el asistente virtual de la investigación.",
+        sec_surveys: "📋 Cuestionarios activos",
+        surveys_desc: "Metodologías disponibles para completar en su etapa actual:",
+        survey_name: "Tamizaje psicométrico de escalas",
+        survey_status: "Estado: Listo para completar (~10 min)",
+        btn_take: "Completar →",
+        sec_history: "📊 Historial y resultados",
+        history_empty: "Aún no tiene sesiones completadas. El historial aparecerá después de enviar sus respuestas.",
+        sec_ai: "🤖 Asistente de IA",
+        ai_desc: "Haga una pregunta sobre el procedimiento para completar los cuestionarios.",
+        chat_placeholder: "Escriba una pregunta...",
+        ai_welcome: "¡Hola! Soy su asistente digital en Research OS. ¿En qué puedo ayudarle con la investigación actual?",
+        ai_reply: "¡Gracias por su pregunta! Sus datos se registran automáticamente en el sistema Research OS. Si tiene dificultades técnicas al completar las escalas, comuníquese con el investigador.",
+        no_token_title: "🔒 Se requiere un enlace personal.",
+        no_token_desc: "Para acceder a su cuenta personal, siga el enlace único proporcionado por el investigador."
+    },
+    en: {
+        logo: "🔬 Research OS — Participant Hub",
+        logout: "Log Out",
+        status_active: "● Session Active",
+        cabinet_title: "Session Personal Hub",
+        cabinet_desc: "Here you can complete assigned psychometric questionnaires and chat with the virtual research assistant.",
+        sec_surveys: "📋 Active Questionnaires",
+        surveys_desc: "Available methods to complete for your current stage:",
+        survey_name: "Psychometric Scale Screening",
+        survey_status: "Status: Ready to complete (~10 min)",
+        btn_take: "Start →",
+        sec_history: "📊 History & Results",
+        history_empty: "You have no completed sessions yet. History will appear after submitting responses.",
+        sec_ai: "🤖 AI Assistant",
+        ai_desc: "Ask a question regarding the questionnaire completion procedure.",
+        chat_placeholder: "Type a question...",
+        ai_welcome: "Hello! I am your digital assistant in Research OS. How can I help you with the current study?",
+        ai_reply: "Thank you for your question! Your data is recorded automatically in the Research OS system. If you encounter technical difficulties while completing the scales, please contact the researcher.",
+        no_token_title: "🔒 Personal Link Required.",
+        no_token_desc: "To access your personal account, please follow the unique link provided by the researcher."
+    }
+};
 
-        if (token) {
-            localStorage.setItem('ros_participant_session', JSON.stringify({ token, time: new Date().toISOString() }));
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
+let currentLang = 'ru';
 
-        const session = localStorage.getItem('ros_participant_session');
-        
-        if (!session) {
-            document.body.innerHTML = `
-                <div style="font-family: system-ui; background: #0f172a; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; padding: 20px;">
-                    <div style="background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                        <h3 style="color: #38bdf8; margin-top: 0;">🔒 Se requiere un enlace personal.</h3>
-                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.5;">Para acceder a su cuenta personal, siga el enlace único proporcionado por el investigador.</p>
-                    </div>
-                </div>
-            `;
-        } else {
-            const data = JSON.parse(session);
-            document.getElementById('welcomeTitle').innerText = `Личный кабинет сессии: ${data.token}`;
-        }
+function setLang(lang, e) {
+    currentLang = lang;
+    localStorage.setItem('app_language', lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    if (e && e.target) {
+        e.target.classList.add('active');
+    } else {
+        const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(lang));
+        if (btn) btn.classList.add('active');
+    }
+
+    const dict = i18n[lang] || i18n.ru;
+    document.querySelectorAll('[data-i18n]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n');
+        if (dict[key]) elem.innerText = dict[key];
     });
 
-    function handleLogout() {
-        localStorage.removeItem('ros_participant_session');
-        location.reload();
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n-placeholder');
+        if (dict[key]) elem.placeholder = dict[key];
+    });
+
+    const session = localStorage.getItem('ros_participant_session');
+    if (session) {
+        const data = JSON.parse(session);
+        const titlePrefix = lang === 'es' ? "Panel personal de la sesión: " : (lang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
+        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${data.token}`;
+    }
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    const savedLang = localStorage.getItem('app_language') || 'ru';
+    setLang(savedLang);
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    if (token) {
+        localStorage.setItem('ros_participant_session', JSON.stringify({ token, time: new Date().toISOString() }));
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
 
-    function sendMsg() {
-        const input = document.getElementById('chatInput');
-        const text = input.value.trim();
-        if(!text) return;
+    const session = localStorage.getItem('ros_participant_session');
+    
+    if (!session) {
+        const dict = i18n[currentLang] || i18n.ru;
+        document.body.innerHTML = `
+            <div style="font-family: system-ui; background: #0f172a; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; padding: 20px;">
+                <div style="background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                    <h3 style="color: #38bdf8; margin-top: 0;">${dict.no_token_title}</h3>
+                    <p style="color: #94a3b8; font-size: 14px; line-height: 1.5;">${dict.no_token_desc}</p>
+                </div>
+            </div>
+        `;
+    } else {
+        const data = JSON.parse(session);
+        const dict = i18n[currentLang] || i18n.ru;
+        const titlePrefix = currentLang === 'es' ? "Panel personal de la sesión: " : (currentLang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
+        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${data.token}`;
+    }
+});
 
-        const chat = document.getElementById('chatContainer');
-        chat.innerHTML += `<div class="chat-msg" style="background: #2563eb; color: #fff; align-self: flex-end;">${text}</div>`;
-        input.value = '';
+function handleLogout() {
+    localStorage.removeItem('ros_participant_session');
+    location.reload();
+}
+
+function sendMsg() {
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if(!text) return;
+
+    const chat = document.getElementById('chatContainer');
+    chat.innerHTML += `<div class="chat-msg" style="background: #2563eb; color: #fff; align-self: flex-end;">${text}</div>`;
+    input.value = '';
+    chat.scrollTop = chat.scrollHeight;
+
+    setTimeout(() => {
+        const dict = i18n[currentLang] || i18n.ru;
+        chat.innerHTML += `<div class="chat-msg ai">${dict.ai_reply}</div>`;
         chat.scrollTop = chat.scrollHeight;
-
-        setTimeout(() => {
-            chat.innerHTML += `<div class="chat-msg ai">Спасибо за вопрос! Ваши данные фиксируются в системе Research OS автоматически. Если возникнут технические трудности при прохождении шкал, обратитесь к исследователю.</div>`;
-            chat.scrollTop = chat.scrollHeight;
-        }, 800);
-    }
+    }, 800);
+}
 </script>
 
 </body>
