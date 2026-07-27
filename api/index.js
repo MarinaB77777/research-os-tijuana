@@ -1,6 +1,90 @@
 export default async function handler(req, res) {
     const { url, method } = req;
     
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+
+    // 1. Генерация пользователя и его QR-токена
+    if (url.includes('/tokens/generate') && method === 'POST') {
+        const { type, customId } = req.body;
+        
+        if (!type || !['researcher', 'respondent'].includes(type)) {
+            return res.status(400).json({ error: 'Invalid user type specified' });
+        }
+
+        const prefix = type === 'researcher' ? 'RES-' : 'RESP-';
+        const userIdentifier = customId || (prefix + Math.floor(1000 + Math.random() * 9000));
+        const qrToken = 'QR-' + crypto.randomUUID();
+
+        if (supabaseUrl && supabaseKey) {
+            try {
+                await fetch(`${supabaseUrl}/rest/v1/app_users`, {
+                    method: 'POST',
+                    headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        user_identifier: userIdentifier,
+                        token: qrToken,
+                        type: type
+                    })
+                });
+            } catch (e) {
+                console.error('Supabase write error:', e);
+                return res.status(500).json({ error: e.message });
+            }
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            token: qrToken, 
+            userIdentifier: userIdentifier,
+            type: type 
+        });
+    }
+
+    // 2. Проверка токена при входе (сканирование QR-кода)
+    if (url.includes('/verify') && method === 'GET') {
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        const token = urlObj.searchParams.get('token');
+
+        if (!token) {
+            return res.status(400).json({ valid: false, error: 'Token missing' });
+        }
+
+        if (supabaseUrl && supabaseKey) {
+            try {
+                const response = await fetch(`${supabaseUrl}/rest/v1/app_users?token=eq.${encodeURIComponent(token)}&select=*`, {
+                    method: 'GET',
+                    headers: {
+                        'apikey': supabaseKey,
+                        'Authorization': `Bearer ${supabaseKey}`
+                    }
+                });
+                const rows = await response.json();
+                const data = rows && rows.length > 0 ? rows[0] : null;
+
+                if (!data) {
+                    return res.status(401).json({ valid: false, error: 'Token not found in database' });
+                }
+
+                return res.status(200).json({
+                    valid: true,
+                    type: data.type,
+                    userIdentifier: data.user_identifier
+                });
+            } catch (e) {
+                console.error('Supabase verification error:', e);
+                return res.status(500).json({ valid: false, error: e.message });
+            }
+        }
+
+        return res.status(500).json({ valid: false, error: 'Supabase credentials missing' });
+    }
+
     // Создание аккаунта участника
     if (url.startsWith('/pilot/accounts') && method === 'POST') {
         const accountId = 'acc_' + Math.random().toString(36).substring(2, 10);
@@ -43,9 +127,6 @@ export default async function handler(req, res) {
     if (url.includes('/answers') && method === 'POST') {
         const { answers, domain_data_identity } = req.body;
         const sessionId = domain_data_identity?.session_id || 'unknown';
-
-        const supabaseUrl = process.env.SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
         if (supabaseUrl && supabaseKey) {
             try {
