@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Research OS | AI Translator</title>
+    <script src="ai-router.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+        .app-header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .back-btn { background: #334155; color: #38bdf8; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+        .back-btn:hover { background: #475569; color: #ffffff; }
+        .page-title { color: #f8fafc; font-weight: 700; font-size: 16px; }
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn { background: transparent; border: none; color: #94a3b8; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .lang-btn.active { background: #38bdf8; color: #0f172a; }
+        .header { border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 24px; margin-top: 16px; }
+        h1 { font-size: 22px; color: #38bdf8; margin: 0 0 6px 0; }
+        .control-panel { background: #1e293b; padding: 16px; border-radius: 10px; border: 1px solid #334155; margin-bottom: 20px; display: flex; gap: 20px; align-items: center; }
+        select { background: #0f172a; border: 1px solid #475569; padding: 10px; border-radius: 6px; color: #f8fafc; }
+        .upload-card { background: #1e293b; border: 2px dashed #475569; border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; margin-bottom: 20px; }
+        .progress-box { background: #1e293b; border-radius: 8px; padding: 16px; margin-bottom: 20px; display: none; }
+        .progress-fill { height: 8px; background: #10b981; border-radius: 4px; width: 0%; transition: width 0.3s; }
+        .editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .code-box { background: #020617; border: 1px solid #334155; border-radius: 8px; padding: 16px; font-family: monospace; font-size: 12px; color: #a5f3fc; height: 400px; overflow-y: auto; white-space: pre-wrap; }
+        .btn { background: #10b981; color: white; border: none; padding: 12px; border-radius: 6px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="app-header">
+    <div class="header-left">
+        <a href="index.html" class="back-btn" data-i18n="back_home">← На главную</a>
+        <span class="page-title">🔬 Research OS</span>
+    </div>
+    <div class="lang-picker">
+        
+        <button class="lang-btn" onclick="setLang('es', event)"> 🇲🇽 ES</button>
+        <button class="lang-btn" onclick="setLang('en', event)"> 🇺🇸  EN</button>
+        <button class="lang-btn" onclick="setLang('ru', event)"> RU</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="header">
+        <h1 data-i18n="translator_h1">🌐 Психометрический AI-Переводчик</h1>
+    </div>
+
+    <div class="control-panel">
+        <label data-i18n="target_lang_label">🎯 Язык назначения:</label>
+        <select id="targetLang">
+            <option value="Spanish" data-i18n="lang_es">Испанский 🇲🇽 (Spanish)</option>
+            <option value="English" data-i18n="lang_en">Английский 🇺🇸 (English)</option>
+            <option value="Russian" data-i18n="lang_ru">Русский (Russian)</option>
+        </select>
+    </div>
+
+    <div class="upload-card" onclick="document.getElementById('fileInput').click()">
+        📥 <strong data-i18n="upload_trans_title">Загрузите файл для перевода (.py / .json / .txt)</strong>
+        <input type="file" id="fileInput" accept=".py,.json,.txt" style="display:none" onchange="loadFile(this.files[0])">
+    </div>
+
+    <div id="progressBox" class="progress-box">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;">
+            <span id="progressStatus" data-i18n="status_prep">Подготовка...</span>
+            <span id="progressPercent">0%</span>
+        </div>
+        <div style="background: #0f172a; border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" class="progress-fill"></div>
+        </div>
+    </div>
+
+    <div class="editor-grid">
+        <div>
+            <h3 data-i18n="col_original">Оригинал</h3>
+            <div id="originalView" class="code-box" data-i18n="wait_upload">// Ожидание загрузки...</div>
+        </div>
+        <div>
+            <h3 data-i18n="col_translated">Переведенный банк (.py)</h3>
+            <div id="translatedView" class="code-box" data-i18n="wait_result">// Здесь появится переведенный словарь...</div>
+            <button id="downloadBtn" class="btn" style="display:none;" onclick="downloadResult()" data-i18n="download_py">💾 Скачать файл (.py)</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let loadedBank = null;
+let translatedBank = {};
+let currentLang = 'ru';
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const i18n = {
+    ru: {
+        back_home: "← На главную",
+        translator_h1: "🌐 Психометрический AI-Переводчик",
+        target_lang_label: "🎯 Язык назначения:",
+        lang_es: "Испанский (Spanish)",
+        lang_en: "Английский (English)",
+        lang_ru: "Русский (Russian)",
+        upload_trans_title: "Загрузите файл для перевода (.py / .json / .txt)",
+        status_prep: "Подготовка...",
+        status_translating: "Переводим пачку",
+        col_original: "Оригинал",
+        col_translated: "Переведенный банк (.py)",
+        wait_upload: "// Ожидание загрузки файла...",
+        wait_result: "// Здесь появится переведенный словарь...",
+        download_py: "💾 Скачать файл (.py)",
+        error_file: "Ошибка разбора файла: ",
+        error_trans: "Ошибка перевода: "
+    },
+    es: {
+        back_home: "← Inicio",
+        translator_h1: "🌐 Traductor IA Psicométrico",
+        target_lang_label: "🎯 Idioma de destino:",
+        lang_es: "Español (Spanish)",
+        lang_en: "Inglés (English)",
+        lang_ru: "Ruso (Russian)",
+        upload_trans_title: "Cargar archivo para traducir (.py / .json / .txt)",
+        status_prep: "Preparando...",
+        status_translating: "Traduciendo el lote",
+        col_original: "Original",
+        col_translated: "Banco traducido (.py)",
+        wait_upload: "// Esperando carga de archivo...",
+        wait_result: "// El diccionario traducido aparecerá aquí...",
+        download_py: "💾 Descargar archivo (.py)",
+        error_file: "Error al procesar el archivo: ",
+        error_trans: "Error de traducción: "
+    },
+    en: {
+        back_home: "← Back to Hub",
+        translator_h1: "🌐 Psychometric AI Translator",
+        target_lang_label: "🎯 Target Language:",
+        lang_es: "Spanish (Spanish)",
+        lang_en: "English (English)",
+        lang_ru: "Russian (Russian)",
+        upload_trans_title: "Upload file for translation (.py / .json / .txt)",
+        status_prep: "Preparing...",
+        status_translating: "Translating batch",
+        col_original: "Original",
+        col_translated: "Translated Bank (.py)",
+        wait_upload: "// Waiting for file upload...",
+        wait_result: "// Translated dictionary will appear here...",
+        download_py: "💾 Download File (.py)",
+        error_file: "File Parse Error: ",
+        error_trans: "Translation Error: "
+    }
+};
+
+function setLang(lang, e) {
+    currentLang = lang;
+    localStorage.setItem('app_language', lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    if (e) e.target.classList.add('active');
+
+    const dict = i18n[lang] || i18n.ru;
+    document.querySelectorAll('[data-i18n]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n');
+        if (dict[key]) elem.innerText = dict[key];
+    });
+}
+
+    function parsePythonDict(text) {
+        // 1. Попытка на случай чистого JSON
+        try {
+            return JSON.parse(text);
+        } catch (e) {}
+
+        // 2. Склеиваем разделенные переносом строки в Python вида 'текст1 ' 'текст2'
+        let clean = text.replace(/'\s*\n\s*'/g, '');
+        clean = clean.replace(/"\s*\n\s*"/g, '');
+
+        // 3. Вырезаем комментарии Python
+        clean = clean.replace(/(?<=^|[^"'\\])#.*$/gm, '');
+
+        // 4. Заменяем константы Python на JS
+        clean = clean
+            .replace(/\bNone\b/g, 'null')
+            .replace(/\bTrue\b/g, 'true')
+            .replace(/\bFalse\b/g, 'false');
+
+        // 5. Ищем границы основного словаря { ... }
+        let startIdx = clean.indexOf('{');
+        let endIdx = clean.lastIndexOf('}');
+        if (startIdx === -1 || endIdx === -1) {
+            throw new Error("В файле не найден словарь { ... }");
+        }
+        clean = clean.slice(startIdx, endIdx + 1);
+
+        // 6. Пробуем исполнить как JS-код (быстрый путь)
+        try {
+            const parsed = new Function('return ' + clean)();
+            
+            // Нормализуем варианты ответов, если вместо 'options' использовано 'answer_options'
+            Object.keys(parsed).forEach(k => {
+                if (!parsed[k].options && parsed[k].answer_options) {
+                    parsed[k].options = parsed[k].answer_options;
+                }
+            });
+            return parsed;
+        } catch (errEval) {
+            console.warn("Прямой eval не прошёл, включаем токенизатор...", errEval);
+        }
+
+        // 7. Резервный парсер-токенизатор конкретно под твою структуру
+        const bank = {};
+        const itemRegex = /['"](?<code>[a-zA-Z0-9_\-\.]+)['"]\s*:\s*\{(?<body>[\s\S]*?)\}(?=\s*,\s*['"]|\s*\}$)/g;
+        
+        let match;
+        while ((match = itemRegex.exec(clean)) !== null) {
+            const code = match.groups.code;
+            const body = match.groups.body;
+
+            // Извлекаем prompt
+            const promptMatch = body.match(/['"]prompt['"]\s*:\s*(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)")/);
+            let promptText = "";
+            if (promptMatch) {
+                promptText = promptMatch[1] || promptMatch[2] || "";
+                promptText = promptText.replace(/\\'/g, "'").replace(/\\"/g, '"');
+            }
+
+            // Извлекаем options или answer_options
+            const options = [];
+            const optionsBlockMatch = body.match(/['"](?:options|answer_options)['"]\s*:\s*\[([\s\S]*?)\]/);
+            
+            if (optionsBlockMatch) {
+                const optionsContent = optionsBlockMatch[1];
+                const optObjRegex = /\{[\s\S]*?['"]text['"]\s*:\s*(?:'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)")[\s\S]*?\}/g;
+                let optObjMatch;
+
+                while ((optObjMatch = optObjRegex.exec(optionsContent)) !== null) {
+                    let optText = optObjMatch[1] || optObjMatch[2] || "";
+                    optText = optText.replace(/\\'/g, "'").replace(/\\"/g, '"');
+                    options.push({ text: optText, value: 0 });
+                }
+            }
+
+            bank[code] = {
+                prompt: promptText,
+                options: options
+            };
+        }
+
+        if (Object.keys(bank).length === 0) {
+            throw new Error("Не удалось прочитать структуры вопросов из файла.");
+        }
+
+        return bank;
+    }
+
+function loadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const content = e.target.result;
+            document.getElementById('originalView').innerText = content.slice(0, 1500) + (content.length > 1500 ? "\n\n... [показано начало файла]" : "");
+            
+            // Пробуем сначала распарсить как JSON, а затем как Python Dict
+            try {
+                loadedBank = JSON.parse(content);
+            } catch (jsonErr) {
+                loadedBank = parsePythonDict(content);
+            }
+
+            startTranslation();
+        } catch (err) {
+            alert(i18n[currentLang].error_file + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+    async function startTranslation() {
+        if (!loadedBank) return;
+        
+        const targetLang = document.getElementById('targetLang').value;
+        const keys = Object.keys(loadedBank);
+        const total = keys.length;
+        translatedBank = JSON.parse(JSON.stringify(loadedBank));
+
+        // --- 1. ПРЕДВАРИТЕЛЬНЫЙ РАСЧЕТ ТОКЕНОВ (Оценка безопасности) ---
+        // В среднем 1 символ ~ 0.3 токена. Учитываем промпт + ответ модели (~x2.5 от размера входа).
+        let totalChars = 0;
+        keys.forEach(k => {
+            const item = loadedBank[k];
+            totalChars += (item.prompt || '').length;
+            if (Array.isArray(item.options)) {
+                item.options.forEach(o => totalChars += (typeof o === 'object' ? (o.text || '') : o).length);
+            }
+        });
+
+        const estimatedInputTokens = Math.ceil(totalChars * 0.3);
+        const estimatedTotalTokens = Math.ceil(estimatedInputTokens * 2.5) + (total * 150); // Учитываем JSON-структуру
+        
+        const SAFE_TPD_LIMIT = 85000; // Оставляем запас от 100,000 лимита TPD
+
+        console.log(`[Research OS Guard] Оценка токенов: ~${estimatedTotalTokens} токенов.`);
+
+        // Если объем файла слишком велик для одного захода
+        if (estimatedTotalTokens > SAFE_TPD_LIMIT) {
+            const minutesToWait = Math.ceil((estimatedTotalTokens - SAFE_TPD_LIMIT) / 1000);
+            const confirmStart = confirm(
+                `⚠️ ВНИМАНИЕ: Файл слишком большой!\n\n` +
+                `Ориентировочный расход: ~${estimatedTotalTokens} токенов.\n` +
+                `Это близко к суточному лимиту Groq (100k TPD).\n\n` +
+                `Есть риск упереться в блокировку на середине. Всё равно продолжить?`
+            );
+            if (!confirmStart) return;
+        }
+
+        document.getElementById('progressBox').style.display = 'block';
+
+        const systemPrompt = `You are a professional psychometric translator.
+    Translate the provided array of survey items into ${targetLang}.
+    Maintain the meaning and tone appropriate for academic research.
+    Return strictly a JSON array with items containing: "code", "prompt", and "options" (array of strings).`;
+
+        const BATCH_SIZE = 3;
+        const batches = [];
+        for (let i = 0; i < total; i += BATCH_SIZE) {
+            const batchKeys = keys.slice(i, i + BATCH_SIZE);
+            const batchItems = batchKeys.map(k => {
+                const item = loadedBank[k];
+                let opts = [];
+                if (Array.isArray(item.options)) {
+                    opts = item.options.map(o => typeof o === 'object' ? (o.text || '') : o);
+                } else if (Array.isArray(item.answer_options)) {
+                    opts = item.answer_options.map(o => typeof o === 'object' ? (o.text || '') : o);
+                }
+                return {
+                    code: k,
+                    prompt: item.prompt || '',
+                    options: opts
+                };
+            });
+            batches.push(batchItems);
+        }
+
+        let processed = 0;
+
+        for (let b = 0; b < batches.length; b++) {
+            const currentBatch = batches[b];
+            const percent = Math.round(((processed + currentBatch.length) / total) * 100);
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('progressPercent').innerText = percent + '%';
+            
+            const dict = i18n[currentLang] || i18n.ru;
+            document.getElementById('progressStatus').innerText = `${dict.status_translating} ${b + 1} / ${batches.length}...`;
+
+            let success = false;
+            let attempts = 0;
+            const maxAttempts = 5;
+
+            while (!success && attempts < maxAttempts) {
+                try {
+                    attempts++;
+                    let res = await AIRouter.sendRequest('translator', systemPrompt, currentBatch);
+                    
+                    if (typeof res === 'string') {
+                        const match = res.match(/\[[\s\S]*\]/) || res.match(/\{[\s\S]*\}/);
+                        if (match) res = JSON.parse(match[0]);
+                    }
+
+                    const items = Array.isArray(res) ? res : (res.items || res.results || []);
+
+                    if (Array.isArray(items)) {
+                        items.forEach(item => {
+                            if (item && item.code && translatedBank[item.code]) {
+                                if (item.prompt) translatedBank[item.code].prompt = item.prompt;
+                                
+                                const targetOpts = translatedBank[item.code].options || translatedBank[item.code].answer_options;
+                                
+                                if (Array.isArray(item.options) && Array.isArray(targetOpts)) {
+                                    item.options.forEach((optText, optIdx) => {
+                                        if (targetOpts[optIdx] !== undefined) {
+                                            if (typeof targetOpts[optIdx] === 'object') {
+                                                targetOpts[optIdx].text = optText;
+                                            } else {
+                                                targetOpts[optIdx] = optText;
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+                    success = true;
+                } catch (e) {
+                    const isRateLimit = e.message && (e.message.includes('Rate limit') || e.message.includes('429') || e.message.includes('TPD') || e.message.includes('TPM'));
+                    
+                    // Парсим время ожидания из ошибки Groq, если оно есть (например: "5m30s")
+                    let waitSeconds = 10;
+                    const timeMatch = e.message ? e.message.match(/try again in ([0-9ms\.]+)/i) : null;
+                    if (timeMatch) {
+                        const timeStr = timeMatch[1];
+                        if (timeStr.includes('m')) {
+                            const mins = parseFloat(timeStr.split('m')[0]);
+                            waitSeconds = Math.ceil(mins * 60) + 5;
+                        } else {
+                            waitSeconds = Math.ceil(parseFloat(timeStr)) + 2;
+                        }
+                    }
+
+                    if (isRateLimit && attempts < maxAttempts) {
+                        // Запускаем визуальный обратный отсчет прямо на UI!
+                        for (let sec = waitSeconds; sec > 0; sec--) {
+                            document.getElementById('progressStatus').innerText = `⏳ Лимит токенов. Пауза и повтор через ${sec} сек...`;
+                            await sleep(1000);
+                        }
+                    } else {
+                        console.error(e);
+                        alert((i18n[currentLang] || i18n.ru).error_trans + e.message);
+                        return;
+                    }
+                }
+            }
+
+            processed += currentBatch.length;
+            document.getElementById('translatedView').innerText = formatAsPythonDict(translatedBank);
+
+            if (b < batches.length - 1) await sleep(4000);
+        }
+
+        document.getElementById('progressBox').style.display = 'none';
+        document.getElementById('downloadBtn').style.display = 'block';
+    }
+
+    function formatAsPythonDict(obj) {
+        // Определяем суффикс языка по выбранному значению в селекторе targetLang
+        const targetLangVal = document.getElementById('targetLang').value.toLowerCase();
+        let varSuffix = 'ES';
+        if (targetLangVal.includes('english') || targetLangVal.includes('en')) {
+            varSuffix = 'EN';
+        } else if (targetLangVal.includes('russian') || targetLangVal.includes('ru')) {
+            varSuffix = 'RU';
+        }
+
+        const varName = `QUESTION_BANK_${varSuffix}`;
+
+        return `${varName} = ` + JSON.stringify(obj, null, 4)
+            .replace(/: true/g, ': True')
+            .replace(/: false/g, ': False')
+            .replace(/: null/g, ': None');
+    }
+
+    function downloadResult() {
+        const targetLangVal = document.getElementById('targetLang').value.toLowerCase();
+        let varSuffix = 'ES';
+        if (targetLangVal.includes('english') || targetLangVal.includes('en')) {
+            varSuffix = 'EN';
+        } else if (targetLangVal.includes('russian') || targetLangVal.includes('ru')) {
+            varSuffix = 'RU';
+        }
+
+        const content = document.getElementById('translatedView').innerText;
+        const blob = new Blob([content], { type: 'text/x-python;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `QUESTION_BANK_${varSuffix}.py`;
+        link.click();
+    }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedLang = localStorage.getItem('app_language') || 'ru';
+    const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
+    if (btn) btn.click();
+});
+</script>
+</body>
+</html>

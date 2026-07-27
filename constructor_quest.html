@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="es-MX">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Research OS · Strict Cyan Protocol Engine</title>
+    <style>
+      :root {
+        --bg: #030a0c;
+        --card-bg: #0c1b21;
+        --border: #1e3a45;
+        --border-focus: #06b6d4;
+        --text: #ecfeff;
+        --text-muted: #a5f3fc;
+        --primary: #06b6d4;
+        --primary-hover: #0891b2;
+        --primary-light: rgba(6, 182, 212, 0.15);
+        --danger: #f87171;
+        --input-bg: #050e12;
+      }
+      * { box-sizing: border-box; }
+
+      /* Стилизация скроллбаров для видимости во всех браузерах */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: var(--input-bg);
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--primary);
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      header {
+        background: #050e12;
+        border-bottom: 2px solid var(--border);
+        padding: 14px 28px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-shrink: 0;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+      }
+      header h1 { font-size: 14px; margin: 0; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; color: var(--primary); }
+      
+      .header-controls { display: flex; align-items: center; gap: 12px; }
+      
+      .mode-switcher {
+        display: flex;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 3px;
+        gap: 4px;
+      }
+      .mode-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        padding: 6px 14px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s ease;
+      }
+      .mode-btn.active {
+        background: var(--primary);
+        color: #030a0c;
+        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
+      }
+
+      .lang-select {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        outline: none;
+        cursor: pointer;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 280px 1fr 380px;
+        flex: 1;
+        height: calc(100vh - 57px);
+        overflow: hidden;
+        min-height: 0;
+      }
+
+      aside {
+        background: #050e12;
+        border-right: 2px solid var(--border);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+        min-height: 0;
+      }
+      .nav-item {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 8px;
+        text-align: left;
+        cursor: pointer;
+        font-size: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        transition: all 0.2s;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      }
+      .nav-item:hover { border-color: var(--text-muted); background: #0f2229; }
+      .nav-item.active { background: var(--primary-light); border-color: var(--primary); font-weight: 600; }
+      
+      .editor-pane {
+        padding: 24px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        min-height: 0;
+        background: var(--bg);
+      }
+
+      .preview-pane {
+        background: #050e12;
+        border-left: 2px solid var(--border);
+        padding: 24px;
+        overflow-y: auto;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      
+      .card {
+        background: var(--card-bg);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      }
+      .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+      .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+      .field { margin-bottom: 16px; }
+      .field:last-child { margin-bottom: 0; }
+      label { display: block; font-size: 11px; font-weight: 700; margin-bottom: 6px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+      textarea, select, input[type="text"], input[type="number"] {
+        width: 100%;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px 14px;
+        color: var(--text);
+        font: inherit;
+        font-size: 13px;
+        outline: none;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      textarea:focus, select:focus, input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px rgba(6,182,212,0.15); }
+      textarea { min-height: 80px; resize: vertical; }
+      
+      .options-stack { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+      .option-row-wrapper {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        padding: 12px;
+        border-radius: 8px;
+      }
+      .option-line { display: flex; gap: 8px; align-items: center; }
+      
+      .inline-error {
+        font-size: 11px;
+        color: var(--danger);
+        background: rgba(248, 113, 113, 0.08);
+        border: 1px solid rgba(248, 113, 113, 0.3);
+        padding: 6px 10px;
+        border-radius: 6px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 4px;
+      }
+      .inline-error button {
+        background: transparent;
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        padding: 2px 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .inline-error button:hover {
+        background: var(--danger);
+        color: #030a0c;
+      }
+
+      .btn {
+        background: var(--primary);
+        color: #030a0c;
+        border: none;
+        padding: 10px 18px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 12px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+        box-shadow: 0 4px 12px rgba(6, 182, 212, 0.2);
+      }
+      .btn:hover:not(:disabled) { background: var(--primary-hover); color: white; transform: translateY(-1px); }
+      .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
+      .btn-secondary { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); box-shadow: none; }
+      .btn-secondary:hover { background: #0f2229; border-color: var(--text-muted); color: white; }
+      .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
+      .btn-danger:hover { background: rgba(248, 113, 113, 0.15); }
+      
+      .preview-box {
+        background: var(--card-bg);
+        border: 2px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      }
+      .preview-option-item {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 8px;
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="uiTitle">Research OS · Strict Cyan Protocol Engine</h1>
+      <div class="header-controls">
+        <a href="index.html" class="btn btn-secondary" id="homeBtn">🔬 Inicio</a>
+        <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
+          <option value="es-MX">🇲🇽 Español (México)</option>
+          <option value="en-US">🇺🇸 English (US)</option>
+          <option value="ru"> Русский </option>
+        </select>
+        <div class="mode-switcher">
+          <button class="mode-btn active" id="btnModeStatic" onclick="switchMode('static')">📌 Estático (T0)</button>
+          <button class="mode-btn" id="btnModeDynamic" onclick="switchMode('dynamic')">⚡ Longitudinal</button>
+        </div>
+        <button class="btn" id="exportBtn" onclick="saveProtocol()" data-i18n="exportBtn">Exportar JSON</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <!-- ASIDE -->
+      <aside>
+        <div style="font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 1px; padding: 4px;" id="sidebarTitle">Lista de Parámetros</div>
+        <div id="navList" style="display: flex; flex-direction: column; gap: 6px; flex: 1;"></div>
+        <button class="btn btn-secondary" onclick="addVariable()" id="addVarBtn">＋ Agregar Parámetro</button>
+        <div style="font-size: 9px; color: var(--text-muted); text-align: center; padding: 10px 4px; border-top: 1px solid var(--border); margin-top: auto; line-height: 1.3;"></div>
+      </aside>
+
+      <!-- EDITOR PANE -->
+      <div class="editor-pane">
+        <div class="card">
+          <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
+            <button class="btn-danger" onclick="deleteCurrentVariable()" id="delVarBtn">🗑 Eliminar Parámetro</button>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label data-i18n="varIdLabel">ID de Variable</label>
+              <input type="text" id="idInput" oninput="onIdChange(this.value)" />
+              <div id="idError" class="inline-error" style="display:none;"></div>
+            </div>
+            <div class="field">
+              <label data-i18n="dataTypeLabel">Tipo de Datos (Psychometric Level)</label>
+              <select id="typeSelect" onchange="onTypeSelectChange(this.value)">
+                <option value="nominal" data-i18n="typeNominal">Nominal</option>
+                <option value="ordinal" data-i18n="typeOrdinal">Ordinal</option>
+                <option value="interval_ratio" data-i18n="typeInterval">Interval / Ratio</option>
+                <option value="textual" data-i18n="typeTextual">Textual</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-2" style="margin-top: 12px;">
+            <div class="field">
+              <label data-i18n="scaleLabel">Escala</label>
+              <select id="scaleSelect" onchange="onScaleChange(this.value)"></select>
+            </div>
+            <div class="field">
+              <label data-i18n="statusLabel">Estado / Modo</label>
+              <input type="text" id="statusField" disabled style="color: var(--primary); background: var(--input-bg);" />
+            </div>
+          </div>
+
+          <!-- TEMPORAL CONFIG (LONGITUDINAL) -->
+          <div id="temporalContainer" style="display: none; background: var(--input-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-top: 16px;">
+            <div style="font-size: 11px; text-transform: uppercase; color: var(--primary); font-weight: 700; margin-bottom: 12px;" data-i18n="temporalLabel">⏱ Parámetros de Olas y Lags</div>
+            <div class="grid-2">
+              <div class="field">
+                <label data-i18n="waveLabel">Ola (Wave)</label>
+                <select id="waveSelect" onchange="onWaveChange(this.value)">
+                  <option value="wave_1" data-i18n="wave1">Ola 1 (T1)</option>
+                  <option value="wave_2" data-i18n="wave2">Ola 2 (T2)</option>
+                  <option value="terminal" data-i18n="waveTerminal">Corte Terminal</option>
+                </select>
+              </div>
+              <div class="field">
+                <label data-i18n="lagLabel">Retraso (Δ)</label>
+                <select id="lagSelect" onchange="onLagChange(this.value)">
+                  <option value="immediate" data-i18n="lagImm">Inmediato (Sin Retraso)</option>
+                  <option value="days_7" data-i18n="lag7">+7 Días</option>
+                  <option value="days_30" data-i18n="lag30">+30 Días</option>
+                  <option value="days_90" data-i18n="lag90">+90 Días</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="field" style="margin-top: 14px;">
+            <label data-i18n="promptLabel">Pregunta</label>
+            <textarea id="promptInput" oninput="onPromptChange(this.value)"></textarea>
+            <div id="promptError" class="inline-error" style="display:none;"></div>
+          </div>
+
+          <!-- TRANSITION & BRANCHING CONFIG -->
+          <div id="transitionConfigCard" class="field" style="margin-top: 20px; background: var(--input-bg); border: 1px solid var(--border); padding: 16px; border-radius: 10px;">
+            <label style="color: var(--primary); margin-bottom: 12px;" data-i18n="transitionConfigTitle">🔀 Lógica de Enrutamiento y Saltos</label>
+            <div class="field">
+              <label data-i18n="defaultNextLabel">Siguiente pregunta por defecto</label>
+              <select id="defaultNextSelect" onchange="onDefaultNextChange(this.value)">
+                <option value="next" data-i18n="targetNextInSequence">➡️ Siguiente en la secuencia</option>
+                <option value="end" data-i18n="targetEndSurvey">🏁 Finalizar encuesta</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- REGULATORS FOR INTERVAL / RATIO -->
+          <div id="metricConfigCard" class="field" style="display: none; margin-top: 20px; background: var(--input-bg); border: 1px solid var(--border); padding: 16px; border-radius: 10px;">
+            <label style="color: var(--primary); margin-bottom: 12px;" data-i18n="metricConfigTitle">⚙️ Reguladores Psicométricos</label>
+            <div class="grid-3" style="margin-bottom: 12px;">
+              <div class="field">
+                <label data-i18n="minLabel">Mínimo</label>
+                <input type="number" id="metricMin" oninput="onMetricConfigChange()" />
+              </div>
+              <div class="field">
+                <label data-i18n="maxLabel">Máximo</label>
+                <input type="number" id="metricMax" oninput="onMetricConfigChange()" />
+              </div>
+              <div class="field">
+                <label data-i18n="stepLabel">Paso (Step)</label>
+                <select id="metricStep" onchange="onMetricConfigChange()">
+                  <option value="1" data-i18n="stepWhole">1 (Enteros)</option>
+                  <option value="0.1" data-i18n="stepDecimal">0.1 (Decimales)</option>
+                  <option value="0.01" data-i18n="stepCenti">0.01 (Centésimas)</option>
+                </select>
+              </div>
+            </div>
+            <div id="metricError" class="inline-error" style="display:none; margin-bottom: 12px;"></div>
+            <div class="grid-2">
+              <div class="field">
+                <label data-i18n="directionLabel">Dirección de Escala</label>
+                <select id="metricDirection" onchange="onMetricConfigChange()">
+                  <option value="direct" data-i18n="dirDirect">Directo (Mayor = Valor Superior)</option>
+                  <option value="inverse" data-i18n="dirInverse">Inverso (Mayor = Peor / Error)</option>
+                </select>
+              </div>
+              <div class="field">
+                <label data-i18n="unitLabel">Sufijo de Unidad</label>
+                <input type="text" id="metricUnit" oninput="onMetricConfigChange()" />
+              </div>
+            </div>
+          </div>
+
+          <!-- REGULATORS FOR TEXTUAL -->
+          <div id="textConfigCard" class="field" style="display: none; margin-top: 20px; background: var(--input-bg); border: 1px solid var(--border); padding: 16px; border-radius: 10px;">
+            <label style="color: var(--primary); margin-bottom: 12px;" data-i18n="textConfigTitle">📝 Configuración de Texto</label>
+            <div class="grid-2">
+              <div class="field">
+                <label data-i18n="maxLengthLabel">Longitud Máxima</label>
+                <input type="number" id="textMaxLength" value="500" oninput="onTextConfigChange()" />
+              </div>
+              <div class="field">
+                <label data-i18n="formatHintLabel">Texto de Ayuda (Placeholder)</label>
+                <input type="text" id="textPlaceholder" oninput="onTextConfigChange()" />
+              </div>
+            </div>
+            <div id="textError" class="inline-error" style="display:none; margin-top: 8px;"></div>
+          </div>
+
+          <!-- REGULATORS FOR NOMINAL / ORDINAL -->
+          <div class="field" id="optionsCard" style="margin-top: 20px;">
+            <label id="optionsSectionTitle" data-i18n="gradingLabel">Graduaciones y Codificación</label>
+            <div id="optionsContainer" class="options-stack"></div>
+            <button id="addOptBtn" class="btn btn-secondary" style="margin-top: 10px;" onclick="addOption()" data-i18n="addGradingBtn">＋ Agregar Opción</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIDE PREVIEW PANE -->
+      <div class="preview-pane">
+        <div style="font-size: 11px; text-transform: uppercase; color: var(--primary); font-weight: 700; letter-spacing: 0.5px;" data-i18n="livePreviewTitle">👁 Vista Previa Lateral</div>
+        <div class="preview-box">
+          <div id="previewBadge" style="font-size: 10px; background: var(--primary-light); color: var(--primary); padding: 4px 8px; border-radius: 4px; font-weight: 700; text-transform: uppercase; display: inline-block; margin-bottom: 12px;">Mode</div>
+          <div id="previewPromptText" style="font-size: 15px; font-weight: 600; margin-bottom: 16px; line-height: 1.4;">Cargando...</div>
+          <div id="previewBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const i18n = {
+        "es-MX": {
+          title: "Research OS · Strict Cyan Protocol Engine",
+          sidebarTitle: "Lista de Parámetros",
+          addVarBtn: "＋ Agregar Parámetro",
+          delVarBtn: "🗑 Eliminar Parámetro",
+          varIdLabel: "ID de Variable",
+          dataTypeLabel: "Tipo de Datos (Psychometric Level)",
+          scaleLabel: "Escala",
+          statusLabel: "Estado / Modo",
+          promptLabel: "Pregunta de Investigación",
+          nominalGradingLabel: "Categorías, Códigos y Enrutamiento",
+          ordinalGradingLabel: "Graduaciones, Monotonicidad y Enrutamiento",
+          addGradingBtn: "＋ Agregar Opción",
+          temporalLabel: "⏱ Parámetros de Olas y Lags",
+          waveLabel: "Ola (Wave)",
+          lagLabel: "Retraso (Δ)",
+          exportBtn: "Exportar JSON",
+          homeBtn: "🔬 Inicio",
+          modeStatic: "📌 Estático (T0)",
+          modeDynamic: "⚡ Longitudinal",
+          typeNominal: "Nominal",
+          typeOrdinal: "Ordinal",
+          typeInterval: "Interval / Ratio",
+          typeTextual: "Textual",
+          wave1: "Ola 1 (T1)",
+          wave2: "Ola 2 (T2)",
+          waveTerminal: "Corte Terminal",
+          lagImm: "Inmediato (Sin Retraso)",
+          lag7: "+7 Días",
+          lag30: "+30 Días",
+          lag90: "+90 Días",
+          statusStaticAuto: "Time-Invariant · Baseline T0",
+          statusDynamicAuto: "Time-Variant · Longitudinal",
+          livePreviewTitle: "👁 Vista Previa Lateral",
+          metricConfigTitle: "⚙️ Reguladores Psicométricos",
+          minLabel: "Mínimo",
+          maxLabel: "Máximo",
+          stepLabel: "Paso (Step)",
+          stepWhole: "1 (Enteros)",
+          stepDecimal: "0.1 (Decimales)",
+          stepCenti: "0.01 (Centésimas)",
+          directionLabel: "Dirección de Escala",
+          dirDirect: "Directo (Mayor = Valor Superior)",
+          dirInverse: "Inverso (Mayor = Peor / Error)",
+          unitLabel: "Sufijo de Unidad",
+          textConfigTitle: "📝 Configuración de Texto",
+          maxLengthLabel: "Longitud Máxima",
+          formatHintLabel: "Texto de Ayuda (Placeholder)",
+          transitionConfigTitle: "🔀 Lógica de Enrutamiento y Saltos",
+          defaultNextLabel: "Siguiente pregunta por defecto",
+          targetNextInSequence: "➡️ Siguiente en la secuencia",
+          targetEndSurvey: "🏁 Finalizar encuesta",
+          jumpToTarget: "Salto ➔",
+          placeholderUnit: "ej., años, MXN, pza, %",
+          placeholderText: "Ingrese texto de respuesta...",
+          placeholderCategory: "Etiqueta de categoría...",
+          alertSingleVar: "No se puede eliminar el único parámetro del protocolo.",
+          alertExportError: "¡Corrija todos los errores resaltados antes de exportar el protocolo!",
+          confirmTypeChange: "Cambiar el tipo de datos restablecerá las opciones actuales al valor predeterminado. ¿Continuar?",
+          confirmScaleChange: "Cambiar la escala actualizará las opciones al valor predeterminado. ¿Continuar?",
+          errMinMax: "⚠️ Error de límites: El mínimo debe ser estrictamente menor que el máximo",
+          errStep: "⚠️ El paso excede todo el rango de la escala",
+          errTextLen: "⚠️ La longitud del texto debe ser mayor que 0",
+          errEmptyId: "⚠️ El ID de la variable no puede estar vacío",
+          errDuplicateId: "⚠️ ¡Conflicto de ID! Este identificador ya está en uso.",
+          errEmptyPrompt: "⚠️ La pregunta es obligatoria para la encuesta",
+          errMonotonicity: "⚠️ Violación de monotonicidad: el peso debe ser mayor que el anterior",
+          errNominalConflict: "⚠️ Conflicto de códigos: el valor de ID está duplicado"
+        },
+        "en-US": {
+          title: "Research OS · Strict Cyan Protocol Engine",
+          sidebarTitle: "Parameters List",
+          addVarBtn: "＋ Add Parameter",
+          delVarBtn: "🗑 Delete Parameter",
+          varIdLabel: "Variable ID",
+          dataTypeLabel: "Data Type (Psychometric Level)",
+          scaleLabel: "Scale",
+          statusLabel: "Status / Mode",
+          promptLabel: "Question Prompt",
+          nominalGradingLabel: "Categories, Independent Nominal Codes & Routing",
+          ordinalGradingLabel: "Grades, Strict Monotonicity & Routing",
+          addGradingBtn: "＋ Add Grade",
+          temporalLabel: "⏱ Wave & Lag Parameters",
+          waveLabel: "Wave",
+          lagLabel: "Time-Lag (Δ)",
+          exportBtn: "Export JSON",
+          homeBtn: "🔬 Research OS",
+          modeStatic: "📌 Static (T0)",
+          modeDynamic: "⚡ Longitudinal",
+          typeNominal: "Nominal",
+          typeOrdinal: "Ordinal",
+          typeInterval: "Interval / Ratio",
+          typeTextual: "Textual",
+          wave1: "Wave 1 (T1)",
+          wave2: "Wave 2 (T2)",
+          waveTerminal: "Terminal Slice",
+          lagImm: "Immediate (No Lag)",
+          lag7: "+7 Days",
+          lag30: "+30 Days",
+          lag90: "+90 Days",
+          statusStaticAuto: "Time-Invariant · Baseline T0",
+          statusDynamicAuto: "Time-Variant · Longitudinal",
+          livePreviewTitle: "👁 Live Side Preview",
+          metricConfigTitle: "⚙️ Psychometric Scale Regulators",
+          minLabel: "Minimum",
+          maxLabel: "Maximum",
+          stepLabel: "Step Size",
+          stepWhole: "1 (Integers)",
+          stepDecimal: "0.1 (Decimals)",
+          stepCenti: "0.01 (Centi)",
+          directionLabel: "Scale Direction",
+          dirDirect: "Direct (Higher = Greater Value)",
+          dirInverse: "Inverse (Higher = Worse / Error)",
+          unitLabel: "Unit Suffix",
+          textConfigTitle: "📝 Text Input Settings",
+          maxLengthLabel: "Max Character Length",
+          formatHintLabel: "Placeholder / Hint",
+          transitionConfigTitle: "🔀 Branching & Routing Logic",
+          defaultNextLabel: "Default Next Question",
+          targetNextInSequence: "➡️ Next in sequence",
+          targetEndSurvey: "🏁 End survey",
+          jumpToTarget: "Jump ➔",
+          placeholderUnit: "e.g., years, USD, pcs, %",
+          placeholderText: "Enter response text...",
+          placeholderCategory: "Category label...",
+          alertSingleVar: "Cannot delete the only parameter in the protocol.",
+          alertExportError: "Fix all highlighted errors before exporting the protocol!",
+          confirmTypeChange: "Changing data type will reset current grades to default preset. Continue?",
+          confirmScaleChange: "Changing scale will update grades to preset. Continue?",
+          errMinMax: "⚠️ Boundary error: Minimum must be strictly less than Maximum",
+          errStep: "⚠️ Step size exceeds the entire scale range",
+          errTextLen: "⚠️ Text length must be greater than 0",
+          errEmptyId: "⚠️ Variable ID cannot be empty",
+          errDuplicateId: "⚠️ ID conflict! This identifier is already used in another parameter.",
+          errEmptyPrompt: "⚠️ Question prompt is required for survey execution",
+          errMonotonicity: "⚠️ Monotonicity violation: weight must be greater than previous",
+          errNominalConflict: "⚠️ Code conflict: ID value is duplicated"
+        },
+        ru: {
+          title: "Research OS · Strict Cyan Protocol Engine",
+          sidebarTitle: "Перечень параметров",
+          addVarBtn: "＋ Добавить параметр",
+          delVarBtn: "🗑 Удалить параметр",
+          varIdLabel: "Идентификатор (Variable ID)",
+          dataTypeLabel: "Тип данных (Psychometric Level)",
+          scaleLabel: "Шкала",
+          statusLabel: "Статус / Режим",
+          promptLabel: "Формулировка вопроса",
+          nominalGradingLabel: "Категории, независимые коды и переходы",
+          ordinalGradingLabel: "Градации, веса с жесткой монотонностью и переходы",
+          addGradingBtn: "＋ Добавить градацию",
+          temporalLabel: "⏱ Параметры волн и лагов",
+          waveLabel: "Волна (Wave)",
+          lagLabel: "Лаг (Δ)",
+          exportBtn: "Экспорт JSON",
+          homeBtn: "🔬 Research OS",
+          modeStatic: "📌 Статика (T0)",
+          modeDynamic: "⚡ Лонгитюд",
+          typeNominal: "Nominal (Номинальный)",
+          typeOrdinal: "Ordinal (Ординальный / Ранговый)",
+          typeInterval: "Interval / Ratio (Метрический)",
+          typeTextual: "Textual (Текстовый)",
+          wave1: "Волна 1 (T1)",
+          wave2: "Волна 2 (T2)",
+          waveTerminal: "Завершающий срез (Terminal)",
+          lagImm: "Сразу (Без лага)",
+          lag7: "+7 дней",
+          lag30: "+30 дней",
+          lag90: "+90 дней",
+          statusStaticAuto: "Time-Invariant · Baseline T0",
+          statusDynamicAuto: "Time-Variant · Лонгитюд",
+          livePreviewTitle: "👁 Живой предпросмотр (Сбоку)",
+          metricConfigTitle: "⚙️ Психометрические регуляторы шкалы (Min / Max / Шаг / Направление)",
+          minLabel: "Минимум",
+          maxLabel: "Максимум",
+          stepLabel: "Шаг (Step)",
+          stepWhole: "1 (Целые)",
+          stepDecimal: "0.1 (Десятые)",
+          stepCenti: "0.01 (Сотые)",
+          directionLabel: "Направление шкалы",
+          dirDirect: "Прямое (Больше = Выше показатель)",
+          dirInverse: "Инвертированное (Больше = Хуже / Ошибка)",
+          unitLabel: "Единицы измерения (суффикс)",
+          textConfigTitle: "📝 Настройки текстового ввода",
+          maxLengthLabel: "Макс. длина символов",
+          formatHintLabel: "Формат / Подсказка (Placeholder)",
+          transitionConfigTitle: "🔀 Маршрутизация и переходы (Branching Logic)",
+          defaultNextLabel: "Переход по умолчанию после вопроса",
+          targetNextInSequence: "➡️ Следующий по порядку",
+          targetEndSurvey: "🏁 Завершить опрос",
+          jumpToTarget: "Переход ➔",
+          placeholderUnit: "например, лет, руб, шт, %",
+          placeholderText: "Введите текст ответа...",
+          placeholderCategory: "Метка категории...",
+          alertSingleVar: "Невозможно удалить единственный параметр протокола.",
+          alertExportError: "Исправьте все подсвеченные красным ошибки перед экспортом протокола!",
+          confirmTypeChange: "Смена типа данных приведет к сбросу текущих градаций шкалы на пресет по умолчанию. Продолжить?",
+          confirmScaleChange: "Смена шкалы обновит градации до пресета. Продолжить?",
+          errMinMax: "⚠️ Ошибка границ: Минимум должен быть строго меньше Максимума",
+          errStep: "⚠️ Шаг превышает весь диапазон шкалы",
+          errTextLen: "⚠️ Длина текста должна быть больше 0",
+          errEmptyId: "⚠️ Идентификатор переменной не может быть пустым",
+          errDuplicateId: "⚠️ Дубликат ID! Идентификатор уже используется в другом параметре.",
+          errEmptyPrompt: "⚠️ Формулировка вопроса обязательна для проведения опроса",
+          errMonotonicity: "⚠️ Нарушена монотонность: вес должен быть больше предыдущего",
+          errNominalConflict: "⚠️ Конфликт кодов: значение ID дублируется"
+        }
+      };
+
+      const scaleMatrices = {
+        "es-MX": {
+          nominal: {
+            scales: [
+              { id: "single_choice", name: "Selección Única (Categorías)", editable: true, preset: [{l: "Masculino", s: 1, target: "next"}, {l: "Femenino", s: 2, target: "next"}, {l: "Otro / Prefiero no decir", s: 3, target: "next"}] },
+              { id: "multiple_choice", name: "Selección Múltiple", editable: true, preset: [{l: "Opción A", s: 1, target: "next"}, {l: "Opción B", s: 2, target: "next"}] },
+              { id: "dichotomous", name: "Dicotómica (Sí/No)", editable: true, preset: [{l: "Sí", s: 1, target: "next"}, {l: "No", s: 0, target: "next"}] }
+            ]
+          },
+          ordinal: {
+            scales: [
+              { id: "likert_7", name: "Escala Likert (7 puntos, rango estricto)", editable: true, preset: [
+                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Ligeramente en desacuerdo", s: 3, target: "next"},
+                {l: "Neutral", s: 4, target: "next"}, {l: "Ligeramente de acuerdo", s: 5, target: "next"}, {l: "De acuerdo", s: 6, target: "next"}, {l: "Totalmente de acuerdo", s: 7, target: "next"}
+              ]},
+              { id: "likert_5", name: "Escala Likert (5 puntos)", editable: true, preset: [
+                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Neutral", s: 3, target: "next"},
+                {l: "De acuerdo", s: 4, target: "next"}, {l: "Totalmente de acuerdo", s: 5, target: "next"}
+              ]},
+              { id: "frequency_scale", name: "Escala de Frecuencia (Nunca — Siempre)", editable: true, preset: [
+                {l: "Nunca", s: 1, target: "next"}, {l: "Rara vez", s: 2, target: "next"}, {l: "A veces", s: 3, target: "next"}, {l: "Frecuentemente", s: 4, target: "next"}, {l: "Siempre", s: 5, target: "next"}
+              ]},
+              { id: "nps_scale", name: "Escala NPS (0–10, Lealtad)", editable: true, preset: [
+                {l: "0 — Detractor", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
+                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Neutral", s: 7, target: "next"},
+                {l: "8", s: 8, target: "next"}, {l: "9 — Promotor", s: 9, target: "next"}, {l: "10 — Promotor", s: 10, target: "next"}
+              ]}
+            ]
+          },
+          interval_ratio: {
+            scales: [
+              { id: "discrete_count", name: "Conteo Discreto", editable: false, preset: [] },
+              { id: "continuous_slider", name: "Escala Análoga Visual (VAS 0–100)", editable: false, preset: [] },
+              { id: "currency_metric", name: "Métrica Financiera", editable: false, preset: [] },
+              { id: "percentage_share", name: "Distribución Porcentual (0–100%)", editable: false, preset: [] }
+            ]
+          },
+          textual: {
+            scales: [
+              { id: "short_string", name: "Texto Corto", editable: false, preset: [] },
+              { id: "long_paragraph", name: "Párrafo", editable: false, preset: [] }
+            ]
+          }
+        },
+        "en-US": {
+          nominal: {
+            scales: [
+              { id: "single_choice", name: "Single Choice (Categories)", editable: true, preset: [{l: "Male", s: 1, target: "next"}, {l: "Female", s: 2, target: "next"}, {l: "Other / Prefer not to say", s: 3, target: "next"}] },
+              { id: "multiple_choice", name: "Multiple Choice", editable: true, preset: [{l: "Option A", s: 1, target: "next"}, {l: "Option B", s: 2, target: "next"}] },
+              { id: "dichotomous", name: "Dichotomous (Yes/No)", editable: true, preset: [{l: "Yes", s: 1, target: "next"}, {l: "No", s: 0, target: "next"}] }
+            ]
+          },
+          ordinal: {
+            scales: [
+              { id: "likert_7", name: "Likert Scale (7-point, strict rank)", editable: true, preset: [
+                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Slightly Disagree", s: 3, target: "next"},
+                {l: "Neutral", s: 4, target: "next"}, {l: "Slightly Agree", s: 5, target: "next"}, {l: "Agree", s: 6, target: "next"}, {l: "Strongly Agree", s: 7, target: "next"}
+              ]},
+              { id: "likert_5", name: "Likert Scale (5-point)", editable: true, preset: [
+                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Neutral", s: 3, target: "next"},
+                {l: "Agree", s: 4, target: "next"}, {l: "Strongly Agree", s: 5, target: "next"}
+              ]},
+              { id: "frequency_scale", name: "Frequency Scale (Never — Always)", editable: true, preset: [
+                {l: "Never", s: 1, target: "next"}, {l: "Rarely", s: 2, target: "next"}, {l: "Sometimes", s: 3, target: "next"}, {l: "Often", s: 4, target: "next"}, {l: "Always", s: 5, target: "next"}
+              ]},
+              { id: "nps_scale", name: "NPS Scale (0–10, Loyalty)", editable: true, preset: [
+                {l: "0 — Detractor", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
+                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Neutral", s: 7, target: "next"},
+                {l: "8", s: 8, target: "next"}, {l: "9 — Promoter", s: 9, target: "next"}, {l: "10 — Promoter", s: 10, target: "next"}
+              ]}
+            ]
+          },
+          interval_ratio: {
+            scales: [
+              { id: "discrete_count", name: "Discrete Count", editable: false, preset: [] },
+              { id: "continuous_slider", name: "Visual Analog Scale (VAS 0–100)", editable: false, preset: [] },
+              { id: "currency_metric", name: "Currency Metric", editable: false, preset: [] },
+              { id: "percentage_share", name: "Percentage Share (0–100%)", editable: false, preset: [] }
+            ]
+          },
+          textual: {
+            scales: [
+              { id: "short_string", name: "Short String", editable: false, preset: [] },
+              { id: "long_paragraph", name: "Paragraph", editable: false, preset: [] }
+            ]
+          }
+        },
+        ru: {
+          nominal: {
+            scales: [
+              { id: "single_choice", name: "Одиночный выбор (Категории)", editable: true, preset: [{l: "Мужской", s: 1, target: "next"}, {l: "Женский", s: 2, target: "next"}, {l: "Другой / Предпочитаю не указывать", s: 3, target: "next"}] },
+              { id: "multiple_choice", name: "Множественный выбор", editable: true, preset: [{l: "Вариант А", s: 1, target: "next"}, {l: "Вариант Б", s: 2, target: "next"}] },
+              { id: "dichotomous", name: "Дихотомическая (Да/Нет)", editable: true, preset: [{l: "Да", s: 1, target: "next"}, {l: "Нет", s: 0, target: "next"}] }
+            ]
+          },
+          ordinal: {
+            scales: [
+              { id: "likert_7", name: "Шкала Лайкерта (7-балльная, строгий ранг)", editable: true, preset: [
+                {l: "Полностью не согласен", s: 1, target: "next"}, {l: "В основном не согласен", s: 2, target: "next"}, {l: "Скорее не согласен", s: 3, target: "next"},
+                {l: "Нейтрально", s: 4, target: "next"}, {l: "Скорее согласен", s: 5, target: "next"}, {l: "В основном согласен", s: 6, target: "next"}, {l: "Полностью согласен", s: 7, target: "next"}
+              ]},
+              { id: "likert_5", name: "Шкала Лайкерта (5-балльная)", editable: true, preset: [
+                {l: "Совсем не согласен", s: 1, target: "next"}, {l: "Скорее не согласен", s: 2, target: "next"}, {l: "Нейтрально", s: 3, target: "next"},
+                {l: "Скорее согласен", s: 4, target: "next"}, {l: "Полностью согласен", s: 5, target: "next"}
+              ]},
+              { id: "frequency_scale", name: "Частотная шкала (Никогда — Всегда)", editable: true, preset: [
+                {l: "Никогда", s: 1, target: "next"}, {l: "Редко", s: 2, target: "next"}, {l: "Иногда", s: 3, target: "next"}, {l: "Часто", s: 4, target: "next"}, {l: "Всегда", s: 5, target: "next"}
+              ]},
+              { id: "nps_scale", name: "Индекс NPS (0–10, Лояльность)", editable: true, preset: [
+                {l: "0 — Абсолютный детрактор", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
+                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Нейтральный", s: 7, target: "next"},
+                {l: "8", s: 8, target: "next"}, {l: "9 — Промоутер", s: 9, target: "next"}, {l: "10 — Абсолютный промоутер", s: 10, target: "next"}
+              ]}
+            ]
+          },
+          interval_ratio: {
+            scales: [
+              { id: "discrete_count", name: "Дискретный счет", editable: false, preset: [] },
+              { id: "continuous_slider", name: "Визуальная аналоговая шкала (VAS 0–100)", editable: false, preset: [] },
+              { id: "currency_metric", name: "Финансовая метрика", editable: false, preset: [] },
+              { id: "percentage_share", name: "Процентное распределение (0–100%)", editable: false, preset: [] }
+            ]
+          },
+          textual: {
+            scales: [
+              { id: "short_string", name: "Короткий текст", editable: false, preset: [] },
+              { id: "long_paragraph", name: "Развернутый абзац", editable: false, preset: [] }
+            ]
+          }
+        }
+      };
+
+      function getScaleMatrix() {
+        return scaleMatrices[currentLang] || scaleMatrices['es-MX'];
+      }
+
+      function getDefaultBank(lang) {
+        if (lang === 'en-US') {
+          return [
+            {
+              id: "gender_baseline",
+              type: "nominal",
+              scale: "single_choice",
+              tracking_mode: "time_invariant",
+              prompt: "Indicate your gender:",
+              wave: "baseline",
+              lag: "immediate",
+              default_next: "next",
+              options: [
+                {l: "Male", s: 1, target: "next"},
+                {l: "Female", s: 2, target: "next"},
+                {l: "Other / Prefer not to say", s: 3, target: "next"}
+              ],
+              config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Enter response text..." }
+            },
+            {
+              id: "academic_stress_t1",
+              type: "ordinal",
+              scale: "likert_7",
+              tracking_mode: "time_variant",
+              prompt: "Rate your current academic stress level:",
+              wave: "wave_1",
+              lag: "days_7",
+              default_next: "next",
+              options: [
+                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Slightly Disagree", s: 3, target: "next"},
+                {l: "Neutral", s: 4, target: "next"}, {l: "Slightly Agree", s: 5, target: "next"}, {l: "Agree", s: 6, target: "next"}, {l: "Strongly Agree", s: 7, target: "next"}
+              ],
+              config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Enter response text..." }
+            }
+          ];
+        } else if (lang === 'ru') {
+          return [
+            {
+              id: "gender_baseline",
+              type: "nominal",
+              scale: "single_choice",
+              tracking_mode: "time_invariant",
+              prompt: "Укажите ваш пол:",
+              wave: "baseline",
+              lag: "immediate",
+              default_next: "next",
+              options: [
+                {l: "Мужской", s: 1, target: "next"},
+                {l: "Женский", s: 2, target: "next"},
+                {l: "Другой / Предпочитаю не указывать", s: 3, target: "next"}
+              ],
+              config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Введите текст ответа..." }
+            },
+            {
+              id: "academic_stress_t1",
+              type: "ordinal",
+              scale: "likert_7",
+              tracking_mode: "time_variant",
+              prompt: "Оцените ваш уровень академического стресса:",
+              wave: "wave_1",
+              lag: "days_7",
+              default_next: "next",
+              options: [
+                {l: "Полностью не согласен", s: 1, target: "next"}, {l: "В основном не согласен", s: 2, target: "next"}, {l: "Скорее не согласен", s: 3, target: "next"},
+                {l: "Нейтрально", s: 4, target: "next"}, {l: "Скорее согласен", s: 5, target: "next"}, {l: "В основном согласен", s: 6, target: "next"}, {l: "Полностью согласен", s: 7, target: "next"}
+              ],
+              config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Введите текст ответа..." }
+            }
+          ];
+        } else {
+          return [
+            {
+              id: "genero_baseline",
+              type: "nominal",
+              scale: "single_choice",
+              tracking_mode: "time_invariant",
+              prompt: "Indique su género biológico o identidad:",
+              wave: "baseline",
+              lag: "immediate",
+              default_next: "next",
+              options: [
+                {l: "Masculino", s: 1, target: "next"},
+                {l: "Femenino", s: 2, target: "next"},
+                {l: "Otro / Prefiero no decir", s: 3, target: "next"}
+              ],
+              config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Ingrese texto de respuesta..." }
+            },
+            {
+              id: "estres_academico_t1",
+              type: "ordinal",
+              scale: "likert_7",
+              tracking_mode: "time_variant",
+              prompt: "Evalúe su nivel actual de estrés académico en las últimas semanas:",
+              wave: "wave_1",
+              lag: "days_7",
+              default_next: "next",
+              options: [
+                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Ligeramente en desacuerdo", s: 3, target: "next"},
+                {l: "Neutral", s: 4, target: "next"}, {l: "Ligeramente de acuerdo", s: 5, target: "next"}, {l: "De acuerdo", s: 6, target: "next"}, {l: "Totalmente de acuerdo", s: 7, target: "next"}
+              ],
+              config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Ingrese texto de respuesta..." }
+            }
+          ];
+        }
+      }
+
+      function sanitizeBankData(data, lang) {
+        if (!Array.isArray(data) || data.length === 0) {
+          return getDefaultBank(lang);
+        }
+        return data.map((v, idx) => {
+          if (!v || typeof v !== 'object') v = {};
+          const type = ['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(v.type) ? v.type : 'nominal';
+          const tracking_mode = ['time_variant', 'time_invariant'].includes(v.tracking_mode) ? v.tracking_mode : 'time_invariant';
+          const config = (v.config && typeof v.config === 'object') ? v.config : {};
+
+          return {
+            id: typeof v.id === 'string' && v.id.trim() ? v.id.trim() : `variable_${idx + 1}`,
+            type: type,
+            scale: typeof v.scale === 'string' ? v.scale : 'single_choice',
+            tracking_mode: tracking_mode,
+            prompt: typeof v.prompt === 'string' ? v.prompt : '',
+            wave: typeof v.wave === 'string' ? v.wave : 'wave_1',
+            lag: typeof v.lag === 'string' ? v.lag : 'immediate',
+            default_next: typeof v.default_next === 'string' ? v.default_next : 'next',
+            options: Array.isArray(v.options) ? v.options.map(o => {
+              const numVal = parseFloat(o?.s);
+              return {
+                l: typeof o?.l === 'string' ? o.l : '',
+                s: !isNaN(numVal) ? numVal : 0,
+                target: typeof o?.target === 'string' ? o.target : 'next'
+              };
+            }) : [],
+            config: {
+              min: !isNaN(parseFloat(config.min)) ? parseFloat(config.min) : 0,
+              max: !isNaN(parseFloat(config.max)) ? parseFloat(config.max) : 100,
+              step: !isNaN(parseFloat(config.step)) && parseFloat(config.step) > 0 ? parseFloat(config.step) : 1,
+              direction: ['direct', 'inverse'].includes(config.direction) ? config.direction : 'direct',
+              unit: typeof config.unit === 'string' ? config.unit : '',
+              maxLength: !isNaN(parseInt(config.maxLength, 10)) && parseInt(config.maxLength, 10) > 0 ? parseInt(config.maxLength, 10) : 500,
+              placeholder: typeof config.placeholder === 'string' ? config.placeholder : ''
+            }
+          };
+        });
+      }
+
+      function loadBank(lang) {
+        try {
+          const raw = localStorage.getItem('ros_strict_cyan_bank_v3');
+          if (!raw) return getDefaultBank(lang);
+          const parsed = JSON.parse(raw);
+          return sanitizeBankData(parsed, lang);
+        } catch (e) {
+          console.error("Storage read error, falling back:", e);
+          return getDefaultBank(lang);
+        }
+      }
+
+      let currentLang = 'es-MX';
+      let currentMode = 'static';
+      let currentIndex = 0;
+      let hasGlobalErrors = false;
+
+      let bank = loadBank(currentLang);
+
+      function saveBank() {
+        try {
+          localStorage.setItem('ros_strict_cyan_bank_v3', JSON.stringify(bank));
+        } catch (e) {
+          console.error("Storage save error:", e);
+        }
+      }
+
+      function changeLanguage(lang) {
+        currentLang = lang;
+        document.getElementById('langSelect').value = lang;
+        const dict = i18n[lang] || i18n['es-MX'];
+        
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+          const key = el.getAttribute('data-i18n');
+          if (dict[key]) el.textContent = dict[key];
+        });
+
+        document.getElementById('uiTitle').textContent = dict.title;
+        document.getElementById('sidebarTitle').textContent = dict.sidebarTitle;
+        document.getElementById('addVarBtn').textContent = dict.addVarBtn;
+        document.getElementById('delVarBtn').textContent = dict.delVarBtn;
+        document.getElementById('homeBtn').textContent = dict.homeBtn;
+        document.getElementById('btnModeStatic').textContent = dict.modeStatic;
+        document.getElementById('btnModeDynamic').textContent = dict.modeDynamic;
+
+        document.getElementById('metricUnit').placeholder = dict.placeholderUnit;
+        document.getElementById('textPlaceholder').placeholder = dict.placeholderText;
+
+        updateUI();
+      }
+
+      function switchMode(mode) {
+        currentMode = mode;
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        document.getElementById('btnModeStatic').classList.toggle('active', mode === 'static');
+        document.getElementById('btnModeDynamic').classList.toggle('active', mode === 'dynamic');
+        
+        const temporalContainer = document.getElementById('temporalContainer');
+        if (mode === 'dynamic') {
+          temporalContainer.style.display = 'block';
+        } else {
+          temporalContainer.style.display = 'none';
+        }
+
+        bank.forEach(v => {
+          v.tracking_mode = (mode === 'dynamic') ? 'time_variant' : 'time_invariant';
+        });
+        saveBank();
+        updateUI();
+      }
+
+      function renderNav() {
+        const navList = document.getElementById('navList');
+        navList.innerHTML = '';
+        bank.forEach((v, idx) => {
+          const item = document.createElement('button');
+          item.className = `nav-item ${idx === currentIndex ? 'active' : ''}`;
+          item.innerHTML = `<span style="font-weight: 700; color: var(--primary);">${v.id || 'var_' + idx}</span><span style="font-size: 10px; color: var(--text-muted);">${v.type} / ${v.scale}</span>`;
+          item.onclick = () => {
+            currentIndex = idx;
+            updateUI();
+          };
+          navList.appendChild(item);
+        });
+      }
+
+      function populateTargetDropdowns() {
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        const defaultNextSelect = document.getElementById('defaultNextSelect');
+        const currentVar = bank[currentIndex];
+        
+        if (!defaultNextSelect || !currentVar) return;
+
+        const currentVal = currentVar.default_next || 'next';
+        defaultNextSelect.innerHTML = `
+          <option value="next">${dict.targetNextInSequence}</option>
+          <option value="end">${dict.targetEndSurvey}</option>
+        `;
+
+        bank.forEach((v, idx) => {
+          if (v.id && v.id.trim() !== currentVar.id.trim()) {
+            const opt = document.createElement('option');
+            opt.value = v.id;
+            opt.textContent = `➔ Al indicador: ${v.id}`;
+            defaultNextSelect.appendChild(opt);
+          }
+        });
+        defaultNextSelect.value = currentVal;
+      }
+
+      function addVariable() {
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        const newVar = {
+          id: `variable_${bank.length + 1}`,
+          type: "ordinal",
+          scale: "likert_5",
+          tracking_mode: (currentMode === 'dynamic') ? 'time_variant' : 'time_invariant',
+          prompt: currentLang === 'es-MX' ? "¿Nueva pregunta de investigación?" : (currentLang === 'ru' ? "Новый вопрос исследования?" : "New research question?"),
+          wave: "wave_1",
+          lag: "immediate",
+          default_next: "next",
+          options: [
+            {l: currentLang === 'es-MX' ? "Totalmente en desacuerdo" : (currentLang === 'ru' ? "Совсем не согласен" : "Strongly Disagree"), s: 1, target: "next"},
+            {l: currentLang === 'es-MX' ? "En desacuerdo" : (currentLang === 'ru' ? "Скорее не согласен" : "Disagree"), s: 2, target: "next"},
+            {l: "Neutral", s: 3, target: "next"},
+            {l: currentLang === 'es-MX' ? "De acuerdo" : (currentLang === 'ru' ? "Скорее согласен" : "Agree"), s: 4, target: "next"},
+            {l: currentLang === 'es-MX' ? "Totalmente de acuerdo" : (currentLang === 'ru' ? "Полностью согласен" : "Strongly Agree"), s: 5, target: "next"}
+          ],
+          config: { min: 1, max: 5, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: dict.placeholderText }
+        };
+        bank.push(newVar);
+        currentIndex = bank.length - 1;
+        saveBank();
+        updateUI();
+      }
+
+      function deleteCurrentVariable() {
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (bank.length <= 1) {
+          alert(dict.alertSingleVar);
+          return;
+        }
+        bank.splice(currentIndex, 1);
+        if (currentIndex >= bank.length) currentIndex = bank.length - 1;
+        saveBank();
+        updateUI();
+      }
+
+      function validateAllInvariants() {
+        let errorsFound = false;
+        const v = bank[currentIndex];
+        const dict = i18n[currentLang] || i18n['es-MX'];
+
+        if (!v) return;
+
+        const idErrEl = document.getElementById('idError');
+        const duplicateId = bank.some((item, idx) => idx !== currentIndex && item.id.trim() === v.id.trim());
+        if (!v.id.trim()) {
+          idErrEl.style.display = 'flex';
+          idErrEl.innerHTML = `<span>${dict.errEmptyId}</span>`;
+          errorsFound = true;
+        } else if (duplicateId) {
+          idErrEl.style.display = 'flex';
+          idErrEl.innerHTML = `<span>${dict.errDuplicateId} ('${v.id}')</span>`;
+          errorsFound = true;
+        } else {
+          idErrEl.style.display = 'none';
+        }
+
+        const promptErrEl = document.getElementById('promptError');
+        if (!v.prompt || !v.prompt.trim()) {
+          promptErrEl.style.display = 'flex';
+          promptErrEl.innerHTML = `<span>${dict.errEmptyPrompt}</span>`;
+          errorsFound = true;
+        } else {
+          promptErrEl.style.display = 'none';
+        }
+
+        const metricErrEl = document.getElementById('metricError');
+        if (v.type === 'interval_ratio') {
+          const min = parseFloat(v.config?.min ?? 0);
+          const max = parseFloat(v.config?.max ?? 0);
+          const step = parseFloat(v.config?.step ?? 1);
+
+          if (isNaN(min) || isNaN(max) || min >= max) {
+            metricErrEl.style.display = 'flex';
+            const fixMax = isNaN(min) ? 10 : min + 10;
+            metricErrEl.innerHTML = `
+              <span>${dict.errMinMax} (${isNaN(min) ? 0 : min} >= ${isNaN(max) ? 0 : max})</span>
+              <button onclick="fixMetricRange(${fixMax})">Fix Max = ${fixMax}</button>
+            `;
+            errorsFound = true;
+          } else if (step > (max - min)) {
+            metricErrEl.style.display = 'flex';
+            metricErrEl.innerHTML = `
+              <span>${dict.errStep} (${step} > ${max - min})</span>
+              <button onclick="fixMetricStep(1)">Fix Step = 1</button>
+            `;
+            errorsFound = true;
+          } else {
+            metricErrEl.style.display = 'none';
+          }
+        } else {
+          metricErrEl.style.display = 'none';
+        }
+
+        const textErrEl = document.getElementById('textError');
+        if (v.type === 'textual') {
+          const maxLen = parseInt(v.config?.maxLength ?? 0, 10);
+          if (isNaN(maxLen) || maxLen <= 0) {
+            textErrEl.style.display = 'flex';
+            textErrEl.innerHTML = `<span>${dict.errTextLen}</span> <button onclick="fixTextLength(500)">Set 500</button>`;
+            errorsFound = true;
+          } else {
+            textErrEl.style.display = 'none';
+          }
+        } else {
+          textErrEl.style.display = 'none';
+        }
+
+        if (v.type === 'ordinal' && v.options && v.options.length > 1) {
+          for (let i = 1; i < v.options.length; i++) {
+            const prevVal = Number(v.options[i - 1].s);
+            const currVal = Number(v.options[i].s);
+            if (!isNaN(prevVal) && !isNaN(currVal) && currVal <= prevVal) {
+              errorsFound = true;
+              break;
+            }
+          }
+        }
+
+        if (v.type === 'nominal' && v.options && v.options.length > 0) {
+          const codeCounts = {};
+          for (const opt of v.options) {
+            const code = String(opt.s).trim();
+            codeCounts[code] = (codeCounts[code] || 0) + 1;
+            if (codeCounts[code] > 1) {
+              errorsFound = true;
+              break;
+            }
+          }
+        }
+
+        hasGlobalErrors = errorsFound;
+        document.getElementById('exportBtn').disabled = errorsFound;
+      }
+
+      function fixMetricRange(fixedMax) {
+        bank[currentIndex].config.max = fixedMax;
+        document.getElementById('metricMax').value = fixedMax;
+        saveBank();
+        updateUI();
+      }
+
+      function fixMetricStep(fixedStep) {
+        bank[currentIndex].config.step = fixedStep;
+        document.getElementById('metricStep').value = fixedStep;
+        saveBank();
+        updateUI();
+      }
+
+      function fixTextLength(fixedLen) {
+        bank[currentIndex].config.maxLength = fixedLen;
+        document.getElementById('textMaxLength').value = fixedLen;
+        saveBank();
+        updateUI();
+      }
+
+      function updateUI() {
+        renderNav();
+        if (!bank[currentIndex]) currentIndex = 0;
+        const v = bank[currentIndex];
+        if (!v) return;
+
+        const dict = i18n[currentLang] || i18n['es-MX'];
+
+        document.getElementById('idInput').value = v.id || '';
+        document.getElementById('typeSelect').value = v.type || 'nominal';
+        
+        const scaleSelect = document.getElementById('scaleSelect');
+        scaleSelect.innerHTML = '';
+        const matrix = getScaleMatrix();
+        const typeScales = matrix[v.type] ? matrix[v.type].scales : [];
+        
+        typeScales.forEach(sObj => {
+          const opt = document.createElement('option');
+          opt.value = sObj.id;
+          opt.textContent = sObj.name;
+          if (sObj.id === v.scale) opt.selected = true;
+          scaleSelect.appendChild(opt);
+        });
+
+        document.getElementById('statusField').value = (v.tracking_mode === 'time_variant') ? dict.statusDynamicAuto : dict.statusStaticAuto;
+        document.getElementById('promptInput').value = v.prompt || '';
+
+        document.getElementById('waveSelect').value = v.wave || 'wave_1';
+        document.getElementById('lagSelect').value = v.lag || 'immediate';
+
+        populateTargetDropdowns();
+
+        const metricCard = document.getElementById('metricConfigCard');
+        const textCard = document.getElementById('textConfigCard');
+        const optionsCard = document.getElementById('optionsCard');
+
+        if (!v.config) {
+          v.config = { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: dict.placeholderText };
+        }
+
+        if (v.type === 'interval_ratio') {
+          metricCard.style.display = 'block';
+          textCard.style.display = 'none';
+          optionsCard.style.display = 'none';
+          document.getElementById('metricMin').value = v.config.min ?? 0;
+          document.getElementById('metricMax').value = v.config.max ?? 100;
+          document.getElementById('metricStep').value = v.config.step ?? 1;
+          document.getElementById('metricDirection').value = v.config.direction ?? 'direct';
+          document.getElementById('metricUnit').value = v.config.unit ?? '';
+          document.getElementById('metricUnit').placeholder = dict.placeholderUnit;
+        } else if (v.type === 'textual') {
+          metricCard.style.display = 'none';
+          textCard.style.display = 'block';
+          optionsCard.style.display = 'none';
+          document.getElementById('textMaxLength').value = v.config.maxLength ?? 500;
+          document.getElementById('textPlaceholder').value = v.config.placeholder ?? dict.placeholderText;
+          document.getElementById('textPlaceholder').placeholder = dict.placeholderText;
+        } else {
+          metricCard.style.display = 'none';
+          textCard.style.display = 'none';
+          optionsCard.style.display = 'block';
+          
+          const titleEl = document.getElementById('optionsSectionTitle');
+          titleEl.textContent = (v.type === 'nominal') ? dict.nominalGradingLabel : dict.ordinalGradingLabel;
+          renderOptions();
+        }
+
+        validateAllInvariants();
+        renderPreview();
+      }
+
+      function renderOptions() {
+        const container = document.getElementById('optionsContainer');
+        container.innerHTML = '';
+        const v = bank[currentIndex];
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (!v || !v.options) return;
+
+        const usedCodes = {};
+        if (v.type === 'nominal') {
+          v.options.forEach(opt => {
+            const code = String(opt.s).trim();
+            usedCodes[code] = (usedCodes[code] || 0) + 1;
+          });
+        }
+
+        v.options.forEach((opt, optIdx) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'option-row-wrapper';
+
+          const line = document.createElement('div');
+          line.className = 'option-line';
+          const codeLabel = (v.type === 'nominal') ? 'ID código' : 'Peso s';
+          
+          let targetOptionsHtml = `<option value="next">➔ ${dict.targetNextInSequence.replace('➡️ ', '')}</option><option value="end">🏁 ${dict.targetEndSurvey.replace('🏁 ', '')}</option>`;
+          bank.forEach(item => {
+            if (item.id && item.id.trim() !== v.id.trim()) {
+              const selectedAttr = (opt.target === item.id) ? 'selected' : '';
+              targetOptionsHtml += `<option value="${item.id}" ${selectedAttr}>➔ ${item.id}</option>`;
+            }
+          });
+          if (opt.target === 'end') {
+            targetOptionsHtml = targetOptionsHtml.replace('value="end"', 'value="end" selected');
+          } else if (opt.target === 'next' || !opt.target) {
+            targetOptionsHtml = targetOptionsHtml.replace('value="next"', 'value="next" selected');
+          }
+
+          line.innerHTML = `
+            <input type="text" value="${opt.l}" placeholder="${dict.placeholderCategory}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
+            <input type="number" id="weight_input_${optIdx}" value="${opt.s}" placeholder="${codeLabel}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
+            <select onchange="updateOptionTarget(${optIdx}, this.value)" style="flex: 1.2; font-size: 11px;" title="Enrutamiento al seleccionar esta opción">
+              ${targetOptionsHtml}
+            </select>
+            <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;">✕</button>
+          `;
+          wrapper.appendChild(line);
+
+          if (v.type === 'ordinal' && optIdx > 0) {
+            const prevVal = Number(v.options[optIdx - 1].s);
+            const currVal = Number(opt.s);
+            if (!isNaN(prevVal) && !isNaN(currVal) && currVal <= prevVal) {
+              const suggestedVal = prevVal + 1;
+              const errDiv = document.createElement('div');
+              errDiv.className = 'inline-error';
+              errDiv.innerHTML = `
+                <span>${dict.errMonotonicity} (&gt; ${prevVal})</span>
+                <button onclick="autoFixWeight(${optIdx}, ${suggestedVal})">Fix = ${suggestedVal}</button>
+              `;
+              wrapper.appendChild(errDiv);
+              setTimeout(() => {
+                const inp = document.getElementById(`weight_input_${optIdx}`);
+                if (inp) inp.style.borderColor = 'var(--danger)';
+              }, 0);
+            }
+          }
+
+          if (v.type === 'nominal') {
+            const codeStr = String(opt.s).trim();
+            if (usedCodes[codeStr] > 1) {
+              const nextFreeCode = getNextFreeNominalCode(v.options);
+              const errDiv = document.createElement('div');
+              errDiv.className = 'inline-error';
+              errDiv.innerHTML = `
+                <span>${dict.errNominalConflict}</span>
+                <button onclick="autoFixWeight(${optIdx}, ${nextFreeCode})">Fix ID = ${nextFreeCode}</button>
+              `;
+              wrapper.appendChild(errDiv);
+              setTimeout(() => {
+                const inp = document.getElementById(`weight_input_${optIdx}`);
+                if (inp) inp.style.borderColor = 'var(--danger)';
+              }, 0);
+            }
+          }
+
+          container.appendChild(wrapper);
+        });
+      }
+
+      function getNextFreeNominalCode(options) {
+        const codes = options.map(o => Number(o.s)).filter(n => !isNaN(n));
+        const max = codes.length > 0 ? Math.max(...codes) : 0;
+        return max + 1;
+      }
+
+      function autoFixWeight(optIdx, fixedVal) {
+        const v = bank[currentIndex];
+        if (!v || !v.options[optIdx]) return;
+        v.options[optIdx].s = fixedVal;
+        saveBank();
+        renderOptions();
+        validateAllInvariants();
+        renderPreview();
+      }
+
+      function addOption() {
+        const v = bank[currentIndex];
+        if (!v) return;
+        if (!v.options) v.options = [];
+        const lastOpt = v.options[v.options.length - 1];
+        const nextVal = lastOpt && !isNaN(Number(lastOpt.s)) ? Number(lastOpt.s) + 1 : 1;
+        const defaultLabel = currentLang === 'es-MX' ? `Opción ${v.options.length + 1}` : (currentLang === 'ru' ? `Вариант ${v.options.length + 1}` : `Option ${v.options.length + 1}`);
+        v.options.push({ l: defaultLabel, s: nextVal, target: "next" });
+        saveBank();
+        updateUI();
+      }
+
+      function removeOption(optIndex) {
+        const v = bank[currentIndex];
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (!v || !v.options) return;
+        if (v.options.length <= 1) {
+          alert(dict.alertSingleVar);
+          return;
+        }
+        v.options.splice(optIndex, 1);
+        saveBank();
+        updateUI();
+      }
+
+      function updateOptionLabel(optIdx, val) {
+        const v = bank[currentIndex];
+        if (!v || !v.options[optIdx]) return;
+        v.options[optIdx].l = val;
+        saveBank();
+        renderPreview();
+      }
+
+      function updateOptionWeight(optIdx, val) {
+        const v = bank[currentIndex];
+        if (!v || !v.options[optIdx]) return;
+        const parsed = parseFloat(val);
+        v.options[optIdx].s = (val === '' || isNaN(parsed)) ? 0 : parsed;
+        saveBank();
+        renderOptions();
+        validateAllInvariants();
+        renderPreview();
+      }
+
+      function updateOptionTarget(optIdx, targetVal) {
+        const v = bank[currentIndex];
+        if (!v || !v.options[optIdx]) return;
+        v.options[optIdx].target = targetVal;
+        saveBank();
+        renderPreview();
+      }
+
+      function onDefaultNextChange(val) {
+        const v = bank[currentIndex];
+        if (!v) return;
+        v.default_next = val;
+        saveBank();
+      }
+
+      function onIdChange(val) {
+        const v = bank[currentIndex];
+        if (!v) return;
+        v.id = val.trim();
+        saveBank();
+        renderNav();
+        validateAllInvariants();
+      }
+
+      function onTypeSelectChange(val) {
+        const v = bank[currentIndex];
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (!v) return;
+        if (v.options && v.options.length > 0) {
+          if (!confirm(dict.confirmTypeChange)) {
+            document.getElementById('typeSelect').value = v.type;
+            return;
+          }
+        }
+        v.type = val;
+        const matrix = getScaleMatrix();
+        const typeScales = matrix[val] ? matrix[val].scales : [];
+        if (typeScales.length > 0) {
+          v.scale = typeScales[0].id;
+          v.options = JSON.parse(JSON.stringify(typeScales[0].preset));
+        }
+        saveBank();
+        updateUI();
+      }
+
+      function onScaleChange(val) {
+        const v = bank[currentIndex];
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (!v) return;
+        const matrix = getScaleMatrix();
+        const typeScales = matrix[v.type] ? matrix[v.type].scales : [];
+        const found = typeScales.find(s => s.id === val);
+        if (found && found.preset.length > 0) {
+          if (v.options && v.options.length > 0 && !confirm(dict.confirmScaleChange)) {
+            document.getElementById('scaleSelect').value = v.scale;
+            return;
+          }
+          v.options = JSON.parse(JSON.stringify(found.preset));
+        }
+        v.scale = val;
+        saveBank();
+        updateUI();
+      }
+
+      function onWaveChange(val) {
+        if (bank[currentIndex]) {
+          bank[currentIndex].wave = val;
+          saveBank();
+        }
+      }
+
+      function onLagChange(val) {
+        if (bank[currentIndex]) {
+          bank[currentIndex].lag = val;
+          saveBank();
+        }
+      }
+
+      function onPromptChange(val) {
+        if (bank[currentIndex]) {
+          bank[currentIndex].prompt = val;
+          saveBank();
+          validateAllInvariants();
+          renderPreview();
+        }
+      }
+
+      function onMetricConfigChange() {
+        const v = bank[currentIndex];
+        if (!v) return;
+        if (!v.config) v.config = {};
+        
+        const minVal = parseFloat(document.getElementById('metricMin').value);
+        const maxVal = parseFloat(document.getElementById('metricMax').value);
+        const stepVal = parseFloat(document.getElementById('metricStep').value);
+        
+        v.config.min = !isNaN(minVal) ? minVal : 0;
+        v.config.max = !isNaN(maxVal) ? maxVal : 100;
+        v.config.step = (!isNaN(stepVal) && stepVal > 0) ? stepVal : 1;
+        
+        v.config.direction = document.getElementById('metricDirection').value;
+        v.config.unit = document.getElementById('metricUnit').value;
+        saveBank();
+        validateAllInvariants();
+        renderPreview();
+      }
+
+      function onTextConfigChange() {
+        const v = bank[currentIndex];
+        if (!v) return;
+        if (!v.config) v.config = {};
+        
+        const maxLenVal = parseInt(document.getElementById('textMaxLength').value, 10);
+        v.config.maxLength = (!isNaN(maxLenVal) && maxLenVal > 0) ? maxLenVal : 500;
+        v.config.placeholder = document.getElementById('textPlaceholder').value;
+        
+        saveBank();
+        validateAllInvariants();
+        renderPreview();
+      }
+
+      function renderPreview() {
+        const v = bank[currentIndex];
+        if (!v) return;
+        
+        document.getElementById('previewBadge').textContent = `${v.type.toUpperCase()} · ${v.scale}`;
+        document.getElementById('previewPromptText').textContent = v.prompt || (currentLang === 'es-MX' ? "Sin pregunta especificada..." : "No prompt specified...");
+        
+        const body = document.getElementById('previewBody');
+        body.innerHTML = '';
+
+        if (v.type === 'nominal' || v.type === 'ordinal') {
+          if (v.options && v.options.length > 0) {
+            v.options.forEach(opt => {
+              const item = document.createElement('div');
+              item.className = 'preview-option-item';
+              const tagLabel = (v.type === 'nominal') ? `[ID: ${opt.s}]` : `[s = ${opt.s}]`;
+              const routeTag = opt.target && opt.target !== 'next' ? ` ➔ [${opt.target}]` : '';
+              item.innerHTML = `<input type="radio" name="preview_group" /> <span style="flex:1;">${opt.l}</span> <span style="font-size: 10px; color: var(--primary); font-family: monospace;">${tagLabel}${routeTag}</span>`;
+              body.appendChild(item);
+            });
+          }
+        } else if (v.type === 'interval_ratio') {
+          const minVal = v.config?.min ?? 0;
+          const maxVal = v.config?.max ?? 100;
+          const stepVal = v.config?.step ?? 1;
+          const unitStr = v.config?.unit ? ` (${v.config.unit})` : '';
+          body.innerHTML = `
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <input type="range" min="${minVal}" max="${maxVal}" step="${stepVal}" value="${minVal}" style="width:100%; accent-color: var(--primary);" />
+              <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
+                <span>Min: ${minVal}</span>
+                <span style="color: var(--primary); font-weight: 700;">Rango [${minVal} — ${maxVal}]${unitStr}</span>
+                <span>Max: ${maxVal}</span>
+              </div>
+            </div>
+          `;
+        } else if (v.type === 'textual') {
+          body.innerHTML = `
+            <textarea placeholder="${v.config?.placeholder || (currentLang === 'es-MX' ? 'Ingrese texto de respuesta...' : 'Enter text...')}" disabled style="width: 100%; min-height: 100px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text);"></textarea>
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; text-align: right;">Máx. longitud: ${v.config?.maxLength ?? 500} car.</div>
+          `;
+        }
+      }
+
+      function saveProtocol() {
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (hasGlobalErrors) {
+          alert(dict.alertExportError);
+          return;
+        }
+
+        const scientificProtocolPackage = {
+          engine: "Research OS Strict Cyan Protocol Engine",
+          version: "2.6.0",
+          timestamp: new Date().toISOString(),
+          language: currentLang,
+          global_mode: currentMode,
+          psychometric_integrity: "validated_strict",
+          variables: bank.map(v => ({
+            variable_id: v.id,
+            routing: {
+              default_next: v.default_next || "next"
+            },
+            psychometric_properties: {
+              measurement_level: v.type,
+              scale_subtype: v.scale,
+              tracking_mode: v.tracking_mode,
+              wave: v.wave,
+              time_lag: v.lag,
+              direction: v.config?.direction || "direct",
+              inversion_metadata: {
+                is_inverted: (v.config?.direction === "inverse"),
+                applied_transform: v.config?.direction === "inverse" ? "x_rev = max - x + min" : "identity"
+              },
+              bounds: v.type === 'interval_ratio' ? { min: v.config.min, max: v.config.max, step: v.config.step, unit: v.config.unit } : null,
+              text_constraints: v.type === 'textual' ? { max_length: v.config.maxLength, placeholder: v.config.placeholder } : null,
+              coding_schema: (v.type === 'nominal' || v.type === 'ordinal') ? v.options.map(o => ({ label: o.l, code_or_weight: o.s, target_transition: o.target || "next" })) : null
+            },
+            question_prompt: v.prompt
+          }))
+        };
+
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(scientificProtocolPackage, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `research_os_cyan_protocol_${currentMode}_${Date.now()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+      }
+
+      window.addEventListener('DOMContentLoaded', () => {
+        changeLanguage('es-MX');
+      });
+    </script>
+    <style>
+      .research-footer {
+        text-align: center;
+        padding: 30px 20px;
+        font-size: 0.85rem;
+        color: #6e6e73;
+        border-top: 1px solid #eaeaea;
+        margin-top: 60px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+    </style>
+
+    <div class="research-footer">
+      ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+    </div>
+  </body>
+</html>

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Research OS | Кабинет участника</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
+        .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; flex: 1; width: 100%; box-sizing: border-box; }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 16px 24px; }
+        .logo { font-weight: 700; color: #38bdf8; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        
+        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+        h1 { font-size: 22px; color: #38bdf8; margin-top: 0; }
+        h3 { font-size: 16px; color: #f8fafc; margin-top: 0; }
+        p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
+        
+        .btn { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; font-size: 14px; }
+        .btn:hover { background: #1d4ed8; }
+        .btn-logout { background: #b91c1c; padding: 6px 12px; font-size: 13px; }
+        .btn-logout:hover { background: #991b1b; }
+
+        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: #065f46; color: #34d399; margin-bottom: 12px; }
+        
+        .chat-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+        .chat-msg { padding: 8px 12px; border-radius: 6px; max-width: 85%; line-height: 1.4; }
+        .chat-msg.ai { background: #1e293b; color: #cbd5e1; align-self: flex-start; border: 1px solid #334155; }
+        .chat-input-area { display: flex; gap: 8px; }
+        .chat-input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
+        .chat-input:focus { border-color: #38bdf8; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="logo">🔬 Research OS — Кабинет Участника</div>
+        <button class="btn btn-logout" onclick="handleLogout()">Выйти</button>
+    </div>
+
+    <div class="container">
+        <div id="cabinetContent">
+            <div class="status-badge">● Сессия активна</div>
+            <h1 id="welcomeTitle">Личный кабинет сессии</h1>
+            <p>Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.</p>
+            
+            <div class="grid">
+                <!-- Левая колонка: Опросники и прогресс -->
+                <div>
+                    <div class="card">
+                        <h3>📋 Активные опросники</h3>
+                        <p>Доступные для заполнения методики в рамках вашего текущего этапа:</p>
+                        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <strong style="color: #f8fafc; display: block; margin-bottom: 4px;">Психометрический скрининг шкал</strong>
+                                <span style="font-size: 12px; color: #94a3b8;">Статус: Готов к прохождению (~10 мин)</span>
+                            </div>
+                            <a href="survey.html" class="btn">Пройти →</a>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3>📊 История и результаты</h3>
+                        <p style="color: #64748b; font-size: 13px; margin: 0;">У вас пока нет завершенных сессий. История появится после отправки ответов.</p>
+                    </div>
+                </div>
+
+                <!-- Правая колонка: ИИ-ассистент -->
+                <div>
+                    <div class="card" style="height: 100%; display: flex; flex-direction: column; box-sizing: border-box;">
+                        <h3>🤖 ИИ-Ассистент</h3>
+                        <p style="font-size: 12px; margin-bottom: 12px;">Задайте вопрос по процедуре прохождения опросников.</p>
+                        
+                        <div class="chat-box" id="chatContainer">
+                            <div class="chat-msg ai">Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?</div>
+                        </div>
+                        
+                        <div class="chat-input-area">
+                            <input type="text" id="chatInput" class="chat-input" placeholder="Введите вопрос..." onkeydown="if(event.key==='Enter') sendMsg()">
+                            <button class="btn" style="padding: 8px 12px;" onclick="sendMsg()">➤</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // Обработка бесшовного входа и токена
+    window.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (token) {
+            localStorage.setItem('ros_participant_session', JSON.stringify({ token, time: new Date().toISOString() }));
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        const session = localStorage.getItem('ros_participant_session');
+        
+        if (!session) {
+            document.body.innerHTML = `
+                <div style="font-family: system-ui; background: #0f172a; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; padding: 20px;">
+                    <div style="background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+                        <h3 style="color: #38bdf8; margin-top: 0;">🔒 Se requiere un enlace personal.</h3>
+                        <p style="color: #94a3b8; font-size: 14px; line-height: 1.5;">Para acceder a su cuenta personal, siga el enlace único proporcionado por el investigador.</p>
+                    </div>
+                </div>
+            `;
+        } else {
+            const data = JSON.parse(session);
+            document.getElementById('welcomeTitle').innerText = `Личный кабинет сессии: ${data.token}`;
+        }
+    });
+
+    function handleLogout() {
+        localStorage.removeItem('ros_participant_session');
+        location.reload();
+    }
+
+    function sendMsg() {
+        const input = document.getElementById('chatInput');
+        const text = input.value.trim();
+        if(!text) return;
+
+        const chat = document.getElementById('chatContainer');
+        chat.innerHTML += `<div class="chat-msg" style="background: #2563eb; color: #fff; align-self: flex-end;">${text}</div>`;
+        input.value = '';
+        chat.scrollTop = chat.scrollHeight;
+
+        setTimeout(() => {
+            chat.innerHTML += `<div class="chat-msg ai">Спасибо за вопрос! Ваши данные фиксируются в системе Research OS автоматически. Если возникнут технические трудности при прохождении шкал, обратитесь к исследователю.</div>`;
+            chat.scrollTop = chat.scrollHeight;
+        }, 800);
+    }
+</script>
+
+</body>
+</html>

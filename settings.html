@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Research OS | Settings</title>
+    <!-- Подключаем библиотеку для генерации QR-кодов -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
+        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+        .app-header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
+        .back-btn { background: #334155; color: #38bdf8; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+        .back-btn:hover { background: #475569; color: #ffffff; }
+        .page-title { color: #f8fafc; font-weight: 700; font-size: 16px; }
+        .lang-picker { display: flex; gap: 6px; }
+        .lang-btn { background: transparent; border: none; color: #94a3b8; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .lang-btn.active { background: #38bdf8; color: #0f172a; }
+        h1 { color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-top: 16px; }
+        .section { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+        label { font-size: 13px; color: #94a3b8; font-weight: 600; }
+        input, select { background: #0f172a; border: 1px solid #475569; padding: 10px; border-radius: 6px; color: #f8fafc; outline: none; }
+        input:focus, select:focus { border-color: #38bdf8; }
+        .btn { background: #10b981; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 14px; }
+        .btn:hover { background: #059669; }
+        .btn-blue { background: #2563eb; }
+        .btn-blue:hover { background: #1d4ed8; }
+        .toast { background: #065f46; color: #34d399; padding: 12px; border-radius: 6px; margin-top: 16px; display: none; text-align: center; }
+    </style>
+</head>
+<body>
+
+<div class="app-header">
+    <div class="header-left">
+        <a href="index.html" class="back-btn" data-i18n="back_home">← На главную</a>
+        <span class="page-title">🔬 Research OS</span>
+    </div>
+    <div class="lang-picker">
+        <button class="lang-btn" onclick="setLang('ru', event)">🇷🇺 RU</button>
+        <button class="lang-btn" onclick="setLang('es', event)">🇲🇽 ES</button>
+        <button class="lang-btn" onclick="setLang('en', event)">🇬🇧 EN</button>
+    </div>
+</div>
+
+<div class="container">
+    <h1 data-i18n="settings_h1">⚙️ Панель управления и доступов</h1>
+
+    <!-- 1. Коды доступа и роли -->
+    <div class="section">
+        <h2 data-i18n="sec3_title">1. Коды доступа и роли</h2>
+        <div class="grid">
+            <div class="form-group">
+                <label data-i18n="label_researcher_code">🔑 Секретный код исследователя:</label>
+                <input type="password" id="access_researcher" placeholder="Например: admin_tijuana_2026">
+                <span style="font-size: 11px; color: #64748b;" data-i18n="hint_researcher">Дает полный доступ к панели управления.</span>
+            </div>
+            <div class="form-group">
+                <label data-i18n="label_participant_prefix">🏷️ Префикс для участников:</label>
+                <input type="text" id="access_participant_prefix" placeholder="Например: resp_">
+                <span style="font-size: 11px; color: #64748b;" data-i18n="hint_participant">Используется для генерации персональных ссылок.</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Генератор ссылок и QR-кодов для респондентов -->
+    <div class="section" style="border-color: #38bdf8;">
+        <h2 style="color: #38bdf8;" data-i18n="sec_generator">🔗 Генератор персональных ссылок и QR-кодов</h2>
+        <p style="color: #94a3b8; font-size: 13px;" data-i18n="generator_desc">Введите ID или имя участника (например, префикс + ID), чтобы сформировать персональный доступ:</p>
+        
+        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+            <input type="text" id="participantId" placeholder="Например: resp_tijuana_01" style="flex: 1; min-width: 200px;">
+            <button class="btn btn-blue" onclick="generateAccess()" data-i18n="btn_generate">Сгенерировать доступ</button>
+        </div>
+        
+        <!-- Результат: Ссылка + QR-код -->
+        <div id="accessResult" style="display: none; background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; flex-direction: column; align-items: center; gap: 16px;">
+            <div id="textLinkBox" style="word-break: break-all; font-family: monospace; font-size: 13px; color: #38bdf8; width: 100%;"></div>
+            
+            <div style="background: #fff; padding: 12px; border-radius: 8px; display: inline-block;" id="qrcode"></div>
+            <span style="font-size: 12px; color: #94a3b8; text-align: center;" data-i18n="hint_qr">Участник сканирует этот код со смартфона для входа в кабинет</span>
+        </div>
+    </div>
+
+    <!-- 3. API-ключи -->
+    <div class="section">
+        <h2 data-i18n="sec1_title">3. Ваши API-ключи ИИ</h2>
+        <div class="grid">
+            <div class="form-group">
+                <label>Groq API Key (Free):</label>
+                <input type="password" id="key_groq" placeholder="gsk_...">
+            </div>
+            <div class="form-group">
+                <label>Google Gemini API Key (Free):</label>
+                <input type="password" id="key_gemini" placeholder="AIzaSy...">
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Маршрутизация ИИ -->
+    <div class="section">
+        <h2 data-i18n="sec2_title">4. Какой ИИ отвечает за задачи?</h2>
+        <div class="form-group">
+            <label data-i18n="label_analyzer">🔍 Анализ и поиск шкал (analyzer.html):</label>
+            <select id="task_analyzer">
+                <option value='{"provider":"groq","model":"llama-3.3-70b-versatile"}'>Groq / Llama 3.3 (Fast)</option>
+                <option value='{"provider":"gemini","model":"gemini-1.5-flash"}'>Google / Gemini 1.5 Flash</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label data-i18n="label_translator">🌐 Перевод и адаптация (translator.html):</label>
+            <select id="task_translator">
+                <option value='{"provider":"gemini","model":"gemini-1.5-flash"}'>Google / Gemini 1.5 Flash</option>
+                <option value='{"provider":"groq","model":"llama-3.3-70b-versatile"}'>Groq / Llama 3.3</option>
+            </select>
+        </div>
+    </div>
+
+    <button class="btn" onclick="saveAllSettings()" data-i18n="btn_save">💾 Сохранить настройки</button>
+    <div id="toast" class="toast" data-i18n="toast_saved">✅ Настройки успешно сохранены!</div>
+</div>
+
+<script>
+const i18n = {
+    ru: {
+        back_home: "← На главную",
+        settings_h1: "⚙️ Панель управления и доступов",
+        sec3_title: "1. Коды доступа и роли",
+        label_researcher_code: "🔑 Секретный код исследователя:",
+        hint_researcher: "Дает полный доступ к панели управления.",
+        label_participant_prefix: "🏷️ Префикс для участников:",
+        hint_participant: "Используется для генерации персональных ссылок.",
+        sec_generator: "🔗 Генератор персональных ссылок и QR-кодов",
+        generator_desc: "Введите ID или имя участника (например, префикс + ID), чтобы сформировать персональный доступ:",
+        btn_generate: "Сгенерировать доступ",
+        hint_qr: "Участник сканирует этот код со смартфона для входа в кабинет",
+        sec1_title: "3. Ваши API-ключи ИИ",
+        sec2_title: "4. Какой ИИ отвечает за задачи?",
+        label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
+        label_translator: "🌐 Перевод и адаптация (translator.html):",
+        btn_save: "💾 Сохранить настройки",
+        toast_saved: "✅ Настройки успешно сохранены!"
+    },
+    es: {
+        back_home: "← Inicio",
+        settings_h1: "⚙️ Panel de Control y Accesos",
+        sec3_title: "1. Códigos de acceso y roles",
+        label_researcher_code: "🔑 Código secreto de investigador:",
+        hint_researcher: "Brinda acceso completo al panel de control.",
+        label_participant_prefix: "🏷️ Prefijo para participantes:",
+        hint_participant: "Se utiliza para generar enlaces personales.",
+        sec_generator: "🔗 Generador de enlaces personales y códigos QR",
+        generator_desc: "Ingrese el ID o nombre del participante para generar su acceso personal:",
+        btn_generate: "Generar acceso",
+        hint_qr: "El participante escanea este código con su smartphone para entrar",
+        sec1_title: "3. Sus Claves API de IA",
+        sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
+        label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
+        label_translator: "🌐 Traducción y adaptación (translator.html):",
+        btn_save: "💾 Guardar configuración",
+        toast_saved: "✅ ¡Configuración guardada con éxito!"
+    },
+    en: {
+        back_home: "← Back to Hub",
+        settings_h1: "⚙️ Access & Control Panel",
+        sec3_title: "1. Access Codes & Roles",
+        label_researcher_code: "🔑 Researcher Secret Code:",
+        hint_researcher: "Grants full control panel access.",
+        label_participant_prefix: "🏷️ Participant Token Prefix:",
+        hint_participant: "Used for personal link generation.",
+        sec_generator: "🔗 Personal Link & QR Code Generator",
+        generator_desc: "Enter participant ID or name to generate secure access:",
+        btn_generate: "Generate Access",
+        hint_qr: "Participant scans this QR code with a smartphone to enter",
+        sec1_title: "3. Your AI API Keys",
+        sec2_title: "4. Assign AI models to tasks",
+        label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
+        label_translator: "🌐 Translation & adaptation (translator.html):",
+        btn_save: "💾 Save Configuration",
+        toast_saved: "✅ Configuration saved successfully!"
+    }
+};
+
+function setLang(lang, e) {
+    localStorage.setItem('app_language', lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    if (e && e.target) e.target.classList.add('active');
+
+    const dict = i18n[lang] || i18n.ru;
+    document.querySelectorAll('[data-i18n]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n');
+        if (dict[key]) elem.innerText = dict[key];
+    });
+}
+
+function generateAccess() {
+    const id = document.getElementById('participantId').value.trim();
+    const resultBox = document.getElementById('accessResult');
+    const textLinkBox = document.getElementById('textLinkBox');
+    const qrContainer = document.getElementById('qrcode');
+    
+    if(!id) {
+        alert('Введите ID участника');
+        return;
+    }
+    
+    // Формируем ссылку на cabinet.html с токеном
+    const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(id)}`;
+    
+    resultBox.style.display = 'flex';
+    textLinkBox.innerHTML = `Персональная ссылка:<br><strong>${generatedLink}</strong>`;
+    
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+        text: generatedLink,
+        width: 160,
+        height: 160,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
+
+function saveAllSettings() {
+    const accessConfig = {
+        researcherCode: document.getElementById('access_researcher').value.trim(),
+        participantPrefix: document.getElementById('access_participant_prefix').value.trim()
+    };
+    localStorage.setItem('ros_access_config', JSON.stringify(accessConfig));
+
+    const keys = {
+        groq: document.getElementById('key_groq').value.trim(),
+        gemini: document.getElementById('key_gemini').value.trim()
+    };
+    localStorage.setItem('ai_api_keys', JSON.stringify(keys));
+
+    const config = {
+        analyzer: JSON.parse(document.getElementById('task_analyzer').value),
+        translator: JSON.parse(document.getElementById('task_translator').value)
+    };
+    localStorage.setItem('ai_router_config', JSON.stringify(config));
+
+    const toast = document.getElementById('toast');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 3000);
+}
+
+function loadSettings() {
+    const accessConfig = JSON.parse(localStorage.getItem('ros_access_config') || '{}');
+    if (accessConfig.researcherCode) document.getElementById('access_researcher').value = accessConfig.researcherCode;
+    if (accessConfig.participantPrefix) document.getElementById('access_participant_prefix').value = accessConfig.participantPrefix;
+
+    const keys = JSON.parse(localStorage.getItem('ai_api_keys') || '{}');
+    if (keys.groq) document.getElementById('key_groq').value = keys.groq;
+    if (keys.gemini) document.getElementById('key_gemini').value = keys.gemini;
+
+    const config = JSON.parse(localStorage.getItem('ai_router_config') || '{}');
+    if (config.analyzer) document.getElementById('task_analyzer').value = JSON.stringify(config.analyzer);
+    if (config.translator) document.getElementById('task_translator').value = JSON.stringify(config.translator);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    const savedLang = localStorage.getItem('app_language') || 'ru';
+    const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
+    if (btn) btn.click();
+});
+</script>
+
+<style>
+  .research-footer {
+    text-align: center;
+    padding: 30px 20px;
+    font-size: 0.85rem;
+    color: #6e6e73;
+    border-top: 1px solid #eaeaea;
+    margin-top: 60px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+</style>
+
+<div class="research-footer">
+  ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+</div>
+</body>
+</html>

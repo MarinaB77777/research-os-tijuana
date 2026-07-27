@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Research OS | Scale Analyzer</title>
+    <script src="ai-router.js"></script>
+    <script src="prompts.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --accent-hover: #0ea5e9;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --error-color: #ef4444;
+            --success-color: #10b981;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .back-btn {
+            background: var(--border-color);
+            color: var(--accent-color);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .back-btn:hover {
+            background: #475569;
+            color: #ffffff;
+        }
+
+        .page-title {
+            color: var(--text-color);
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .lang-picker {
+            display: flex;
+            gap: 6px;
+        }
+
+        .lang-btn {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .lang-btn.active {
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border-color: var(--accent-color);
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        .header {
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+            margin-top: 16px;
+        }
+
+        h1 { font-size: 22px; color: var(--accent-color); margin: 0 0 6px 0; }
+        p { color: var(--text-muted); margin: 0; font-size: 13px; }
+
+        .upload-card {
+            background: var(--card-bg);
+            border: 2px dashed #475569;
+            border-radius: 12px;
+            padding: 32px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-bottom: 24px;
+        }
+        .upload-card:hover { border-color: var(--accent-color); }
+
+        .progress-box {
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 16px;
+            margin-bottom: 24px;
+            display: none;
+        }
+        .progress-fill { height: 8px; background: var(--accent-color); border-radius: 4px; width: 0%; transition: width 0.3s; }
+
+        .btn {
+            background-color: var(--success-color);
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.9; }
+
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #64748b;
+            font-size: 13px;
+            border-top: 1px solid var(--card-bg);
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="app-header">
+    <div class="header-left">
+        <a href="index.html" class="back-btn" data-i18n="back_home">← На главную</a>
+        <span class="page-title">🔬 Research OS | Scale Analyzer</span>
+    </div>
+    <div class="lang-picker">
+        
+        <button class="lang-btn" onclick="setLang('es', event)"> 🇲🇽 ES</button>
+        <button class="lang-btn" onclick="setLang('en', event)"> 🇺🇸 EN</button>
+        <button class="lang-btn" onclick="setLang('ru', event)"> RU</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="header">
+        <h1 data-i18n="analyzer_h1">🧠 Психометрический Смысловой Анализатор</h1>
+        <p data-i18n="analyzer_sub">Валидация шкал, определение методик и классификация интентов вопросов через ИИ</p>
+    </div>
+
+    <div class="upload-card" onclick="document.getElementById('fileInput').click()">
+        📂 <strong data-i18n="upload_title">Загрузите файл с банком вопросов (.py / .json / .txt)</strong><br>
+        <small style="color: var(--text-muted); margin-top: 6px; display: inline-block;" data-i18n="upload_sub">Скрипт автоматически распознает структуру и запустит анализ через выбранный ИИ</small>
+        <input type="file" id="fileInput" accept=".py,.json,.txt" style="display:none" onchange="loadFile(this.files[0])">
+    </div>
+
+    <div id="progressBox" class="progress-box">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px;">
+            <span id="progressStatus" data-i18n="status_prep">Подготовка...</span>
+            <span id="progressPercent">0%</span>
+        </div>
+        <div style="background: var(--bg-color); border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" class="progress-fill"></div>
+        </div>
+    </div>
+
+    <div id="resultsArea" style="display: none;">
+        <h3 data-i18n="results_title" style="color: var(--text-color);">Результаты анализа:</h3>
+        <button class="btn" onclick="downloadCSV()" data-i18n="download_csv">💾 Скачать отчет CSV</button>
+        <pre id="jsonPreview" style="background: #020617; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 12px; color: #a5f3fc; margin-top: 16px; max-height: 400px; border: 1px solid var(--border-color);"></pre>
+    </div>
+
+    <div class="footer">
+        ✨ Designed and built in collaboration with Gemini AI | Research OS Pilot
+    </div>
+</div>
+
+<script>
+let analyzedResults = [];
+let currentLang = 'ru';
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+const i18n = {
+    ru: {
+        back_home: "← На главную",
+        analyzer_h1: "🧠 Психометрический Смысловой Анализатор",
+        analyzer_sub: "Валидация шкал, определение методик и классификация интентов вопросов через ИИ",
+        upload_title: "Загрузите файл с банком вопросов (.py / .json / .txt)",
+        upload_sub: "Скрипт автоматически распознает структуру и запустит анализ через выбранный ИИ",
+        status_prep: "Подготовка...",
+        status_analyzing: "ИИ анализирует пачку",
+        results_title: "Результаты анализа:",
+        download_csv: "💾 Скачать отчет CSV",
+        error_file: "Ошибка чтения структуры файла: ",
+        error_ai: "Ошибка ИИ: "
+    },
+    es: {
+        back_home: "← Inicio",
+        analyzer_h1: "🧠 Analizador Semántico Psicométrico",
+        analyzer_sub: "Validación de escalas, identificación de metodologías y clasificación mediante IA",
+        upload_title: "Cargar archivo con banco de preguntas (.py / .json / .txt)",
+        upload_sub: "El script detectará la estructura y ejecutará el análisis mediante la IA seleccionada",
+        status_prep: "Preparando...",
+        status_analyzing: "La IA está analizando el lote",
+        results_title: "Resultados del análisis:",
+        download_csv: "💾 Descargar informe CSV",
+        error_file: "Error al leer la estructura del archivo: ",
+        error_ai: "Error de IA: "
+    },
+    en: {
+        back_home: "← Back to Hub",
+        analyzer_h1: "🧠 Psychometric Semantic Analyzer",
+        analyzer_sub: "Scale validation, methodology detection, and question intent classification via AI",
+        upload_title: "Upload question bank file (.py / .json / .txt)",
+        upload_sub: "The script will automatically detect structure and run analysis via chosen AI",
+        status_prep: "Preparing...",
+        status_analyzing: "AI is analyzing batch",
+        results_title: "Analysis Results:",
+        download_csv: "💾 Download CSV Report",
+        error_file: "File structure error: ",
+        error_ai: "AI Error: "
+    }
+};
+
+function setLang(lang, e) {
+    currentLang = lang;
+    localStorage.setItem('app_language', lang);
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+    if (e && e.target) e.target.classList.add('active');
+
+    const dict = i18n[lang] || i18n.ru;
+    document.querySelectorAll('[data-i18n]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n');
+        if (dict[key]) elem.innerText = dict[key];
+    });
+}
+
+/* --- НАДЕЖНЫЙ ЛЕКСИЧЕСКИЙ ПАРСЕР PYTHON/JSON (State Machine) --- */
+window.parsePythonDictionary = function(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+
+    let text = rawText
+        .replace(/#.*$/gm, '')
+        .replace(/^\s*[a-zA-Z_]\w*\s*=\s*/gm, '')
+        .trim();
+
+    const firstBrace = text.indexOf('{');
+    if (firstBrace === -1) return null;
+
+    let questions = {};
+    let i = firstBrace + 1;
+
+    while (i < text.length) {
+        while (i < text.length && /[\s,\r\n]/.test(text[i])) i++;
+        if (i >= text.length || text[i] === '}') break;
+
+        let questionCode = '';
+        if (text[i] === '"' || text[i] === "'") {
+            let quoteChar = text[i];
+            i++;
+            let keyStart = i;
+            while (i < text.length && text[i] !== quoteChar) i++;
+            questionCode = text.substring(keyStart, i);
+            i++;
+        } else {
+            let keyStart = i;
+            while (i < text.length && !/[\s:]/.test(text[i])) i++;
+            questionCode = text.substring(keyStart, i);
+        }
+
+        if (!questionCode) break;
+
+        while (i < text.length && text[i] !== ':') i++;
+        i++;
+
+        while (i < text.length && text[i] !== '{') {
+            if (text[i] === '}') break;
+            i++;
+        }
+        if (i >= text.length || text[i] === '}') break;
+
+        let blockStart = i;
+        let braceCount = 1;
+        i++;
+        let inStr = false;
+        let strChar = '';
+        let escaped = false;
+
+        while (i < text.length && braceCount > 0) {
+            let char = text[i];
+            if (escaped) {
+                escaped = false;
+            } else if (char === '\\') {
+                escaped = true;
+            } else if (!inStr && (char === '"' || char === "'")) {
+                inStr = true;
+                strChar = char;
+            } else if (inStr && char === strChar) {
+                inStr = false;
+            } else if (!inStr) {
+                if (char === '{') braceCount++;
+                if (char === '}') braceCount--;
+            }
+            i++;
+        }
+
+        let blockContent = text.substring(blockStart, i);
+        let parsedQuestion = extractQuestionData(questionCode, blockContent);
+        
+        let finalKey = parsedQuestion.code || questionCode;
+        questions[finalKey] = parsedQuestion;
+    }
+
+    return Object.keys(questions).length > 0 ? questions : null;
+};
+
+function extractValueByKey(text, key) {
+    let escapedKey = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    let regex = new RegExp(`['"]?${escapedKey}['"]?\\s*:\\s*`, 'g');
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        let startIdx = match.index + match[0].length;
+        let valResult = parsePythonValue(text, startIdx);
+        if (valResult !== undefined) {
+            return valResult;
+        }
+    }
+    return null;
+}
+
+function parsePythonValue(text, idx) {
+    while (idx < text.length && /\s/.test(text[idx])) idx++;
+    if (idx >= text.length) return undefined;
+
+    let char = text[idx];
+
+    if (char === '"' || char === "'") {
+        let fullStr = '';
+        while (idx < text.length) {
+            while (idx < text.length && /\s/.test(text[idx])) idx++;
+            if (idx >= text.length) break;
+            char = text[idx];
+            if (char !== '"' && char !== "'") break;
+
+            let quote = char;
+            idx++;
+            let strVal = '';
+            let escaped = false;
+            while (idx < text.length) {
+                let c = text[idx];
+                if (escaped) {
+                    strVal += c;
+                    escaped = false;
+                    idx++;
+                } else if (c === '\\') {
+                    escaped = true;
+                    idx++;
+                } else if (c === quote) {
+                    idx++;
+                    break;
+                } else {
+                    strVal += c;
+                    idx++;
+                }
+            }
+            fullStr += strVal;
+
+            while (idx < text.length && /\s/.test(text[idx])) idx++;
+            if (idx < text.length && text[idx] === '+') {
+                idx++;
+                while (idx < text.length && /\s/.test(text[idx])) idx++;
+            } else {
+                break;
+            }
+        }
+        return fullStr.replace(/\\n/g, '\n');
+    }
+
+    let valEnd = idx;
+    while (valEnd < text.length && !/[,\r\n}]/.test(text[valEnd])) {
+        valEnd++;
+    }
+    let rawVal = text.substring(idx, valEnd).trim();
+    if (rawVal === 'True' || rawVal === 'true') return true;
+    if (rawVal === 'False' || rawVal === 'false') return false;
+    if (rawVal === 'None' || rawVal === 'none') return null;
+    if (!isNaN(rawVal) && rawVal !== '') return Number(rawVal);
+    return rawVal.replace(/^["']|["']$/g, '');
+}
+
+function extractQuestionData(code, block) {
+    let headerEndIdx = -1;
+    ['options', 'rows', 'columns'].forEach(key => {
+        let idx = block.search(new RegExp(`["']?${key}["']?\\s*:\\s*\\[`));
+        if (idx !== -1 && (headerEndIdx === -1 || idx < headerEndIdx)) {
+            headerEndIdx = idx;
+        }
+    });
+    
+    let headerBlock = headerEndIdx !== -1 ? block.substring(0, headerEndIdx) : block;
+
+    const getField = (fieldNames) => {
+        if (!Array.isArray(fieldNames)) fieldNames = [fieldNames];
+        for (let fieldName of fieldNames) {
+            let val = extractValueByKey(headerBlock, fieldName);
+            if (val !== null) return val;
+        }
+        return null;
+    };
+
+    let internalCode = getField('code') || String(code);
+    let promptText = getField(['prompt', 'text', 'title']) || '';
+    let respType = getField(['response_type', 'type', 'question_type']) || 'single_select';
+    let qType = getField(['question_type', 'type']) || respType;
+
+    let parseArrayOfObjects = (arrayName) => {
+        let items = [];
+        let matchIdx = block.search(new RegExp(`["']?${arrayName}["']?\\s*:\\s*\\[`));
+        if (matchIdx === -1) return items;
+
+        let startIdx = block.indexOf('[', matchIdx);
+        let bracketCount = 1;
+        let j = startIdx + 1;
+        let inStr = false;
+        let strChar = '';
+        let escaped = false;
+
+        while (j < block.length && bracketCount > 0) {
+            let char = block[j];
+            if (escaped) {
+                escaped = false;
+            } else if (char === '\\') {
+                escaped = true;
+            } else if (!inStr && (char === '"' || char === "'")) {
+                inStr = true;
+                strChar = char;
+            } else if (inStr && char === strChar) {
+                inStr = false;
+            } else if (!inStr) {
+                if (char === '[') bracketCount++;
+                if (char === ']') bracketCount--;
+            }
+            j++;
+        }
+
+        let arrayContent = block.substring(startIdx + 1, j - 1);
+        let i = 0;
+        let idx = 0;
+
+        while (i < arrayContent.length) {
+            while (i < arrayContent.length && arrayContent[i] !== '{') i++;
+            if (i >= arrayContent.length) break;
+
+            let objStart = i;
+            let objBraces = 1;
+            i++;
+            let objInStr = false;
+            let objStrChar = '';
+            let objEscaped = false;
+
+            while (i < arrayContent.length && objBraces > 0) {
+                let c = arrayContent[i];
+                if (objEscaped) {
+                    objEscaped = false;
+                } else if (c === '\\') {
+                    objEscaped = true;
+                } else if (!objInStr && (c === '"' || c === "'")) {
+                    objInStr = true;
+                    objStrChar = c;
+                } else if (objInStr && c === objStrChar) {
+                    objInStr = false;
+                } else if (!objInStr) {
+                    if (c === '{') objBraces++;
+                    if (c === '}') objBraces--;
+                }
+                i++;
+            }
+
+            let itemContent = arrayContent.substring(objStart, i);
+            
+            let val = extractValueByKey(itemContent, 'value') ?? extractValueByKey(itemContent, 'val') ?? extractValueByKey(itemContent, 'code') ?? idx;
+            let text = extractValueByKey(itemContent, 'text') ?? extractValueByKey(itemContent, 'label');
+
+            if (text !== null && text !== undefined) {
+                items.push({
+                    value: val,
+                    text: String(text).replace(/\\n/g, '\n')
+                });
+            }
+            idx++;
+        }
+        return items;
+    };
+
+    let options = parseArrayOfObjects('options');
+    let rows = parseArrayOfObjects('rows');
+    let columns = parseArrayOfObjects('columns');
+
+    return {
+        code: internalCode,
+        prompt: promptText,
+        response_type: respType,
+        options: (respType === 'matrix' || rows.length > 0) ? rows.map(r => r.text) : options.map(o => o.text)
+    };
+}
+
+function parseInputData(rawText) {
+    try { return JSON.parse(rawText); } catch (e) {}
+    const pyDict = parsePythonDictionary(rawText);
+    if (pyDict) return pyDict;
+    throw new Error("Не удалось разобрать структуру файла. Проверьте правильность синтаксиса.");
+}
+
+function loadFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const content = e.target.result;
+            const bankObj = parseInputData(content);
+            processBankWithAI(bankObj);
+        } catch (err) {
+            alert((i18n[currentLang] || i18n.ru).error_file + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+/* ------------------------------------------------------------------------- */
+
+    let rawAiResponsesLog = []; // Глобальный массив для сырых ответов ИИ
+
+    async function processBankWithAI(bankObj) {
+        const keys = Object.keys(bankObj);
+        const total = keys.length;
+        analyzedResults = [];
+        rawAiResponsesLog = []; // Очищаем лог при новом запуске
+
+        if (total === 0) {
+            alert("В загруженном файле не найдено вопросов для анализа.");
+            return;
+        }
+
+        document.getElementById('progressBox').style.display = 'block';
+        document.getElementById('resultsArea').style.display = 'none';
+
+        const BATCH_SIZE = 3; // Безопасный размер пачки для токенов
+        let allClusters = [];
+
+        for (let i = 0; i < total; i += BATCH_SIZE) {
+            const batchKeys = keys.slice(i, i + BATCH_SIZE);
+            const batchItems = batchKeys.map(code => {
+                const item = bankObj[code] || {};
+                return {
+                    code: item.code || code,
+                    prompt: item.prompt || '',
+                    options: item.options || []
+                };
+            });
+
+            const percent = Math.round(((i + batchItems.length) / total) * 100);
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('progressPercent').innerText = percent + '%';
+            
+            const dict = i18n[currentLang] || i18n.ru;
+            document.getElementById('progressStatus').innerText = dict.status_analyzing + ` (${i + 1}-${Math.min(i + BATCH_SIZE, total)} / ${total})...`;
+
+            let success = false;
+            let attempts = 0;
+            const maxAttempts = 5;
+
+            while (!success && attempts < maxAttempts) {
+                try {
+                    attempts++;
+                    let rawResponseText = await AIRouter.sendRequest('analyzer', PSYCHOMETRIC_SYSTEM_PROMPT, batchItems);
+                    
+                    // Сохраняем сырой ответ ИИ в лог
+                    rawAiResponsesLog.push({
+                        batch_index: i / BATCH_SIZE + 1,
+                        raw_text: rawResponseText,
+                        input_items: batchItems
+                    });
+
+                    let cleanText = rawResponseText;
+                    if (typeof rawResponseText === 'string') {
+                        cleanText = rawResponseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+                        const match = cleanText.match(/\[[\s\S]*\]/) || cleanText.match(/\{[\s\S]*\}/);
+                        if (match) cleanText = match[0];
+                    }
+
+                    let batchResults = typeof cleanText === 'string' ? JSON.parse(cleanText) : cleanText;
+                    let clusters = Array.isArray(batchResults) ? batchResults : (batchResults.clusters || [batchResults]);
+                    
+                    clusters.forEach(cluster => {
+                        allClusters.push({
+                            deep_human_meaning: cluster.deep_human_meaning || "General Cluster",
+                            standard_methodology: cluster.standard_methodology || "Author construct",
+                            is_standard_mapping: Boolean(cluster.is_standard_mapping),
+                            questions: Array.isArray(cluster.questions) ? cluster.questions : []
+                        });
+                    });
+
+                    success = true;
+                } catch (e) {
+                    console.error("Ошибка ИИ:", e);
+                    const errorMessage = e.message || String(e);
+                    const isRateLimit = errorMessage.includes('Rate limit') || errorMessage.includes('429') || errorMessage.includes('TPD') || errorMessage.includes('TPM');
+                   
+                    let waitSeconds = 8;
+                    const timeMatch = errorMessage.match(/try again in ([0-9ms\.]+)/i);
+                    if (timeMatch) {
+                        const timeStr = timeMatch[1];
+                        if (timeStr.includes('m')) {
+                            const mins = parseFloat(timeStr.split('m')[0]);
+                            waitSeconds = Math.ceil(mins * 60) + 5;
+                        } else {
+                            waitSeconds = Math.ceil(parseFloat(timeStr)) + 2;
+                        }
+                    }
+
+                    if (isRateLimit && attempts < maxAttempts) {
+                        for (let sec = waitSeconds; sec > 0; sec--) {
+                            document.getElementById('progressStatus').innerText = `⏳ Лимит токенов. Пауза и повтор через ${sec} сек... (попытка ${attempts})`;
+                            await sleep(1000);
+                        }
+                    } else if (attempts < maxAttempts) {
+                        document.getElementById('progressStatus').innerText = `⚠️ Ошибка, повтор через 3 сек... (попытка ${attempts})`;
+                        await sleep(3000);
+                    } else {
+                        alert(dict.error_ai + errorMessage);
+                        document.getElementById('progressBox').style.display = 'none';
+                        return;
+                    }
+                }
+            }
+            
+            // Пауза между успешными пачками для соблюдения лимитов API
+            if (i + BATCH_SIZE < total) {
+                await sleep(4000);
+            }
+        }
+
+        analyzedResults = allClusters;
+
+        // Считаем статистику покрытия строго по флагам
+        let totalQuestionsCount = 0;
+        let methodologyStats = {};
+
+        analyzedResults.forEach(cluster => {
+            let methodology = cluster.standard_methodology || "Author construct";
+            let isStandard = Boolean(cluster.is_standard_mapping);
+
+            if (!methodologyStats[methodology]) {
+                methodologyStats[methodology] = {
+                    count: 0,
+                    isStandard: isStandard
+                };
+            }
+
+            if (cluster.questions && Array.isArray(cluster.questions)) {
+                cluster.questions.forEach(q => {
+                    totalQuestionsCount++;
+                    methodologyStats[methodology].count++;
+                });
+            }
+        });
+
+        let sortedMethodologies = Object.keys(methodologyStats).sort((a, b) => methodologyStats[b].count - methodologyStats[a].count);
+
+        document.getElementById('progressBox').style.display = 'none';
+        const resultsArea = document.getElementById('resultsArea');
+        resultsArea.style.display = 'block';
+
+        let tableRows = '';
+        sortedMethodologies.forEach(m => {
+            let item = methodologyStats[m];
+            let percent = totalQuestionsCount > 0 ? ((item.count / totalQuestionsCount) * 100).toFixed(1) : 0;
+            let typeBadge = item.isStandard
+                ? '<span style="color: #2e7d32; font-weight: bold;">Standard</span>'
+                : '<span style="color: #e65100; font-weight: bold;">Author Construct</span>';
+
+            tableRows += `
+                <tr>
+                    <td style="padding: 10px; border: 1px solid #dee2e6;">${m}</td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; text-align: center;">${typeBadge}</td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; text-align: center;">${item.count}</td>
+                    <td style="padding: 10px; border: 1px solid #dee2e6; text-align: center;"><b>${percent}%</b></td>
+                </tr>
+            `;
+        });
+
+        let statsHtml = `
+            <div style="background: #f8f9fa; border: 1px solid #dee2e6; padding: 20px; border-radius: 8px; margin-bottom: 20px; font-family: sans-serif; color: #333;">
+                <h3 style="margin: 0 0 8px 0; font-size: 16px; color: #2c3e50;">📊 Perfil de Validación Psicométrica / Psychometric Validation Profile</h3>
+                <p style="margin: 0 0 10px 0; font-size: 14px; color: #555;">Total de preguntas analizadas: <b>${totalQuestionsCount}</b></p>
+                <div style="margin-bottom: 15px;">
+                    <button onclick="downloadCSV()" style="background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px;">💾 Download CSV Report</button>
+                    <button onclick="downloadRawReport()" style="background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold;">📦 Download Raw AI Log (JSON)</button>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; background: #fff;">
+                    <thead>
+                        <tr style="background: #e9ecef; text-align: left; color: #495057;">
+                            <th style="padding: 10px; border: 1px solid #dee2e6;">Metodología / Constructo</th>
+                            <th style="padding: 10px; border: 1px solid #dee2e6; text-align: center;">Tipo</th>
+                            <th style="padding: 10px; border: 1px solid #dee2e6; text-align: center;">Preguntas</th>
+                            <th style="padding: 10px; border: 1px solid #dee2e6; text-align: center;">% del Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        let existingStats = document.getElementById('coverageStatsBox');
+        if (existingStats) existingStats.remove();
+
+        const statsDiv = document.createElement('div');
+        statsDiv.id = 'coverageStatsBox';
+        statsDiv.innerHTML = statsHtml;
+        resultsArea.prepend(statsDiv);
+
+        document.getElementById('jsonPreview').innerText = JSON.stringify(analyzedResults, null, 2);
+    }
+
+    // Функция для скачивания сырого лога отчетов ИИ
+    function downloadRawReport() {
+        if (!rawAiResponsesLog || rawAiResponsesLog.length === 0) {
+            alert("Сырой лог отчетов пуст!");
+            return;
+        }
+        const blob = new Blob([JSON.stringify(rawAiResponsesLog, null, 2)], { type: 'application/json;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = "raw_ai_psychometric_log_" + Date.now() + ".json";
+        link.click();
+    }
+
+    function downloadCSV() {
+        if (!analyzedResults || analyzedResults.length === 0) {
+            alert("Ошибка: Массив результатов пуст!");
+            return;
+        }
+
+        let csv = "Deep Human Meaning;Standard Methodology;Is Standard;Question Code;Question Prompt;Alignment Explanation\n";
+        
+        analyzedResults.forEach(cluster => {
+            let meaning = (cluster.deep_human_meaning || '').replace(/"/g, '""');
+            let methodology = (cluster.standard_methodology || '').replace(/"/g, '""');
+            let isStandard = cluster.is_standard_mapping ? "Yes" : "No";
+
+            if (cluster.questions && cluster.questions.length > 0) {
+                cluster.questions.forEach(q => {
+                    let code = (q.code || '').replace(/"/g, '""');
+                    let prompt = (q.prompt || '').replace(/"/g, '""');
+                    let explanation = (q.alignment_explanation || '').replace(/"/g, '""');
+                    
+                    csv += `"${meaning}";"${methodology}";"${isStandard}";"${code}";"${prompt}";"${explanation}"\n`;
+                });
+            }
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = "psychometric_coverage_map_" + Date.now() + ".csv";
+        link.click();
+    }
+
+                function downloadCSV() {
+                    if (!analyzedResults || analyzedResults.length === 0) {
+                        alert("Ошибка: Массив результатов пуст!");
+                        return;
+                    }
+
+                    let csv = "Deep Human Meaning;Standard Methodology;Is Standard;Question Code;Question Prompt;Alignment Explanation\n";
+                    
+                    analyzedResults.forEach(cluster => {
+                        let meaning = (cluster.deep_human_meaning || '').replace(/"/g, '""');
+                        let methodology = (cluster.standard_methodology || '').replace(/"/g, '""');
+                        let isStandard = cluster.is_standard_mapping ? "Yes" : "No";
+
+                        if (cluster.questions && cluster.questions.length > 0) {
+                        cluster.questions.forEach(q => {
+                                let code = (q.code || '').replace(/"/g, '""');
+                                let prompt = (q.prompt || '').replace(/"/g, '""');
+                                let explanation = (q.alignment_explanation || '').replace(/"/g, '""');
+                                
+                                csv += `"${meaning}";"${methodology}";"${isStandard}";"${code}";"${prompt}";"${explanation}"\n`;
+                            });
+                        }
+                    });
+
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = "psychometric_coverage_map_" + Date.now() + ".csv";
+                    link.click();
+                }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const savedLang = localStorage.getItem('app_language') || 'ru';
+    const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
+    if (btn) btn.click();
+});
+</script>
+
+</body>
+</html>

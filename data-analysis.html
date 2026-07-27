@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research OS — Статистический модуль</title>
+
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --error-bg: rgba(239, 68, 68, 0.15);
+      --error-color: #f87171;
+      --warning-bg: rgba(245, 158, 11, 0.15);
+      --warning-color: #fbbf24;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --success-color: #34d399;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      max-width: 1350px;
+      width: 100%;
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      padding: 24px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 16px; }
+
+    .hub-btn {
+      background: #334155;
+      color: var(--text-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+    }
+    .hub-btn:hover { background: #475569; }
+
+    .lang-selector { display: flex; gap: 6px; }
+    .lang-selector button {
+      background: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    .lang-selector button.active { background: var(--accent-color); color: #0f172a; border-color: var(--accent-color); }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 950px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    .panel { display: flex; flex-direction: column; gap: 12px; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; }
+
+    label { font-weight: 600; font-size: 0.85rem; color: var(--text-muted); }
+
+    textarea, select, input {
+      width: 100%;
+      background: #0f172a;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      font-size: 0.9rem;
+    }
+
+    textarea { height: 140px; font-family: monospace; font-size: 0.8rem; resize: vertical; }
+
+    .step-box {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .step-title {
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: var(--accent-color);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .output-card-container {
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 16px;
+      height: 480px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    .metric-box {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .metric-value {
+      font-size: 1.4rem;
+      font-weight: bold;
+      color: var(--accent-color);
+      margin-top: 4px;
+    }
+
+    .metric-title {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .trajectory-item {
+      background: #1e293b;
+      border-left: 4px solid var(--accent-color);
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .alert-box {
+      background: var(--error-bg);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: var(--error-color);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .warning-box {
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: var(--warning-color);
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+    }
+
+    .controls { display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; }
+
+    button.btn {
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.btn:hover { background-color: var(--accent-hover); }
+    button.btn:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; }
+
+    button.btn-secondary {
+      background-color: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+    button.btn-secondary:hover { background-color: rgba(255, 255, 255, 0.05); }
+
+    .status-bar {
+      margin-top: 12px;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      display: none;
+    }
+    .status-bar.error { display: block; background-color: var(--error-bg); color: var(--error-color); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .status-bar.success { display: block; background-color: var(--success-bg); color: var(--success-color); border: 1px solid rgba(16, 185, 129, 0.3); }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="header-left">
+      <a href="index.html" class="hub-btn" id="lbl-back">← Назад в Hub</a>
+      <span style="font-weight: 600; color: var(--text-muted);" id="lbl-title">Research OS — Статистический модуль</span>
+    </div>
+    <div class="lang-selector">
+      <button onclick="setLanguage('es')" id="lang-es">🇲🇽 ES</button>
+      <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
+      <button onclick="setLanguage('ru')" id="lang-ru" class="active">🇷🇺 RU</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- Левая панель -->
+    <div class="panel">
+      
+      <div class="step-box">
+        <div class="step-title" id="lbl-step1">📥 Шаг 1. Загрузка данных анкет (JSON)</div>
+        <input type="file" id="file-loader" accept=".json" style="display:none;" onchange="handleFile(event)">
+        <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" style="width: 100%;" id="lbl-upload">📂 Загрузить файл выгрузки</button>
+        <textarea id="input-data" oninput="validateAndParse()">[
+  { "participant_id": "P_01", "timestamp": "2026-06-01T10:00:00Z", "work_format": "remote", "work_load": 3, "stress_level": 4 },
+  { "participant_id": "P_01", "timestamp": "2026-06-15T14:30:00Z", "work_format": "remote", "work_load": 4, "stress_level": 2 },
+  { "participant_id": "P_02", "timestamp": "2026-06-01T11:15:00Z", "work_format": "office", "work_load": 5, "stress_level": 5 }
+]</textarea>
+      </div>
+
+      <div class="step-box">
+        <div class="step-title" id="lbl-step2">⚙️ Шаг 2. Выбор модели и привязка полей</div>
+        
+        <div>
+          <label id="lbl-analysistype">Тип научного анализа:</label>
+          <select id="analysisType" onchange="toggleAnalysisFields(); validateAndParse();">
+            <option value="longitudinal">Лонгитюдный трекинг (Динамика во времени)</option>
+            <option value="cohorts">Когортный срез (Сравнение групп)</option>
+            <option value="dependency">Анализ зависимостей (Корреляция X -> Y)</option>
+          </select>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div id="boxParticipant">
+            <label id="lbl-participant">ID участника (Субъект):</label>
+            <select id="keyParticipant" onchange="validateAndParse()"></select>
+          </div>
+          <div id="boxTimestamp">
+            <label id="lbl-timestamp">Время (Авто-фиксация):</label>
+            <select id="keyTimestamp" onchange="validateAndParse()"></select>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div id="wrapperSplit" style="display:none;">
+            <label id="lbl-split">Фактор группы (Когорта):</label>
+            <select id="keySplit" onchange="validateAndParse()"></select>
+          </div>
+          <div id="wrapperX" style="display:none;">
+            <label id="lbl-pred">Предиктор (Переменная X):</label>
+            <select id="keyX" onchange="validateAndParse()"></select>
+          </div>
+          <div id="boxTarget">
+            <label id="lbl-target">Целевая шкала / Метрика (Y):</label>
+            <select id="keyTarget" onchange="validateAndParse()"></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Контейнер для динамических предупреждений защиты от дурака -->
+      <div id="guard-warning-container"></div>
+
+    </div>
+
+    <!-- Правая панель -->
+    <div class="panel">
+      <div class="panel-header">
+        <label style="font-weight: bold; color: var(--text-color);" id="lbl-results-title">📊 Результаты проверки и расчет:</label>
+      </div>
+      <div id="output-container" class="output-card-container"></div>
+      <div class="controls" style="margin-top: 0;">
+        <button class="btn btn-secondary" onclick="clearData()" id="lbl-clear">Сбросить</button>
+        <button class="btn" id="runAnalysisBtn" onclick="executeScientificAnalysis()">🚀 Запустить анализ</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="status-message" class="status-bar"></div>
+</div>
+
+<script>
+  let currentLang = 'ru';
+
+  const i18n = {
+    ru: {
+      back: "← Назад в Hub",
+      title: "Research OS — Статистический модуль",
+      step1: "📥 Шаг 1. Загрузка данных анкет (JSON)",
+      upload: "📂 Загрузить файл выгрузки",
+      step2: "⚙️ Шаг 2. Выбор модели и привязка полей",
+      analysisType: "Тип научного анализа:",
+      optLong: "Лонгитюдный трекинг (Динамика во времени)",
+      optCoh: "Когортный срез (Сравнение групп)",
+      optDep: "Анализ зависимостей (Корреляция X -> Y)",
+      participant: "ID участника (Субъект):",
+      timestamp: "Время (Авто-фиксация):",
+      split: "Фактор группы (Когорта):",
+      pred: "Предиктор (Переменная X):",
+      target: "Целевая шкала / Метрика (Y):",
+      resultsTitle: "📊 Результаты проверки и расчет:",
+      clear: "Сбросить",
+      run: "🚀 Запустить анализ",
+      statusSuccess: "Файл успешно загружен и прошел структурный аудит.",
+      statusRun: "Статистический анализ успешно выполнен.",
+      statusErr: "Ошибка чтения файла.",
+      emptyOutput: "Данные очищены. Загрузите файл выгрузки.",
+      auditOk: "✅ Структура данных прошла предварительный аудит. Условия применимости статистического метода соблюдены.",
+      errNotArray: "Корневой элемент JSON должен быть массивом объектов [...], а не единичным объектом.",
+      errEmpty: "Переданный массив данных пуст.",
+      errLong: "⚠️ Лонгитюдный анализ заблокирован: ни у одного участника нет двух и более временных волн (нужно минимум 2 записи на один ID).",
+      errDep: "⚠️ Анализ зависимостей заблокирован: найдено менее 3 пар валидных числовых значений для переменных X и Y (требуется n >= 3).",
+      errCoh: "⚠️ Когортный срез заблокирован: фактор группы содержит менее 2 уникальных категорий для сравнения.",
+      errJson: "Ошибка разбора JSON: проверьте синтаксис кавычек и запятых.",
+      blockedMsg: "Расчет заблокирован из-за несоответствия научным требованиям выборки. См. предупреждения слева.",
+      totalSubjects: "Всего субъектов",
+      meanShift: "Средний сдвиг",
+      trajectories: "Динамика индивидуальных треков:",
+      cohortResults: "Результаты межгруппового сравнения (Когорты):",
+      mean: "Среднее",
+      median: "Медиана",
+      stdDev: "Ст. отклонение",
+      pearson: "Коэффициент Пирсона (r)",
+      interpretation: "Интерпретация связи",
+      sampleSize: "Объем выборки парных наблюдений:",
+      strongLink: "Сильная связь",
+      modLink: "Умеренная связь",
+      weakLink: "Слабая / Отсутствует"
+    },
+    en: {
+      back: "← Back to Hub",
+      title: "Research OS — Statistical Module",
+      step1: "📥 Step 1. Load Questionnaire Data (JSON)",
+      upload: "📂 Upload Dataset File",
+      step2: "⚙️ Step 2. Model Selection & Field Mapping",
+      analysisType: "Scientific Analysis Type:",
+      optLong: "Longitudinal Tracking (Time Dynamics)",
+      optCoh: "Cohort Slice (Group Comparison)",
+      optDep: "Dependency Analysis (Correlation X -> Y)",
+      participant: "Participant ID (Subject):",
+      timestamp: "Timestamp (Auto-fixed):",
+      split: "Group Factor (Cohort):",
+      pred: "Predictor (Variable X):",
+      target: "Target Scale / Metric (Y):",
+      resultsTitle: "📊 Validation & Calculation Results:",
+      clear: "Reset",
+      run: "🚀 Run Analysis",
+      statusSuccess: "File successfully uploaded and passed structural audit.",
+      statusRun: "Statistical analysis successfully completed.",
+      statusErr: "File read error.",
+      emptyOutput: "Data cleared. Upload a dataset file.",
+      auditOk: "✅ Data structure passed preliminary audit. Statistical applicability conditions are met.",
+      errNotArray: "Root JSON element must be an array of objects [...], not a single object.",
+      errEmpty: "The provided dataset array is empty.",
+      errLong: "⚠️ Longitudinal analysis blocked: no participant has two or more waves (at least 2 records per ID required).",
+      errDep: "⚠️ Dependency analysis blocked: fewer than 3 valid numeric pairs found for variables X and Y (requires n >= 3).",
+      errCoh: "⚠️ Cohort slice blocked: group factor contains less than 2 unique categories for comparison.",
+      errJson: "JSON parse error: check quotes and commas syntax.",
+      blockedMsg: "Calculation blocked due to sample mismatch with scientific requirements. See warnings on the left.",
+      totalSubjects: "Total Subjects",
+      meanShift: "Mean Shift",
+      trajectories: "Individual Track Dynamics:",
+      cohortResults: "Intergroup Comparison Results (Cohorts):",
+      mean: "Mean",
+      median: "Median",
+      stdDev: "Std Dev",
+      pearson: "Pearson Coefficient (r)",
+      interpretation: "Relationship Interpretation",
+      sampleSize: "Paired observations sample size:",
+      strongLink: "Strong correlation",
+      modLink: "Moderate correlation",
+      weakLink: "Weak / None"
+    },
+    es: {
+      back: "← Volver al Hub",
+      title: "Research OS — Módulo Estadístico",
+      step1: "📥 Paso 1. Cargar Datos de Encuestas (JSON)",
+      upload: "📂 Cargar Archivo de Datos",
+      step2: "⚙️ Paso 2. Selección de Modelo y Mapeo de Campos",
+      analysisType: "Tipo de Análisis Científico:",
+      optLong: "Seguimiento Longitudinal (Dinámica Temporal)",
+      optCoh: "Corte de Cohortes (Comparación de Grupos)",
+      optDep: "Análisis de Dependencias (Correlación X -> Y)",
+      participant: "ID de Participante (Sujeto):",
+      timestamp: "Marca de tiempo (Auto-fijada):",
+      split: "Factor de Grupo (Cohorte):",
+      pred: "Predictor (Variable X):",
+      target: "Escala Objetivo / Métrica (Y):",
+      resultsTitle: "📊 Resultados de Validación y Cálculo:",
+      clear: "Reiniciar",
+      run: "🚀 Ejecutar Análisis",
+      statusSuccess: "Archivo cargado con éxito y auditado estructuralmente.",
+      statusRun: "Análisis estadístico completado con éxito.",
+      statusErr: "Error de lectura de archivo.",
+      emptyOutput: "Datos borrados. Cargue un archivo de datos.",
+      auditOk: "✅ La estructura de datos pasó la auditoría previa. Se cumplen las condiciones de aplicabilidad estadística.",
+      errNotArray: "El elemento raíz JSON debe ser un array de objetos [...], no un objeto único.",
+      errEmpty: "El array de datos proporcionado está vacío.",
+      errLong: "⚠️ Análisis longitudinal bloqueado: ningun participante tiene dos o más olas (se requieren al menos 2 registros por ID).",
+      errDep: "⚠️ Análisis de dependencias bloqueado: se encontraron menos de 3 pares numéricos válidos para X e Y (requiere n >= 3).",
+      errCoh: "⚠️ Corte de cohortes bloqueado: el factor de grupo contiene menos de 2 categorías únicas para comparar.",
+      errJson: "Error de análisis JSON: verifique la sintaxis de comillas y comas.",
+      blockedMsg: "Cálculo bloqueado debido a incumplimiento de requisitos científicos de la muestra. Ver advertencias a la izquierda.",
+      totalSubjects: "Sujetos Totales",
+      meanShift: "Cambio Medio",
+      trajectories: "Dinámica de Pistas Individuales:",
+      cohortResults: "Resultados de Comparación Intergrupal (Cohortes):",
+      mean: "Media",
+      median: "Mediana",
+      stdDev: "Desviación Est.",
+      pearson: "Coeficiente de Pearson (r)",
+      interpretation: "Interpretación de Relación",
+      sampleSize: "Tamaño de muestra de observaciones emparejadas:",
+      strongLink: "Correlación fuerte",
+      modLink: "Correlación moderada",
+      weakLink: "Débil / Ninguna"
+    }
+  };
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-selector button').forEach(b => b.classList.remove('active'));
+    document.getElementById(`lang-${lang}`).classList.add('active');
+
+    // Обновляем тексты интерфейса
+    const t = i18n[lang];
+    document.getElementById('lbl-back').innerText = t.back;
+    document.getElementById('lbl-title').innerText = t.title;
+    document.getElementById('lbl-step1').innerText = t.step1;
+    document.getElementById('lbl-upload').innerText = t.upload;
+    document.getElementById('lbl-step2').innerText = t.step2;
+    document.getElementById('lbl-analysistype').innerText = t.analysisType;
+    
+    const sel = document.getElementById('analysisType');
+    sel.options[0].text = t.optLong;
+    sel.options[1].text = t.optCoh;
+    sel.options[2].text = t.optDep;
+
+    document.getElementById('lbl-participant').innerText = t.participant;
+    document.getElementById('lbl-timestamp').innerText = t.timestamp;
+    document.getElementById('lbl-split').innerText = t.split;
+    document.getElementById('lbl-pred').innerText = t.pred;
+    document.getElementById('lbl-target').innerText = t.target;
+    document.getElementById('lbl-results-title').innerText = t.resultsTitle;
+    document.getElementById('lbl-clear').innerText = t.clear;
+    document.getElementById('runAnalysisBtn').innerText = t.run;
+
+    validateAndParse();
+  }
+
+  function showStatus(msg, isErr = false) {
+    const bar = document.getElementById('status-message');
+    bar.className = `status-bar ${isErr ? 'error' : 'success'}`;
+    bar.innerText = msg;
+  }
+
+  function toggleAnalysisFields() {
+    const mode = document.getElementById('analysisType').value;
+    document.getElementById('boxParticipant').style.display = (mode === 'longitudinal') ? 'block' : 'none';
+    document.getElementById('boxTimestamp').style.display = (mode === 'longitudinal') ? 'block' : 'none';
+    document.getElementById('wrapperSplit').style.display = (mode === 'cohorts') ? 'block' : 'none';
+    document.getElementById('wrapperX').style.display = (mode === 'dependency') ? 'block' : 'none';
+  }
+
+  async function handleFile(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    try {
+      document.getElementById('input-data').value = await file.text();
+      validateAndParse();
+      showStatus(i18n[currentLang].statusSuccess, false);
+    } catch (e) {
+      showStatus(i18n[currentLang].statusErr, true);
+    }
+  }
+
+  function clearData() {
+    document.getElementById('input-data').value = '';
+    document.getElementById('output-container').innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 150px;">${i18n[currentLang].emptyOutput}</div>`;
+    document.getElementById('guard-warning-container').innerHTML = '';
+    document.getElementById('status-message').style.display = 'none';
+  }
+
+  // ЗАЩИТА ОТ ДУРАКА С УЧЕТОМ ЯЗЫКА
+  function validateAndParse() {
+    const warningContainer = document.getElementById('guard-warning-container');
+    const runBtn = document.getElementById('runAnalysisBtn');
+    const t = i18n[currentLang];
+    warningContainer.innerHTML = '';
+
+    try {
+      const text = document.getElementById('input-data').value.trim();
+      const dataset = JSON.parse(text);
+
+      if (!Array.isArray(dataset)) throw new Error(t.errNotArray);
+      if (dataset.length === 0) throw new Error(t.errEmpty);
+
+      const keys = Object.keys(dataset[0]);
+      ['keyParticipant', 'keyTimestamp', 'keySplit', 'keyX', 'keyTarget'].forEach(id => {
+        const select = document.getElementById(id);
+        const currentVal = select.value;
+        select.innerHTML = '';
+        keys.forEach(k => {
+          const opt = document.createElement('option');
+          opt.value = k;
+          opt.textContent = k;
+          select.appendChild(opt);
+        });
+        if (keys.includes(currentVal)) select.value = currentVal;
+      });
+
+      if (keys.includes('participant_id') && !document.getElementById('keyParticipant').value) document.getElementById('keyParticipant').value = 'participant_id';
+      if (keys.includes('timestamp') && !document.getElementById('keyTimestamp').value) document.getElementById('keyTimestamp').value = 'timestamp';
+      if (keys.includes('work_format') && !document.getElementById('keySplit').value) document.getElementById('keySplit').value = 'work_format';
+      if (keys.includes('work_load') && !document.getElementById('keyX').value) document.getElementById('keyX').value = 'work_load';
+      if (keys.includes('stress_level') && !document.getElementById('keyTarget').value) document.getElementById('keyTarget').value = 'stress_level';
+
+      const mode = document.getElementById('analysisType').value;
+      let issues = [];
+
+      if (mode === 'longitudinal') {
+        const idKey = document.getElementById('keyParticipant').value;
+        const counts = {};
+        dataset.forEach(row => {
+          const id = row[idKey];
+          if (id !== undefined) counts[id] = (counts[id] || 0) + 1;
+        });
+        const multiWaveCount = Object.values(counts).filter(c => c >= 2).length;
+        if (multiWaveCount === 0) issues.push(t.errLong);
+      } else if (mode === 'dependency') {
+        const xKey = document.getElementById('keyX').value;
+        const targetKey = document.getElementById('keyTarget').value;
+        let validPairs = 0;
+        dataset.forEach(row => {
+          if (!isNaN(Number(row[xKey])) && !isNaN(Number(row[targetKey]))) validPairs++;
+        });
+        if (validPairs < 3) issues.push(t.errDep);
+      } else if (mode === 'cohorts') {
+        const splitKey = document.getElementById('keySplit').value;
+        const groups = new Set(dataset.map(r => r[splitKey]));
+        if (groups.size < 2) issues.push(t.errCoh);
+      }
+
+      if (issues.length > 0) {
+        runBtn.disabled = true;
+        warningContainer.innerHTML = `<div class="alert-box">${issues.join('<br>')}<br></div>`;
+        document.getElementById('output-container').innerHTML = `<div style="color: var(--error-color); padding: 20px; text-align: center;">${t.blockedMsg}</div>`;
+      } else {
+        runBtn.disabled = false;
+        warningContainer.innerHTML = `<div class="warning-box">${t.auditOk}</div>`;
+      }
+
+    } catch (e) {
+      runBtn.disabled = true;
+      warningContainer.innerHTML = `<div class="alert-box">❌ ${e.message || t.errJson}</div>`;
+    }
+  }
+
+  // НАУЧНЫЙ ДВИЖОК
+  class ScientificEngine {
+    mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+    median(arr) {
+      if (!arr.length) return 0;
+      const s = [...arr].sort((a, b) => a - b);
+      const m = Math.floor(s.length / 2);
+      return s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
+    }
+    stdDev(arr, m) {
+      if (arr.length <= 1) return 0;
+      const meanVal = m !== undefined ? m : this.mean(arr);
+      return Math.sqrt(arr.reduce((acc, val) => acc + Math.pow(val - meanVal, 2), 0) / (arr.length - 1));
+    }
+
+    trackLongitudinal(data, cfg) {
+      const timelines = {};
+      data.forEach(row => {
+        const id = row[cfg.idKey];
+        const time = row[cfg.timeKey];
+        const val = Number(row[cfg.targetKey]);
+        if (id !== undefined && time !== undefined && !isNaN(val)) {
+          if (!timelines[id]) timelines[id] = [];
+          timelines[id].push({ time: new Date(time).getTime() || time, value: val });
+        }
+      });
+      let trajectories = {}, deltas = [];
+      for (const [id, points] of Object.entries(timelines)) {
+        points.sort((a, b) => a.time - b.time);
+        if (points.length >= 2) {
+          const init = points[0].value, latest = points[points.length - 1].value;
+          const delta = latest - init;
+          deltas.push(delta);
+          trajectories[id] = { waves: points.length, initial: init, latest: latest, delta: Number(delta.toFixed(2)) };
+        }
+      }
+      return { type: 'longitudinal', sample: Object.keys(timelines).length, meanDelta: Number(this.mean(deltas).toFixed(2)), trajectories };
+    }
+
+    analyzeCohorts(data, cfg) {
+      const groups = {};
+      data.forEach(row => {
+        const g = row[cfg.splitKey] !== undefined ? String(row[cfg.splitKey]) : 'N/A';
+        const val = Number(row[cfg.targetKey]);
+        if (!isNaN(val)) { if (!groups[g]) groups[g] = []; groups[g].push(val); }
+      });
+      const cohorts = {};
+      for (const [g, vals] of Object.entries(groups)) {
+        const m = this.mean(vals);
+        cohorts[g] = { n: vals.length, mean: Number(m.toFixed(2)), median: Number(this.median(vals).toFixed(2)), stdDev: Number(this.stdDev(vals, m).toFixed(2)) };
+      }
+      return { type: 'cohorts', cohorts };
+    }
+
+    calculateDependency(data, cfg) {
+      const t = i18n[currentLang];
+      const pairs = [];
+      data.forEach(row => {
+        const x = Number(row[cfg.xKey]), y = Number(row[cfg.targetKey]);
+        if (!isNaN(x) && !isNaN(y)) pairs.push({ x, y });
+      });
+      const mx = this.mean(pairs.map(p => p.x)), my = this.mean(pairs.map(p => p.y));
+      let num = 0, dx = 0, dy = 0;
+      pairs.forEach(p => { num += (p.x - mx) * (p.y - my); dx += Math.pow(p.x - mx, 2); dy += Math.pow(p.y - my, 2); });
+      const r = (dx * dy === 0) ? 0 : num / Math.sqrt(dx * dy);
+      const absR = Math.abs(r);
+      const strength = absR > 0.5 ? t.strongLink : (absR > 0.3 ? t.modLink : t.weakLink);
+      return { type: 'dependency', n: pairs.length, r: Number(r.toFixed(2)), strength };
+    }
+  }
+
+  function executeScientificAnalysis() {
+    const rawText = document.getElementById('input-data').value.trim();
+    try {
+      const dataset = JSON.parse(rawText);
+      const mode = document.getElementById('analysisType').value;
+      const engine = new ScientificEngine();
+      let res = {};
+
+      if (mode === 'longitudinal') {
+        res = engine.trackLongitudinal(dataset, {
+          idKey: document.getElementById('keyParticipant').value,
+          timeKey: document.getElementById('keyTimestamp').value,
+          targetKey: document.getElementById('keyTarget').value
+        });
+      } else if (mode === 'cohorts') {
+        res = engine.analyzeCohorts(dataset, {
+          splitKey: document.getElementById('keySplit').value,
+          targetKey: document.getElementById('keyTarget').value
+        });
+      } else if (mode === 'dependency') {
+        res = engine.calculateDependency(dataset, {
+          xKey: document.getElementById('keyX').value,
+          targetKey: document.getElementById('keyTarget').value
+        });
+      }
+
+      renderHtmlOutput(res);
+      showStatus(i18n[currentLang].statusRun, false);
+    } catch (e) {
+      document.getElementById('output-container').innerHTML = `<div style="color: var(--error-color); padding: 20px; text-align: center;">Ошибка расчета.</div>`;
+    }
+  }
+
+  function renderHtmlOutput(res) {
+    const container = document.getElementById('output-container');
+    const t = i18n[currentLang];
+    container.innerHTML = '';
+
+    if (res.type === 'longitudinal') {
+      container.innerHTML = `
+        <div class="metric-grid">
+          <div class="metric-box">
+            <div class="metric-title">${t.totalSubjects}</div>
+            <div class="metric-value">${res.sample}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-title">${t.meanShift}</div>
+            <div class="metric-value">${res.meanDelta}</div>
+          </div>
+        </div>
+        <div style="font-weight: 600; font-size: 0.85rem; margin-top: 5px; color: var(--text-muted);">${t.trajectories}</div>
+      `;
+      for (const [id, data] of Object.entries(res.trajectories)) {
+        container.innerHTML += `
+          <div class="trajectory-item">
+            <span>👤 ${id} (${data.waves} waves)</span>
+            <span>${data.initial} → ${data.latest} (<b style="color: ${data.delta <= 0 ? '#34d399' : '#f87171'}">${data.delta > 0 ? '+' + data.delta : data.delta}</b>)</span>
+          </div>
+        `;
+      }
+    } else if (res.type === 'cohorts') {
+      container.innerHTML = `<div style="font-weight: 600; font-size: 0.85rem; color: var(--text-muted);">${t.cohortResults}</div>`;
+      for (const [g, data] of Object.entries(res.cohorts)) {
+        container.innerHTML += `
+          <div class="trajectory-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <div>🏷️ ${g} (n = ${data.n})</div>
+            <div style="display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted);">
+              <span>${t.mean}: <b style="color: var(--accent-color);">${data.mean}</b></span>
+              <span>${t.median}: <b>${data.median}</b></span>
+              <span>${t.stdDev}: <b>${data.stdDev}</b></span>
+            </div>
+          </div>
+        `;
+      }
+    } else if (res.type === 'dependency') {
+      container.innerHTML = `
+        <div class="metric-grid">
+          <div class="metric-box">
+            <div class="metric-title">${t.pearson}</div>
+            <div class="metric-value">${res.r}</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-title">${t.interpretation}</div>
+            <div class="metric-value" style="font-size: 1rem; line-height: 1.4rem;">${res.strength}</div>
+          </div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 15px; text-align: center;">
+          ${t.sampleSize} <b>${res.n}</b>
+        </div>
+      `;
+    }
+  }
+
+  window.onload = function() {
+    toggleAnalysisFields();
+    validateAndParse();
+    executeScientificAnalysis();
+  };
+</script>
+</body>
+</html>

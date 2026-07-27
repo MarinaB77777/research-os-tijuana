@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convertidor Universal de Cuestionarios | Research OS</title>
+  
+  <!-- Mammoth para DOCX -->
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
+  <!-- PDF.js para leer texto de PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+  <!-- SheetJS para XLSX, XLS, CSV -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- JS-YAML para YAML / YML -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #162032;
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155; /* Сделали контуры более заметными */
+      --error-bg: rgba(239, 68, 68, 0.15);
+      --error-color: #f87171;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --success-color: #34d399;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      max-width: 1200px;
+      width: 100%;
+      background: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+      border: 2px solid var(--border-color); /* Увеличена четкость главной рамки */
+      padding: 24px;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid var(--border-color);
+      padding-bottom: 16px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .hub-btn {
+      background: #1e293b;
+      color: var(--text-color);
+      padding: 6px 12px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+    .hub-btn:hover { background: #334155; }
+
+    .brand-title {
+      color: var(--text-muted);
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .lang-selector {
+      display: flex;
+      gap: 6px;
+    }
+
+    .lang-selector button {
+      background: #1e293b;
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .lang-selector button:hover {
+      color: var(--text-color);
+      border-color: var(--accent-color);
+    }
+
+    .lang-selector button.active {
+      background: var(--accent-color);
+      color: #0f172a;
+      border-color: var(--accent-color);
+    }
+
+    .page-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin: 0;
+      color: var(--text-color);
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      align-items: stretch;
+    }
+
+    @media (max-width: 768px) {
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #0f172a; /* Сделали внутренние панели контрастнее подложки */
+      border: 2px solid var(--border-color); /* Четкий видимый контур окон */
+      border-radius: 10px;
+      padding: 16px;
+      box-sizing: border-box;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 36px;
+    }
+
+    label { font-weight: 600; font-size: 0.9rem; color: var(--text-muted); }
+
+    textarea {
+      width: 100%;
+      height: 440px;
+      font-family: "Consolas", "Courier New", Courier, monospace;
+      font-size: 0.85rem;
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-sizing: border-box;
+      resize: vertical;
+      background: #090d16; /* Глубокий цвет текстаовой зоны для контраста */
+      color: #e2e8f0;
+      line-height: 1.5;
+    }
+
+    /* Настройка явных, видимых скроллбаров */
+    textarea::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    textarea::-webkit-scrollbar-track {
+      background: #090d16;
+      border-radius: 6px;
+    }
+    textarea::-webkit-scrollbar-thumb {
+      background: #475569;
+      border-radius: 6px;
+      border: 2px solid #090d16;
+    }
+    textarea::-webkit-scrollbar-thumb:hover {
+      background: var(--accent-color);
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    button.btn {
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    button.btn:hover { background-color: var(--accent-hover); }
+
+    button.btn-secondary {
+      background-color: #1e293b;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+
+    button.btn-secondary:hover { background-color: #334155; }
+
+    .file-input-wrapper input[type="file"] { display: none; }
+
+    .status-bar {
+      padding: 12px 16px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      display: none;
+    }
+
+    .status-bar.error {
+      display: block;
+      background-color: var(--error-bg);
+      color: var(--error-color);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .status-bar.success {
+      display: block;
+      background-color: var(--success-bg);
+      color: var(--success-color);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .app-signature {
+      text-align: center;
+      margin-top: 10px;
+      padding-top: 16px;
+      border-top: 2px solid var(--border-color);
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="header-left">
+      <a href="index.html" class="hub-btn">← Back to Hub</a>
+      <span class="brand-title">Research OS</span>
+    </div>
+    <div class="lang-selector">
+      <button onclick="setLanguage('es')" id="lang-es" class="active">🇲🇽 ES</button>
+      <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
+      <button onclick="setLanguage('ru')" id="lang-ru">🇷🇺 RU</button>
+    </div>
+  </header>
+
+  <div class="page-title-row">
+    <span style="font-size: 1.5rem;">🔄</span>
+    <h1 id="ui-title">Convertidor Universal de Cuestionarios</h1>
+  </div>
+
+  <div class="workspace">
+    <div class="panel">
+      <div class="panel-header">
+        <label for="input-json" id="ui-input-label">Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):</label>
+        <div class="file-input-wrapper">
+          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js" onchange="handleFileSelect(event)">
+          <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" id="ui-btn-upload">📂 Cargar Archivo</button>
+        </div>
+      </div>
+      <textarea id="input-json" placeholder="Cargue un archivo o pegue los datos del cuestionario..."></textarea>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <label for="output-json" id="ui-output-label">Resultado (Canonical Schema + UUID):</label>
+      </div>
+      <textarea id="output-json" readonly placeholder="Espere el resultado..."></textarea>
+    </div>
+  </div>
+
+  <div id="status-message" class="status-bar"></div>
+
+  <div class="controls">
+    <button class="btn btn-secondary" onclick="clearAll()" id="ui-btn-clear">Limpiar</button>
+    <button class="btn btn-secondary" onclick="copyResult()" id="ui-btn-copy">Copiar Resultado</button>
+    <button class="btn" onclick="processConversion()" id="ui-btn-convert">Convertir</button>
+  </div>
+
+  <div class="app-signature">
+    <span>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</span>
+  </div>
+</div>
+
+<script>
+  const i18n = {
+    es: {
+      title: "Convertidor Universal de Cuestionarios",
+      inputLabel: "Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      outputLabel: "Resultado (Canonical Schema + UUID):",
+      btnUpload: "📂 Cargar Archivo",
+      btnClear: "Limpiar",
+      btnCopy: "Copiar Resultado",
+      btnConvert: "Convertir",
+      errEmpty: "El campo de entrada está vacío. Cargue un archivo o pegue datos.",
+      msgSuccess: "¡Interpretado y convertido con éxito!",
+      msgCopied: "¡Resultado copiado al portapapeles!"
+    },
+    en: {
+      title: "Universal Survey Schema Converter",
+      inputLabel: "Source Survey (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      outputLabel: "Result (Canonical Schema + UUID):",
+      btnUpload: "📂 Upload File",
+      btnClear: "Clear",
+      btnCopy: "Copy Result",
+      btnConvert: "Convert",
+      errEmpty: "Input field is empty. Upload a file or paste data.",
+      msgSuccess: "Successfully parsed and converted!",
+      msgCopied: "Result copied to clipboard!"
+    },
+    ru: {
+      title: "Универсальный конвертер анкет",
+      inputLabel: "Исходная анкета (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      outputLabel: "Результат (Canonical Schema + UUID):",
+      btnUpload: "📂 Загрузить файл",
+      btnClear: "Очистить",
+      btnCopy: "Скопировать результат",
+      btnConvert: "Сконвертировать",
+      errEmpty: "Поле ввода пусто. Загрузите файл или вставьте текст данных.",
+      msgSuccess: "Успешно извлечено и сконвертировано!",
+      msgCopied: "Результат скопирован в буфер обмена!"
+    }
+  };
+
+  let currentLang = 'es';
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    document.querySelectorAll('.lang-selector button').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`lang-${lang}`).classList.add('active');
+
+    const t = i18n[lang];
+    document.getElementById('ui-title').innerText = t.title;
+    document.getElementById('ui-input-label').innerText = t.inputLabel;
+    document.getElementById('ui-output-label').innerText = t.outputLabel;
+    document.getElementById('ui-btn-upload').innerText = t.btnUpload;
+    document.getElementById('ui-btn-clear').innerText = t.btnClear;
+    document.getElementById('ui-btn-copy').innerText = t.btnCopy;
+    document.getElementById('ui-btn-convert').innerText = t.btnConvert;
+  }
+
+  function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  }
+
+  async function parsePdfWithLib(arrayBuffer) {
+    if (typeof pdfjsLib === 'undefined') {
+      throw new Error("La librería PDF.js no está cargada.");
+    }
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdfDoc = await loadingTask.promise;
+    let extractedText = '';
+
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map(item => item.str).join(' ');
+      extractedText += pageText + '\n';
+    }
+    return extractedText;
+  }
+
+  window.parsePythonDictionary = function(rawText) {
+    if (!rawText || typeof rawText !== 'string') return null;
+
+    let text = rawText
+      .replace(/#.*$/gm, '')
+      .replace(/^\s*[a-zA-Z_]\w*\s*=\s*/gm, '')
+      .trim();
+
+    const firstBrace = text.indexOf('{');
+    if (firstBrace === -1) return null;
+
+    let questions = {};
+    let i = firstBrace + 1;
+
+    while (i < text.length) {
+      while (i < text.length && /[\s,\r\n]/.test(text[i])) i++;
+      if (i >= text.length || text[i] === '}') break;
+
+      let questionCode = '';
+      if (text[i] === '"' || text[i] === "'") {
+        let quoteChar = text[i];
+        i++;
+        let keyStart = i;
+        while (i < text.length && text[i] !== quoteChar) i++;
+        questionCode = text.substring(keyStart, i);
+        i++;
+      } else {
+        let keyStart = i;
+        while (i < text.length && !/[\s:]/.test(text[i])) i++;
+        questionCode = text.substring(keyStart, i);
+      }
+
+      if (!questionCode) break;
+
+      while (i < text.length && text[i] !== ':') i++;
+      i++;
+
+      while (i < text.length && text[i] !== '{') {
+        if (text[i] === '}') break;
+        i++;
+      }
+      if (i >= text.length || text[i] === '}') break;
+
+      let blockStart = i;
+      let braceCount = 1;
+      i++;
+      let inStr = false;
+      let strChar = '';
+      let escaped = false;
+
+      while (i < text.length && braceCount > 0) {
+        let char = text[i];
+        if (escaped) {
+          escaped = false;
+        } else if (char === '\\') {
+          escaped = true;
+        } else if (!inStr && (char === '"' || char === "'")) {
+          inStr = true;
+          strChar = char;
+        } else if (inStr && char === strChar) {
+          inStr = false;
+        } else if (!inStr) {
+          if (char === '{') braceCount++;
+          if (char === '}') braceCount--;
+        }
+        i++;
+      }
+
+      let blockContent = text.substring(blockStart, i);
+      let parsedQuestion = extractQuestionData(questionCode, blockContent);
+      
+      let finalKey = parsedQuestion.code || questionCode;
+      questions[finalKey] = parsedQuestion;
+    }
+
+    return Object.keys(questions).length > 0 ? questions : null;
+  };
+
+  function extractValueByKey(text, key) {
+    let escapedKey = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    let regex = new RegExp(`['"]?${escapedKey}['"]?\\s*:\\s*`, 'g');
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      let startIdx = match.index + match[0].length;
+      let valResult = parsePythonValue(text, startIdx);
+      if (valResult !== undefined) {
+        return valResult;
+      }
+    }
+    return null;
+  }
+
+  function parsePythonValue(text, idx) {
+    while (idx < text.length && /\s/.test(text[idx])) idx++;
+    if (idx >= text.length) return undefined;
+
+    let char = text[idx];
+
+    if (char === '"' || char === "'") {
+      let fullStr = '';
+      while (idx < text.length) {
+        while (idx < text.length && /\s/.test(text[idx])) idx++;
+        if (idx >= text.length) break;
+        char = text[idx];
+        if (char !== '"' && char !== "'") break;
+
+        let quote = char;
+        idx++;
+        let strVal = '';
+        let escaped = false;
+        while (idx < text.length) {
+          let c = text[idx];
+          if (escaped) {
+            strVal += c;
+            escaped = false;
+            idx++;
+          } else if (c === '\\') {
+            escaped = true;
+            idx++;
+          } else if (c === quote) {
+            idx++;
+            break;
+          } else {
+            strVal += c;
+            idx++;
+          }
+        }
+        fullStr += strVal;
+
+        while (idx < text.length && /\s/.test(text[idx])) idx++;
+        if (idx < text.length && text[idx] === '+') {
+          idx++;
+          while (idx < text.length && /\s/.test(text[idx])) idx++;
+        } else {
+          break;
+        }
+      }
+      return fullStr.replace(/\\n/g, '\n');
+    }
+
+    let valEnd = idx;
+    while (valEnd < text.length && !/[,\r\n}]/.test(text[valEnd])) {
+      valEnd++;
+    }
+    let rawVal = text.substring(idx, valEnd).trim();
+    if (rawVal === 'True' || rawVal === 'true') return true;
+    if (rawVal === 'False' || rawVal === 'false') return false;
+    if (rawVal === 'None' || rawVal === 'none') return null;
+    if (!isNaN(rawVal) && rawVal !== '') return Number(rawVal);
+    return rawVal.replace(/^["']|["']$/g, '');
+  }
+
+  function extractQuestionData(code, block) {
+    let headerEndIdx = -1;
+    ['options', 'rows', 'columns'].forEach(key => {
+      let idx = block.search(new RegExp(`["']?${key}["']?\\s*:\\s*\\[`));
+      if (idx !== -1 && (headerEndIdx === -1 || idx < headerEndIdx)) {
+        headerEndIdx = idx;
+      }
+    });
+    
+    let headerBlock = headerEndIdx !== -1 ? block.substring(0, headerEndIdx) : block;
+
+    const getField = (fieldNames) => {
+      if (!Array.isArray(fieldNames)) fieldNames = [fieldNames];
+      for (let fieldName of fieldNames) {
+        let val = extractValueByKey(headerBlock, fieldName);
+        if (val !== null) return val;
+      }
+      return null;
+    };
+
+    let internalCode = getField('code') || String(code);
+    let promptText = getField(['prompt', 'text', 'title']) || '';
+    let respType = getField(['response_type', 'type', 'question_type']) || 'single_select';
+    let qType = getField(['question_type', 'type']) || respType;
+
+    let scoreDir = getField(['score_direction']);
+    if (scoreDir === null) scoreDir = 'neutral';
+
+    let statusVal = getField(['status', 'active']);
+    let isActive = true;
+    if (statusVal !== null) {
+      if (typeof statusVal === 'boolean') isActive = statusVal;
+      else if (statusVal === 'active') isActive = true;
+      else if (statusVal === 'inactive' || statusVal === false) isActive = false;
+    }
+
+    let parseArrayOfObjects = (arrayName) => {
+      let items = [];
+      let matchIdx = block.search(new RegExp(`["']?${arrayName}["']?\\s*:\\s*\\[`));
+      if (matchIdx === -1) return items;
+
+      let startIdx = block.indexOf('[', matchIdx);
+      let bracketCount = 1;
+      let j = startIdx + 1;
+      let inStr = false;
+      let strChar = '';
+      let escaped = false;
+
+      while (j < block.length && bracketCount > 0) {
+        let char = block[j];
+        if (escaped) {
+          escaped = false;
+        } else if (char === '\\') {
+          escaped = true;
+        } else if (!inStr && (char === '"' || char === "'")) {
+          inStr = true;
+          strChar = char;
+        } else if (inStr && char === strChar) {
+          inStr = false;
+        } else if (!inStr) {
+          if (char === '[') bracketCount++;
+          if (char === ']') bracketCount--;
+        }
+        j++;
+      }
+
+      let arrayContent = block.substring(startIdx + 1, j - 1);
+      let i = 0;
+      let idx = 0;
+
+      while (i < arrayContent.length) {
+        while (i < arrayContent.length && arrayContent[i] !== '{') i++;
+        if (i >= arrayContent.length) break;
+
+        let objStart = i;
+        let objBraces = 1;
+        i++;
+        let objInStr = false;
+        let objStrChar = '';
+        let objEscaped = false;
+
+        while (i < arrayContent.length && objBraces > 0) {
+          let c = arrayContent[i];
+          if (objEscaped) {
+            objEscaped = false;
+          } else if (c === '\\') {
+            objEscaped = true;
+          } else if (!objInStr && (c === '"' || c === "'")) {
+            objInStr = true;
+            objStrChar = c;
+          } else if (objInStr && c === objStrChar) {
+            objInStr = false;
+          } else if (!objInStr) {
+            if (c === '{') objBraces++;
+            if (c === '}') objBraces--;
+          }
+          i++;
+        }
+
+        let itemContent = arrayContent.substring(objStart, i);
+        
+        let val = extractValueByKey(itemContent, 'value');
+        if (val === null) val = extractValueByKey(itemContent, 'val');
+        if (val === null) val = extractValueByKey(itemContent, 'code');
+        if (val === null) val = idx;
+
+        let text = extractValueByKey(itemContent, 'text');
+        if (text === null) text = extractValueByKey(itemContent, 'label');
+
+        if (text !== null && text !== undefined) {
+          items.push({
+            value: val,
+            text: String(text).replace(/\\n/g, '\n')
+          });
+        }
+        idx++;
+      }
+      return items;
+    };
+
+    let options = parseArrayOfObjects('options');
+    let rows = parseArrayOfObjects('rows');
+    let columns = parseArrayOfObjects('columns');
+
+    if (options.length === 0 && headerEndIdx === -1 && respType !== 'open_text') {
+      let lines = block.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      let candidateLines = lines.filter(l => !l.startsWith(code) && l !== promptText && !l.includes(':'));
+      if (candidateLines.length > 0) {
+        options = candidateLines.map((txt, idx) => ({
+          value: idx + 1,
+          text: txt.replace(/^["']|["']$/g, '')
+        }));
+      }
+    }
+
+    let resultData = {
+      question_id: getField('question_id') || generateUUID(),
+      code: internalCode,
+      version: Number(getField('version')) || 1,
+      block: getField('block') || internalCode.replace(/[0-9]/g, '') || 'general',
+      family: getField('family') || 'standard',
+      domain: getField('domain') || 'general',
+      question_type: qType,
+      response_type: respType,
+      presentation_type: getField('presentation_type') || (respType.includes('multi') ? 'checkbox' : (respType === 'matrix' ? 'matrix' : 'radio')),
+      scale_type: getField('scale_type') || 'ordinal',
+      prompt: promptText,
+      score_direction: scoreDir,
+      active: isActive
+    };
+
+    if (respType === 'matrix' || rows.length > 0 || columns.length > 0) {
+      if (rows.length > 0) resultData.rows = rows;
+      if (columns.length > 0) resultData.columns = columns;
+      resultData.options = [];
+    } else {
+      resultData.options = options;
+    }
+
+    return resultData;
+  }
+
+  function parsePlainTextFallback(text) {
+    const cleanText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+    const lines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const questions = {};
+    let currentQ = null;
+    let counter = 1;
+
+    lines.forEach((line) => {
+      const isQuestion = line.match(/^(\d+[\.\)]|[Qq]\d+|Вопрос|Question)/i) || line.includes('?');
+      if (isQuestion) {
+        const code = `Q_${counter++}`;
+        currentQ = {
+          code: code,
+          prompt: line.replace(/^.*?[\.\)]\s*/, ''),
+          options: []
+        };
+        questions[code] = currentQ;
+      } else if (currentQ) {
+        const isOption = line.match(/^[-*a-zA-D\d+][\.\)]/) || line.match(/^\[[ x]\]/i);
+        if (isOption) {
+          currentQ.options.push({
+            value: currentQ.options.length,
+            text: line.replace(/^.*?[\.\)]\s*/, '').replace(/^\[[ x]\]\s*/i, '')
+          });
+        }
+      }
+    });
+
+    return Object.keys(questions).length > 0 ? questions : null;
+  }
+
+  function parseInputData(rawText) {
+    try {
+      if (typeof jsyaml !== 'undefined') {
+        const yamlData = jsyaml.load(rawText);
+        if (yamlData && typeof yamlData === 'object') {
+          if (Array.isArray(yamlData)) {
+            const dict = {};
+            yamlData.forEach((item, index) => {
+              const code = item.code || item.question_code || `Q_${index + 1}`;
+              dict[code] = item;
+            });
+            return dict;
+          }
+          return yamlData;
+        }
+      }
+    } catch (e) {}
+
+    try {
+      const parsed = JSON.parse(rawText);
+      if (Array.isArray(parsed)) {
+        const dict = {};
+        parsed.forEach((item, index) => {
+          const code = item.code || item.question_code || `Q_${index + 1}`;
+          dict[code] = item;
+        });
+        return dict;
+      }
+      return parsed;
+    } catch (e) {}
+
+    const pyDict = parsePythonDictionary(rawText);
+    if (pyDict) return pyDict;
+
+    const textParsed = parsePlainTextFallback(rawText);
+    if (textParsed) return textParsed;
+
+    throw new Error("No se pudo analizar la estructura de datos. Verifique la sintaxis.");
+  }
+
+  function convertToCanonicalSchema(parsedInput) {
+    const result = {};
+
+    Object.entries(parsedInput).forEach(([key, item]) => {
+      if (!item || typeof item !== 'object') return;
+
+      const code = item.code || key;
+      const questionId = item.question_id || generateUUID();
+      const qType = item.question_type || item.type || "single_select";
+
+      let options = [];
+      if (Array.isArray(item.options)) {
+        options = item.options.map((opt, idx) => {
+          if (typeof opt === 'object' && opt !== null) {
+            return {
+              value: opt.value !== undefined ? opt.value : idx,
+              text: String(opt.text || opt.label || '')
+            };
+          }
+          return { value: idx, text: String(opt) };
+        });
+      }
+
+      let isActive = item.active !== undefined ? item.active : true;
+      if (item.status === "active") isActive = true;
+
+      result[code] = {
+        question_id: questionId,
+        code: code,
+        version: item.version !== undefined ? item.version : 1,
+        block: item.block || "general",
+        family: item.family || "standard",
+        domain: item.domain || "general",
+        question_type: qType,
+        response_type: item.response_type || qType,
+        presentation_type: item.presentation_type || (qType.includes('multi') ? 'checkbox' : 'radio'),
+        scale_type: item.scale_type || "ordinal",
+        prompt: item.prompt || "",
+        options: options,
+        score_direction: item.score_direction || "neutral",
+        active: isActive,
+        ...item
+      };
+
+      delete result[code].type;
+      delete result[code].status;
+    });
+
+    return result;
+  }
+
+  function readFileAsText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = e => reject(new Error("Error al leer el archivo de texto."));
+      reader.readAsText(file);
+    });
+  }
+
+  async function handleFileSelect(event) {
+    const fileInput = event.target;
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    showStatus("📂 Leyendo y procesando archivo...", false);
+    const ext = file.name.split('.').pop().toLowerCase();
+    const inputArea = document.getElementById('input-json');
+
+    try {
+      let extractedContent = "";
+
+      if (ext === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+        extractedContent = res.value;
+      } else if (ext === 'pdf') {
+        const arrayBuffer = await file.arrayBuffer();
+        extractedContent = await parsePdfWithLib(arrayBuffer);
+      } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const sheetJson = XLSX.utils.sheet_to_json(worksheet);
+        extractedContent = JSON.stringify(sheetJson, null, 2);
+      } else if (ext === 'yml' || ext === 'yaml') {
+        const text = await readFileAsText(file);
+        if (typeof jsyaml !== 'undefined') {
+          const doc = jsyaml.load(text);
+          extractedContent = JSON.stringify(doc, null, 2);
+        } else {
+          extractedContent = text;
+        }
+      } else {
+        extractedContent = await readFileAsText(file);
+      }
+
+      if (!extractedContent || !extractedContent.trim()) {
+        throw new Error("El contenido extraído está vacío.");
+      }
+
+      inputArea.value = extractedContent;
+      fileInput.value = "";
+
+      processConversion();
+
+    } catch (err) {
+      showStatus(`⚠️ ${err.message}`, true);
+      fileInput.value = "";
+    }
+  }
+
+  function showStatus(message, isError = false) {
+    const statusBar = document.getElementById('status-message');
+    statusBar.className = `status-bar ${isError ? 'error' : 'success'}`;
+    statusBar.innerText = message;
+  }
+
+  function processConversion() {
+    const inputArea = document.getElementById('input-json');
+    const outputArea = document.getElementById('output-json');
+
+    let rawText = (inputArea.value || "").trim();
+
+    if (!rawText) {
+      showStatus(i18n[currentLang].errEmpty, true);
+      return;
+    }
+
+    try {
+      const parsedData = parseInputData(rawText);
+      const canonicalResult = convertToCanonicalSchema(parsedData);
+
+      outputArea.value = JSON.stringify(canonicalResult, null, 2);
+      showStatus(i18n[currentLang].msgSuccess, false);
+    } catch (e) {
+      showStatus(`Error de conversión: ${e.message}`, true);
+    }
+  }
+
+  function clearAll() {
+    document.getElementById('input-json').value = '';
+    document.getElementById('output-json').value = '';
+    document.getElementById('file-loader').value = '';
+    document.getElementById('status-message').style.display = 'none';
+  }
+
+  function copyResult() {
+    const outputArea = document.getElementById('output-json');
+    if (outputArea.value) {
+      navigator.clipboard.writeText(outputArea.value);
+      showStatus(i18n[currentLang].msgCopied, false);
+    }
+  }
+</script>
+
+</body>
+</html>

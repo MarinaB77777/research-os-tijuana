@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Health Model Pilot — Кабинет участника</title>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --accent-color: #38bdf8;
+      --accent-hover: #0ea5e9;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --success-bg: rgba(16, 185, 129, 0.15);
+      --success-color: #34d399;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      margin: 0;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
+
+    .container {
+      max-width: 900px;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 24px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    h1, h2, h3 { color: var(--accent-color); margin-top: 0; }
+
+    button {
+      background-color: var(--accent-color);
+      color: #0f172a;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      margin: 6px 6px 6px 0;
+      font-size: 0.9rem;
+      transition: background 0.2s;
+    }
+    button:hover { background-color: var(--accent-hover); }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover { background-color: rgba(255, 255, 255, 0.05); }
+
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      margin-top: 8px;
+      background: #0f172a;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+
+    .hidden { display: none !important; }
+    .small { color: var(--text-muted); font-size: 0.85rem; }
+
+    .option-row {
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px 14px;
+      margin: 8px 0;
+      cursor: pointer;
+      background: #0f172a;
+      transition: border-color 0.2s;
+    }
+    .option-row:hover { border-color: var(--accent-color); }
+    .option-row input { width: auto; margin-right: 12px; accent-color: var(--accent-color); }
+
+    pre { background: #0f172a; border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; overflow: auto; color: var(--text-muted); }
+    hr { border: 0; border-top: 1px solid var(--border-color); margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Health Model Pilot</h1>
+  <p id="status" class="small">Page loaded</p>
+
+  <div id="languageScreen" class="card screen">
+    <h2>Seleccione idioma / Choose language / Выберите язык</h2>
+    <div style="display: flex; gap: 10px; margin-top: 16px;">
+      <button type="button" onclick="setLanguage('es')">🇲🇽 Español</button>
+      <button type="button" onclick="setLanguage('en')">🇺🇸 English</button>
+      <button type="button" onclick="setLanguage('ru')">🇷🇺 Русский</button>
+    </div>
+  </div>
+
+  <div id="loginScreen" class="card screen hidden">
+    <h2 id="loginTitle">Вход</h2>
+    <button type="button" onclick="createAccount()" id="createIdButton">Создать новый ID</button>
+    <hr>
+    <p id="existingIdText">Уже есть ID:</p>
+    <input id="accountIdInput" placeholder="Введите account_id">
+    <div style="margin-top: 12px;">
+      <button type="button" onclick="loadAccount()" id="loginButton">Войти</button>
+      <button type="button" class="btn-secondary" onclick="resetLocal()" id="resetLoginIdButton">Сбросить сохранённый ID</button>
+    </div>
+  </div>
+
+  <div id="cabinetScreen" class="card screen hidden">
+    <h2 id="cabinetTitle">Личный кабинет</h2>
+    <p><span id="yourIdText">Ваш ID:</span> <code id="accountIdView" style="color: var(--accent-color); font-weight: bold;"></code></p>
+    <div style="margin-bottom: 16px;">
+      <button type="button" class="btn-secondary" onclick="copyAccountId()" id="copyIdButton">Скопировать ID</button>
+      <button type="button" class="btn-secondary" onclick="resetLocal()" id="resetIdButton">Сбросить ID</button>
+      <button type="button" class="btn-secondary" onclick="logoutToLogin()" id="loginOtherIdButton">Сменить ID</button>
+    </div>
+
+    <h3 id="availableStudiesTitle">Доступные исследования</h3>
+    <div id="availableStudiesList" class="small">Loading studies...</div>
+  </div>
+
+  <div id="consentScreen" class="card screen hidden">
+    <h2 id="consentTitle">Согласие</h2>
+    <div id="consentDocument" style="margin-bottom: 16px; max-height: 250px; overflow-y: auto; padding: 12px; background: #0f172a; border-radius: 8px; border: 1px solid var(--border-color);"></div>
+
+    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-bottom: 16px;">
+      <input type="checkbox" id="consentCheckbox" style="width: 18px; height: 18px; accent-color: var(--accent-color);">
+      <span id="consentCheckboxText">Я согласен(на) участвовать</span>
+    </label>
+
+    <div>
+      <button type="button" onclick="startSession()" id="startButton">Начать</button>
+      <button type="button" class="btn-secondary" onclick="showScreen('cabinetScreen')" id="backButton">Назад</button>
+    </div>
+  </div>
+
+  <div id="questionnaireScreen" class="card screen hidden">
+    <h2 id="questionnaireTitle">Анкета</h2>
+    <p id="questionnaireText" class="small">Ответьте на вопросы.</p>
+
+    <div id="questionBlock"></div>
+
+    <div style="margin-top: 20px;">
+      <button type="button" onclick="submitQuestionnaire()" id="submitAnswersButton">Отправить ответы</button>
+    </div>
+
+    <pre id="sessionResult" class="hidden"></pre>
+    <div id="participantReport" class="card hidden" style="margin-top: 20px; background: #0f172a;"></div>
+  </div>
+</div>
+
+<script>
+  let currentAccountId = null;
+  let selectedStudy = null;
+  let currentLang = localStorage.getItem("health_model_lang") || null;
+  let currentSessionId = null;
+  let currentAssessment = null;
+  let questionnaireStartedAt = null;
+
+  const T = {
+    ru: {
+      loginTitle: "Вход",
+      createIdButton: "Создать новый ID",
+      existingIdText: "Уже есть ID:",
+      accountPlaceholder: "Введите account_id",
+      loginButton: "Войти",
+      cabinetTitle: "Личный кабинет",
+      yourIdText: "Ваш ID:",
+      copyIdButton: "Скопировать ID",
+      resetIdButton: "Сбросить ID",
+      resetLoginIdButton: "Сбросить ID",
+      loginOtherIdButton: "Сменить ID",
+      availableStudiesTitle: "Доступные исследования",
+      consentTitle: "Согласие",
+      consentCheckboxText: "Я согласен(на) участвовать",
+      startButton: "Начать",
+      backButton: "Назад",
+      questionnaireTitle: "Анкета",
+      questionnaireText: "Сессия создана.",
+      idNotFound: "ID не найден",
+      consentRequired: "Необходимо принять согласие",
+      copied: "ID скопирован",
+      submitAnswersButton: "Отправить ответы"
+    },
+    en: {
+      loginTitle: "Sign in",
+      createIdButton: "Create new ID",
+      existingIdText: "Already have an ID:",
+      accountPlaceholder: "Enter account_id",
+      loginButton: "Sign in",
+      cabinetTitle: "Personal cabinet",
+      yourIdText: "Your ID:",
+      copyIdButton: "Copy ID",
+      resetIdButton: "Reset ID",
+      resetLoginIdButton: "Reset ID",
+      loginOtherIdButton: "Change ID",
+      availableStudiesTitle: "Available studies",
+      consentTitle: "Consent",
+      consentCheckboxText: "I agree to participate",
+      startButton: "Start",
+      backButton: "Back",
+      questionnaireTitle: "Questionnaire",
+      questionnaireText: "Session created.",
+      idNotFound: "ID not found",
+      consentRequired: "Consent is required",
+      copied: "ID copied",
+      submitAnswersButton: "Submit answers"
+    },
+    es: {
+      loginTitle: "Entrada",
+      createIdButton: "Crear nuevo ID",
+      existingIdText: "Ya tengo ID:",
+      accountPlaceholder: "Introduce account_id",
+      loginButton: "Entrar",
+      cabinetTitle: "Gabinete personal",
+      yourIdText: "Tu ID:",
+      copyIdButton: "Copiar ID",
+      resetIdButton: "Restablecer ID",
+      resetLoginIdButton: "Restablecer ID",
+      loginOtherIdButton: "Cambiar ID",
+      availableStudiesTitle: "Estudios disponibles",
+      consentTitle: "Consentimiento",
+      consentCheckboxText: "Acepto participar",
+      startButton: "Empezar",
+      backButton: "Atrás",
+      questionnaireTitle: "Cuestionario",
+      questionnaireText: "Sesión creada.",
+      idNotFound: "ID no encontrado",
+      consentRequired: "Se requiere consentimiento",
+      copied: "ID copiado",
+      submitAnswersButton: "Enviar respuestas"
+    }
+  };
+
+  function setStatus(text) {
+    document.getElementById("status").innerText = text;
+  }
+
+  function showScreen(screenId) {
+    document.querySelectorAll(".screen").forEach(el => el.classList.add("hidden"));
+    document.getElementById(screenId).classList.remove("hidden");
+    setStatus("Screen: " + screenId);
+  }
+
+  function applyLanguage() {
+    const t = T[currentLang || "ru"];
+    Object.keys(t).forEach(key => {
+      if (key === "accountPlaceholder") {
+        document.getElementById("accountIdInput").placeholder = t[key];
+        return;
+      }
+      const el = document.getElementById(key);
+      if (el) el.innerText = t[key];
+    });
+  }
+
+  function setLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem("health_model_lang", lang);
+    applyLanguage();
+    showScreen("loginScreen");
+  }
+
+  async function createAccount() {
+    setStatus("Creating account...");
+    const response = await fetch("/pilot/accounts", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ preferred_language: currentLang || "ru" })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.account_id) {
+      alert(JSON.stringify(data));
+      setStatus("Create account failed");
+      return;
+    }
+    currentAccountId = data.account_id;
+    localStorage.setItem("health_model_account_id", currentAccountId);
+    showCabinet();
+  }
+
+  async function loadAccount() {
+    const t = T[currentLang || "ru"];
+    const accountId = document.getElementById("accountIdInput").value.trim();
+    if (!accountId) {
+      alert("Введите account_id");
+      return;
+    }
+    setStatus("Loading account...");
+    const response = await fetch("/pilot/accounts/" + encodeURIComponent(accountId));
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      alert(t.idNotFound);
+      setStatus("Account not found");
+      return;
+    }
+    currentAccountId = data.account_id;
+    localStorage.setItem("health_model_account_id", currentAccountId);
+    showCabinet();
+  }
+
+  function showCabinet() {
+    applyLanguage();
+    document.getElementById("accountIdView").innerText = currentAccountId;
+    showScreen("cabinetScreen");
+    loadAvailableStudies();
+  }
+
+  async function loadAvailableStudies() {
+    const box = document.getElementById("availableStudiesList");
+    if (!box) return;
+    box.innerHTML = "Loading studies...";
+    const response = await fetch("/pilot/questionnaire-banks?project_id=health_model_pilot");
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      box.innerHTML = "Studies failed to load.";
+      return;
+    }
+    const enabledBanks = (data.banks || []).filter(bank => bank.enabled);
+    if (enabledBanks.length === 0) {
+      box.innerHTML = "No studies are currently connected.";
+      return;
+    }
+    box.innerHTML = enabledBanks.map(bank => {
+      const title = bank.title_by_lang?.[currentLang || "ru"] || bank.title_by_lang?.ru || bank.id;
+      return `<button type="button" onclick="selectStudy('${bank.id}')">${title}</button>`;
+    }).join("");
+  }
+
+  function copyAccountId() {
+    const t = T[currentLang || "ru"];
+    navigator.clipboard.writeText(currentAccountId);
+    alert(t.copied);
+  }
+
+  async function selectStudy(studyId) {
+    selectedStudy = studyId;
+    applyLanguage();
+    document.getElementById("consentCheckbox").checked = false;
+    await loadConsent();
+    showScreen("consentScreen");
+  }
+
+  async function loadConsent() {
+    const lang = currentLang || "ru";
+    const response = await fetch(`/consent/pilot_v1/${lang}?v=1`);
+    if (!response.ok) {
+      document.getElementById("consentDocument").innerHTML = "<p>Consent file not found.</p>";
+      return;
+    }
+    const html = await response.text();
+    document.getElementById("consentDocument").innerHTML = html;
+  }
+
+  async function startSession() {
+    const t = T[currentLang || "ru"];
+    if (!selectedStudy) {
+      alert("Study not selected");
+      showScreen("cabinetScreen");
+      return;
+    }
+    if (!document.getElementById("consentCheckbox").checked) {
+      alert(t.consentRequired);
+      return;
+    }
+    setStatus("Starting session...");
+    const response = await fetch("/pilot/accounts/start-session", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        account_id: currentAccountId,
+        participant_role: "participant",
+        study_id: selectedStudy,
+        consent_record: {
+          consent_status: "granted",
+          consent_version: "consent-policy-1",
+          consent_scope: ["pilot_participation"],
+          granted_at: new Date().toISOString(),
+          revoked_at: null,
+          expiration_at: null,
+          consent_basis: "explicit_checkbox",
+          notes: null,
+          language: currentLang || "ru",
+          assessment_logic_id: selectedStudy,
+          study_id: selectedStudy,
+        }
+      })
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      alert(data.detail || "Session start failed");
+      setStatus("Start session failed: " + response.status);
+      return;
+    }
+    currentSessionId = data.session_id;
+    await renderQuestionnaire();
+    showScreen("questionnaireScreen");
+  }
+
+  async function renderQuestionnaire() {
+    const response = await fetch("/question-banks/" + encodeURIComponent(selectedStudy) + "?lang=" + encodeURIComponent(currentLang || "ru"));
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      alert(JSON.stringify(data));
+      setStatus("Question bank load failed");
+      return;
+    }
+    currentAssessment = {
+      assessment_id: data.bank_id,
+      title: { [currentLang || "ru"]: data.bank_id },
+      description: { [currentLang || "ru"]: "" },
+      questions: data.questions || []
+    };
+    questionnaireStartedAt = new Date().toISOString();
+    document.getElementById("questionnaireTitle").innerText = currentAssessment.title[currentLang || "ru"] || currentAssessment.assessment_id;
+    document.getElementById("questionnaireText").innerText = currentAssessment.description[currentLang || "ru"] || "";
+    const questions = currentAssessment.questions || [];
+    document.getElementById("questionBlock").innerHTML = questions.map(renderQuestion).join("");
+  }
+
+  function renderQuestion(q) {
+    const prompt = q.prompt || q.text?.[currentLang || "ru"] || q.code;
+    if (q.type === "number" || q.type === "numeric") {
+      return `
+        <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
+          <label>
+            <b>${q.code}</b><br><span class="small">${prompt}</span>
+            <input id="answer_${q.code}" type="number">
+          </label>
+        </div>`;
+    }
+    if (q.type === "text") {
+      return `
+        <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
+          <label>
+            <b>${q.code}</b><br><span class="small">${prompt}</span>
+            <input id="answer_${q.code}" type="text">
+          </label>
+        </div>`;
+    }
+    if (q.type === "multi_select" || q.type === "multiple_choice") {
+      return `
+        <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
+          <b>${q.code}</b><br><span class="small">${prompt}</span>
+          ${(q.options || []).map(opt => `
+            <label class="option-row">
+              <input type="checkbox" name="answer_${q.code}" value="${opt.value}">
+              <span>${opt.text}</span>
+            </label>`).join("")}
+        </div>`;
+    }
+    return `
+      <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
+        <b>${q.code}</b><br><span class="small">${prompt}</span>
+        ${(q.options || []).map(opt => `
+          <label class="option-row">
+            <input type="radio" name="answer_${q.code}" value="${opt.value}">
+            <span>${opt.text}</span>
+          </label>`).join("")}
+      </div>`;
+  }
+
+  function collectAnswer(q) {
+    if (q.type === "number" || q.type === "numeric") {
+      const el = document.getElementById("answer_" + q.code);
+      if (!el || el.value === "") return undefined;
+      return Number(el.value);
+    }
+    if (q.type === "text") {
+      const el = document.getElementById("answer_" + q.code);
+      if (!el || el.value.trim() === "") return undefined;
+      return el.value.trim();
+    }
+    if (q.type === "multi_select" || q.type === "multiple_choice") {
+      const selected = Array.from(document.querySelectorAll(`input[name="answer_${q.code}"]:checked`)).map(el => {
+        const raw = el.value;
+        return raw === "null" ? null : (isNaN(Number(raw)) ? raw : Number(raw));
+      });
+      return selected.length ? selected : undefined;
+    }
+    const selected = document.querySelector(`input[name="answer_${q.code}"]:checked`);
+    if (!selected) return undefined;
+    const raw = selected.value;
+    return raw === "null" ? null : (isNaN(Number(raw)) ? raw : Number(raw));
+  }
+
+  function renderParticipantReport(report) {
+    const box = document.getElementById("participantReport");
+    if (!report || !report.resource_cards || report.resource_cards.length === 0) {
+      box.classList.add("hidden");
+      return;
+    }
+    box.classList.remove("hidden");
+    box.innerHTML = `
+      <h2>${report.title || "Результат"}</h2>
+      <p>${report.summary || ""}</p>
+      ${report.resource_cards.map(card => `
+        <div class="card" style="margin-top: 12px; background: var(--card-bg);">
+          <h3>${card.title}</h3>
+          <p><b>${card.level_label}</b></p>
+          <p>${card.summary || ""}</p>
+          <h4>На что стоит обратить внимание</h4>
+          <p>${card.what_may_be_sensitive || ""}</p>
+          <h4>Как это может влиять на решения</h4>
+          <p>${card.decision_context || ""}</p>
+        </div>`).join("")}
+      <h3>Ограничения</h3>
+      <ul>${(report.limitations || []).map(item => `<li>${item}</li>`).join("")}</ul>`;
+  }
+
+  async function submitQuestionnaire() {
+    const questions = currentAssessment?.questions || [];
+    const answers = {};
+    const submitButton = document.getElementById("submitAnswersButton");
+    submitButton.disabled = true;
+    setStatus("Submitting answers...");
+    questions.forEach(q => {
+      const value = collectAnswer(q);
+      if (value !== undefined) { answers[q.code] = value; }
+    });
+    const collectionFinishedAt = new Date().toISOString();
+    const domainDataIdentity = {
+      source_instance_id: crypto.randomUUID ? crypto.randomUUID() : "questionnaire-" + Date.now(),
+      session_id: currentSessionId,
+      participant_id: currentAccountId,
+      domain_id: "questionnaire",
+      source_type: "self_report",
+      data_structure_type: "question_bank",
+      data_source_path: selectedStudy,
+      collection_started_at: questionnaireStartedAt,
+      collection_finished_at: collectionFinishedAt,
+      global_time_reference: currentSessionId
+    };
+    const saveResponse = await fetch("/pilot/sessions/" + currentSessionId + "/answers", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ domain_data_identity: domainDataIdentity, answers })
+    });
+    const saveData = await saveResponse.json();
+    if (!saveResponse.ok || !saveData.ok) {
+      submitButton.disabled = false;
+      document.getElementById("sessionResult").classList.remove("hidden");
+      document.getElementById("sessionResult").innerText = JSON.stringify(saveData, null, 2);
+      setStatus("Answer submit failed");
+      return;
+    }
+    setStatus("Running session...");
+    const runResponse = await fetch("/pilot/sessions/" + currentSessionId + "/run", { method: "POST" });
+    const runData = await runResponse.json();
+    if (!runResponse.ok || !runData.ok) {
+      document.getElementById("sessionResult").classList.remove("hidden");
+      document.getElementById("sessionResult").innerText = JSON.stringify(runData, null, 2);
+      setStatus("Run failed");
+      return;
+    }
+    setStatus("Loading result...");
+    const reportResponse = await fetch("/pilot/sessions/" + currentSessionId + "/participant-report");
+    const reportData = await reportResponse.json();
+    if (reportResponse.ok && reportData.ok) {
+      renderParticipantReport(reportData.participant_report);
+    }
+    setStatus("Completed");
+    submitButton.innerText = currentLang === "en" ? "Submitted" : currentLang === "es" ? "Enviado" : "Ответы отправлены";
+    window.location.href = "/pilot-result?session_id=" + encodeURIComponent(currentSessionId);
+  }
+
+  function logoutToLogin() {
+    localStorage.removeItem("health_model_account_id");
+    currentAccountId = null;
+    document.getElementById("accountIdInput").value = "";
+    showScreen("loginScreen");
+  }
+
+  function resetLocal() {
+    localStorage.removeItem("health_model_account_id");
+    localStorage.removeItem("health_model_lang");
+    currentAccountId = null;
+    currentLang = null;
+    selectedStudy = null;
+    showScreen("languageScreen");
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setStatus("JS started");
+    currentLang = null;
+    currentAccountId = null;
+    selectedStudy = null;
+    localStorage.removeItem("health_model_lang");
+    localStorage.removeItem("health_model_account_id");
+    showScreen("languageScreen");
+  });
+</script>
+</body>
+</html>

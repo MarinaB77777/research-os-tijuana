@@ -1,0 +1,7 @@
+{
+  "rewrites": [
+    { "source": "/pilot/(.*)", "destination": "/api/index.js" },
+    { "source": "/consent/(.*)", "destination": "/api/index.js" },
+    { "source": "/question-banks/(.*)", "destination": "/api/index.js" }
+  ]
+}
