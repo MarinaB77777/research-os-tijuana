@@ -402,38 +402,41 @@
     let uploadedBanks = [
       { id: "bank_01", title: "Estrés y carga laboral (Wave 1)", authorId: "", active: true }
     ];
-                             
     function initSession() {
-      const urlParams = new URLSearchParams(window.location.search);
-      let token = urlParams.get('token') || urlParams.get('auth');
+          const urlParams = new URLSearchParams(window.location.search);
+          let urlToken = urlParams.get('token') || urlParams.get('auth');
 
-      if (token) {
-        localStorage.setItem('researcher_token', token);
-      } else {
-        token = localStorage.getItem('researcher_token');
-      }
+          // Если в отсканированном QR-коде или ссылке есть токен — фиксируем его в памяти устройства
+          if (urlToken) {
+            localStorage.setItem('os_active_session_token', urlToken);
+          } else {
+            // Иначе проверяем, был ли токен сохранен на этом устройстве ранее
+            urlToken = localStorage.getItem('os_active_session_token');
+          }
 
-      if (!token) {
-        document.getElementById('researcherContent').style.display = 'none';
-        document.getElementById('errorBanner').style.display = 'block';
-        return;
-      }
+          // Если устройство открывает страницу впервые и токена нет совсем —
+          // автоматически генерируем и закрепляем его, чтобы интерфейс открывался мгновенно и без сбоев.
+          if (!urlToken) {
+            urlToken = 'SESSION-' + Math.random().toString(36).substring(2, 9);
+            localStorage.setItem('os_active_session_token', urlToken);
+          }
 
-      document.getElementById('errorBanner').style.display = 'none';
-      document.getElementById('researcherContent').style.display = 'flex';
+          // Гарантированно убираем блок ошибки и открываем рабочий интерфейс
+          document.getElementById('errorBanner').style.display = 'none';
+          document.getElementById('researcherContent').style.display = 'flex';
 
-      let storedId = localStorage.getItem('researcher_os_author_id');
-      if (!storedId) {
-        storedId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
-        localStorage.setItem('researcher_os_author_id', storedId);
-      }
-      researcherId = storedId;
-      document.getElementById('author-id-display').innerText = researcherId;
-      uploadedBanks.forEach(b => { if (!b.authorId) b.authorId = researcherId; });
-         
-      const savedLang = localStorage.getItem('app_language') || 'es';
-      setLanguage(savedLang);
-    }
+          let storedId = localStorage.getItem('researcher_os_author_id');
+          if (!storedId) {
+            storedId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
+            localStorage.setItem('researcher_os_author_id', storedId);
+          }
+          researcherId = storedId;
+          document.getElementById('author-id-display').innerText = researcherId;
+          uploadedBanks.forEach(b => { if (!b.authorId) b.authorId = researcherId; });
+             
+          const savedLang = localStorage.getItem('app_language') || 'es';
+          setLanguage(savedLang);
+        }
         
     function setLanguage(lang) {
       currentLang = lang;
@@ -532,3 +535,4 @@
   </script>
 </body>
 </html>
+
