@@ -94,7 +94,7 @@
         
         .card {
             background: var(--card-bg);
-            border: 2px solid var(--border-color); /* Увеличена четкость контуров */
+            border: 2px solid var(--border-color);
             border-radius: 12px;
             padding: 20px;
             display: flex;
@@ -156,6 +156,16 @@
     <!-- 1. Preparación de la Investigación -->
     <div class="section-title" data-i18n="sec_prep">🛠️ 1. Preparación de la Investigación</div>
     <div class="grid">
+        <!-- Карта кабинета исследователя (survey.html) -->
+        <a href="survey.html" class="card" style="border-color: #0284c7;">
+            <div>
+                <div class="card-icon">🔬</div>
+                <div class="card-title" data-i18n="tool_cabinet_title">Gabinete del Investigador</div>
+                <div class="card-desc" data-i18n="tool_cabinet_desc">Espacio de administración, control de autoría y gestión de bancos de preguntas.</div>
+            </div>
+            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
+        </a>
+
         <a href="constructor_quest.html" class="card">
             <div>
                 <div class="card-icon">📋</div>
@@ -205,22 +215,13 @@
     <!-- 2. Recopilación de Datos -->
     <div class="section-title" data-i18n="sec_collection">📝 2. Recopilación de Datos</div>
     <div class="grid">
-        <a href="survey.html" class="card">
-            <div>
-                <div class="card-icon">📝</div>
-                <div class="card-title" data-i18n="tool_survey_title">Interfaz de Encuesta</div>
-                <div class="card-desc" data-i18n="tool_survey_desc">Entorno de trabajo para que el encuestado complete el cuestionario.</div>
-            </div>
-            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
-        </a>
-
         <a href="cabinet.html" class="card">
             <div>
                 <div class="card-icon">👤</div>
-                <div class="card-title" data-i18n="tool_cabinet_title">Panel de Participante</div>
-                <div class="card-desc" data-i18n="tool_cabinet_desc">Espacio de trabajo seguro (requiere usuario y contraseña únicos).</div>
+                <div class="card-title" data-i18n="tool_participant_title">Panel de Participante</div>
+                <div class="card-desc" data-i18n="tool_participant_desc">Espacio de trabajo seguro para el usuario final.</div>
             </div>
-            <div class="card-link" data-i18n="open_tool">Войти в кабинет →</div>
+            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
         </a>
     </div>
 
@@ -264,6 +265,8 @@ const i18n = {
         sec_prep: "🛠️ 1. Preparación de la Investigación",
         sec_collection: "📝 2. Recopilación de Datos",
         sec_processing: "📈 3. Procesamiento y Análisis de Datos",
+        tool_cabinet_title: "Gabinete del Investigador",
+        tool_cabinet_desc: "Espacio de administración, control de autoría y gestión de bancos de preguntas.",
         tool_ctor_title: "Constructor de Cuestionarios",
         tool_ctor_desc: "Creación y configuración flexible de estructuras y escalas de encuestas.",
         tool_analyzer_title: "Analizador Semántico de Escalas",
@@ -274,10 +277,8 @@ const i18n = {
         tool_importer_desc: "Transformación de archivos (DOCX, PDF, TXT, PY, JS) a estructura JSON.",
         tool_translator_title: "Traductor de Cuestionarios",
         tool_translator_desc: "Traducción adaptativa de preguntas preservando el contexto psicométrico.",
-        tool_survey_title: "Interfaz de Encuesta",
-        tool_survey_desc: "Entorno de trabajo para que el encuestado complete el cuestionario.",
-        tool_cabinet_title: "Panel de Participante",
-        tool_cabinet_desc: "Espacio de trabajo seguro (requiere usuario y contraseña únicos).",
+        tool_participant_title: "Panel de Participante",
+        tool_participant_desc: "Espacio de trabajo seguro para el usuario final.",
         tool_assessment_title: "Evaluación y Pruebas",
         tool_assessment_desc: "Módulo de evaluación inicial y cribado psicométrico.",
         tool_data_title: "Analítica de Datos",
@@ -292,6 +293,8 @@ const i18n = {
         sec_prep: "🛠️ 1. Research Preparation",
         sec_collection: "📝 2. Data Collection",
         sec_processing: "📈 3. Data Processing & Analysis",
+        tool_cabinet_title: "Researcher's Cabinet",
+        tool_cabinet_desc: "Administration space, authorship control, and question bank management.",
         tool_ctor_title: "Survey Constructor",
         tool_ctor_desc: "Creation and flexible configuration of survey structures and rating scales.",
         tool_analyzer_title: "Scale Semantic Analyzer",
@@ -302,10 +305,8 @@ const i18n = {
         tool_importer_desc: "Transformation of files (DOCX, PDF, TXT, PY, JS) into JSON structures.",
         tool_translator_title: "Survey Translator",
         tool_translator_desc: "Adaptive question translation preserving psychometric context.",
-        tool_survey_title: "Survey Interface",
-        tool_survey_desc: "Working environment for respondents taking the questionnaire.",
-        tool_cabinet_title: "Participant Portal",
-        tool_cabinet_desc: "Secure workspace (requires unique login and password).",
+        tool_participant_title: "Participant Portal",
+        tool_participant_desc: "Secure workspace for the end user.",
         tool_assessment_title: "Assessment & Testing Block",
         tool_assessment_desc: "Initial evaluation and psychometric screening module.",
         tool_data_title: "Data Analytics",
@@ -320,6 +321,8 @@ const i18n = {
         sec_prep: "🛠️ 1. Подготовка к исследованию",
         sec_collection: "📝 2. Сбор данных",
         sec_processing: "📈 3. Обработка данных и анализ",
+        tool_cabinet_title: "Кабинет Исследователя",
+        tool_cabinet_desc: "Административное пространство, контроль авторства и управление банками вопросов.",
         tool_ctor_title: "Конструктор Опросников",
         tool_ctor_desc: "Создание и гибкая настройка структуры опросных листов и шкал.",
         tool_analyzer_title: "Смысловой Анализатор Шкал",
@@ -330,10 +333,8 @@ const i18n = {
         tool_importer_desc: "Преобразование файлов (DOCX, PDF, TXT, PY, JS) в структуру JSON.",
         tool_translator_title: "Переводчик Опросников",
         tool_translator_desc: "Адаптивный перевод вопросов с сохранением психометрического контекста.",
-        tool_survey_title: "Интерфейс Опроса",
-        tool_survey_desc: "Рабочая среда прохождения опросника респондентом.",
-        tool_cabinet_title: "Личный Кабинет",
-        tool_cabinet_desc: "Защищенное рабочее пространство (требует уникальный логин/пароль).",
+        tool_participant_title: "Личный Кабинет Участника",
+        tool_participant_desc: "Защищенное рабочее пространство для конечного пользователя.",
         tool_assessment_title: "Оценка и Блок Тестирования",
         tool_assessment_desc: "Модуль первичного оценивания и психометрического скрининга.",
         tool_data_title: "Аналитика Данных",
