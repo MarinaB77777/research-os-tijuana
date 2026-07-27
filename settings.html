@@ -234,62 +234,90 @@ function setLang(lang, e) {
     });
 }
 
-function generateResearcherAccess() {
-    const id = document.getElementById('researcherId').value.trim();
-    const resultBox = document.getElementById('researcherResult');
-    const textLinkBox = document.getElementById('resTextLink');
-    const qrContainer = document.getElementById('qrcodeRes');
-    
-    if(!id) {
-        alert('Введите код или ID исследователя');
-        return;
-    }
-    
-    const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-    const generatedLink = `${currentUrl}index.html?token=${encodeURIComponent(id)}`;
-    
-    resultBox.style.display = 'flex';
-    textLinkBox.innerHTML = `<strong>${generatedLink}</strong>`;
-    
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, {
-        text: generatedLink,
-        width: 130,
-        height: 130,
-        colorDark: "#0f172a",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-    });
-}
+    async function generateResearcherAccess() {
+        const id = document.getElementById('researcherId').value.trim();
+        const resultBox = document.getElementById('researcherResult');
+        const textLinkBox = document.getElementById('resTextLink');
+        const qrContainer = document.getElementById('qrcodeRes');
+        
+        if(!id) {
+            alert('Введите код или ID исследователя');
+            return;
+        }
+        
+        try {
+            // Отправляем запрос на наш бэкенд для сохранения в Supabase
+            const response = await fetch('/api/tokens/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'researcher', customId: id })
+            });
+            
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Ошибка генерации');
 
-function generateRespondentAccess() {
-    const id = document.getElementById('respondentId').value.trim();
-    const resultBox = document.getElementById('respondentResult');
-    const textLinkBox = document.getElementById('respTextLink');
-    const qrContainer = document.getElementById('qrcodeResp');
-    
-    if(!id) {
-        alert('Введите ID или имя респондента');
-        return;
+            const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+            // В ссылку зашивается уникальный токен безопасности, выданный бэкендом
+            const generatedLink = `${currentUrl}index.html?token=${encodeURIComponent(result.token)}`;
+            
+            resultBox.style.display = 'flex';
+            textLinkBox.innerHTML = `<strong>ID: ${result.userIdentifier}</strong><br><span style="font-size:10px;">${generatedLink}</span>`;
+            
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: generatedLink,
+                width: 130,
+                height: 130,
+                colorDark: "#0f172a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } catch (err) {
+            alert('Не удалось сгенерировать доступ: ' + err.message);
+        }
     }
-    
-    // Ссылка ведет строго в кабинет участника: cabinet.html
-    const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-    const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(id)}`;
-    
-    resultBox.style.display = 'flex';
-    textLinkBox.innerHTML = `<strong>${generatedLink}</strong>`;
-    
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, {
-        text: generatedLink,
-        width: 130,
-        height: 130,
-        colorDark: "#0f172a",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-    });
-}
+
+    async function generateRespondentAccess() {
+        const id = document.getElementById('respondentId').value.trim();
+        const resultBox = document.getElementById('respondentResult');
+        const textLinkBox = document.getElementById('respTextLink');
+        const qrContainer = document.getElementById('qrcodeResp');
+        
+        if(!id) {
+            alert('Введите ID или имя респондента');
+            return;
+        }
+        
+        try {
+            // Отправляем запрос на бэкенд для создания респондента в базе
+            const response = await fetch('/api/tokens/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'respondent', customId: id })
+            });
+            
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Ошибка генерации');
+
+            const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+            const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(result.token)}`;
+            
+            resultBox.style.display = 'flex';
+            textLinkBox.innerHTML = `<strong>ID: ${result.userIdentifier}</strong><br><span style="font-size:10px;">${generatedLink}</span>`;
+            
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+                text: generatedLink,
+                width: 130,
+                height: 130,
+                colorDark: "#0f172a",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        } catch (err) {
+            alert('Не удалось сгенерировать доступ: ' + err.message);
+        }
+    }
 
 function downloadResQR() {
     const qrCanvas = document.querySelector('#qrcodeRes canvas');
