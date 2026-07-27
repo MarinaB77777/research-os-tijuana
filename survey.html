@@ -1,11 +1,9 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Research OS — Кабинет исследователя</title>
-  <!-- Подключаем библиотеку для генерации QR-кодов -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <title>Research OS — Panel de Control del Investigador</title>
 
   <style>
     :root {
@@ -32,6 +30,18 @@
       min-height: 100vh;
       box-sizing: border-box;
     }
+    
+    .error-banner {
+      background: #7f1d1d;
+      color: #fca5a5;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+      display: none;
+      margin: 20px auto;
+      max-width: 600px;
+    }
 
     .container {
       max-width: 1200px;
@@ -53,6 +63,8 @@
       align-items: center;
       border-bottom: 1px solid var(--border-color);
       padding-bottom: 16px;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     .header-left { display: flex; align-items: center; gap: 16px; }
@@ -82,7 +94,11 @@
       gap: 15px;
     }
 
-    .profile-info { display: flex; flex-direction: column; gap: 4px; }
+    .profile-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
 
     .author-badge {
       font-family: monospace;
@@ -189,424 +205,330 @@
     }
 
     th { background: #1e293b; color: var(--text-muted); font-weight: 600; }
-    
-    input[type="text"], input[type="password"] {
-      background: #1e293b;
-      border: 1px solid var(--border-color);
-      padding: 10px;
-      border-radius: 6px;
-      color: var(--text-color);
-      outline: none;
-      box-sizing: border-box;
-    }
-    input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent-color); }
   </style>
 </head>
 <body>
-
-<!-- 🔒 Защитный оверлей панели исследователя -->
-<div id="authOverlay" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0f172a; z-index: 999999; display: flex; justify-content: center; align-items: center; font-family: system-ui, sans-serif; color: #f8fafc;">
-    <div style="background: #1e293b; border: 1px solid #334155; padding: 32px; border-radius: 16px; width: 380px; text-align: center; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-        <h2 style="color: #f43f5e; margin-top: 0; font-size: 20px;">🛑 Acceso restringido</h2>
-        <p style="color: #94a3b8; font-size: 14px; line-height: 1.5; margin-bottom: 20px;">Este es el panel de control del investigador de Research OS. Introduzca la clave secreta para autorizar:</p>
-        <input type="password" id="adminKeyInput" placeholder="Clave secreta..." style="width: 100%; margin-bottom: 12px;">
-        <button onclick="checkAdminKey()" style="background: #38bdf8; color: #0f172a; border: none; padding: 10px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%;">Inicia sesión en el panel</button>
-    </div>
-</div>
-
-<script>
-    const ADMIN_SECRET = "my_super_secret_research_key_2026"; // Puede cambiar esta contraseña si lo desea.
-
-    (function initAuthCheck() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const keyFromUrl = urlParams.get('admin');
-
-        if (keyFromUrl === ADMIN_SECRET) {
-            localStorage.setItem('researcher_logged_in', 'true');
-            window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        const isAuthorized = localStorage.getItem('researcher_logged_in') === 'true';
-
-        if (isAuthorized) {
-            const overlay = document.getElementById('authOverlay');
-            if (overlay) overlay.remove();
-        }
-    })();
-
-    function checkAdminKey() {
-        const val = document.getElementById('adminKeyInput').value;
-        if (val === ADMIN_SECRET) {
-            localStorage.setItem('researcher_logged_in', 'true');
-            const overlay = document.getElementById('authOverlay');
-            if (overlay) overlay.remove();
-        } else {
-            alert('Неверный ключ доступа!');
-        }
-    }
-</script>
-
-<div class="container">
-  <header>
-    <div class="header-left">
-      <span style="font-weight: bold; font-size: 1.1rem; color: var(--accent-color);">Research OS</span>
-      <span style="color: var(--text-muted);" id="lbl-subtitle">— Панель управления исследователя</span>
-    </div>
-    <div class="lang-selector">
-      <button onclick="setLanguage('es')" id="lang-es">🇲🇽 ES</button>
-      <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
-      <button onclick="setLanguage('ru')" id="lang-ru" class="active">🇷🇺 RU</button>
-    </div>
-  </header>
-
-  <!-- Профиль и ID автора -->
-  <div class="profile-banner">
-    <div class="profile-info">
-      <span style="font-size: 0.8rem; color: var(--text-muted);" id="lbl-id-title">Идентификационный номер исследователя (Авторство):</span>
-      <div><span class="author-badge" id="author-id-display">--</span></div>
-    </div>
-    <div style="display: flex; gap: 12px; align-items: center;">
-      <a href="settings.html" class="btn btn-secondary" style="font-size: 0.75rem; padding: 6px 12px;" id="lbl-settings-btn">⚙️ Настройки и ИИ</a>
-      <span style="font-size: 0.85rem; color: var(--success-color);" id="lbl-session-status">● Сессия активна</span>
-    </div>
+    
+  <div id="errorBanner" class="error-banner">
+    Error: Código QR o token de acceso de investigador no válido. Por favor, escanee el código QR autorizado para entrar.
   </div>
 
-  <!-- НОВЫЙ БЛОК: Генератор персональных ссылок и QR-кодов для респондентов -->
-  <div class="manager-section" style="border-color: var(--accent-color);">
-    <div class="section-title" id="lbl-gen-header">📱 Генератор персональных ссылок и QR-кодов для респондентов</div>
-    <p style="color: var(--text-muted); font-size: 0.85rem; margin: 0;" id="lbl-gen-desc">Введите ID участника (например, префикс + номер сессии), чтобы мгновенно сформировать защищенную ссылку и QR-код для бесшовного входа со смартфона:</p>
-    
-    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px;">
-      <input type="text" id="participantId" placeholder="Например: tijuana_user_01" style="flex: 1; min-width: 220px;">
-      <button class="btn" onclick="generateAccess()" id="lbl-gen-btn">Сгенерировать доступ</button>
-    </div>
-    
-    <!-- Результат генерации -->
-    <div id="accessResult" style="display: none; background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid var(--border-color); flex-direction: column; align-items: center; gap: 16px; margin-top: 8px;">
-      <div id="textLinkBox" style="word-break: break-all; font-family: monospace; font-size: 13px; color: var(--accent-color); width: 100%;"></div>
-      <div style="background: #fff; padding: 12px; border-radius: 8px; display: inline-block;" id="qrcode"></div>
-      <span style="font-size: 12px; color: var(--text-muted); text-align: center;" id="lbl-qr-hint">El participante escanea este código con un teléfono inteligente para iniciar sesión en su cuenta personal.</span>
+  <div id="researcherContent" style="display: none; flex-direction: column; width: 100%; align-items: center;">
+    <div class="container">
+      <header>
+        <div class="header-left">
+          <span style="font-weight: bold; font-size: 1.1rem; color: var(--accent-color);">Research OS</span>
+          <span style="color: var(--text-muted);" id="lbl-subtitle">— Panel de Control del Investigador</span>
+        </div>
+        <div class="lang-selector">
+          <button onclick="setLanguage('es')" id="lang-es" class="active">🇲🇽 ES</button>
+          <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
+          <button onclick="setLanguage('ru')" id="lang-ru">🇷🇺 RU</button>
+        </div>
+      </header>
+        
+      <!-- Профиль и ID автора -->
+      <div class="profile-banner">
+        <div class="profile-info">
+          <span style="font-size: 0.80rem; color: var(--text-muted);" id="lbl-id-title">Número de Identificación del Investigador (Autoría):</span>
+          <div><span class="author-badge" id="author-id-display">--</span></div>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--success-color);" id="lbl-session-status">● Sesión Activa (Derechos de Administrador)</div>
+      </div>
+        
+      <!-- Управление банками вопросов из папок -->
+      <div class="manager-section">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+          <div class="section-title" id="lbl-banks-header" style="margin:0;">📂 Carga y Gestión de Bancos de Preguntas (Carpetas / Archivos)</div>
+          <input type="file" id="folder-loader" accept=".json" multiple style="display:none;" onchange="handleFolderUpload(event)">
+          <button class="btn btn-secondary" onclick="document.getElementById('folder-loader').click()" id="lbl-upload-btn">📁 Cargar Archivos de Bancos</button>
+        </div>
+        <div class="banks-table-container">
+          <table>
+            <thead>
+              <tr>
+                <th id="th-name">Nombre del Banco / Encuesta</th>
+                <th id="th-author">ID de Autor</th>
+                <th id="th-status">Estado en Sistema</th>
+                <th id="th-action">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="banks-table-body">
+              <!-- Динамические строки -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+        
+      <!-- Навигация по инструментам -->
+      <div>
+        <div class="section-title" id="lbl-tools-header">🛠️ Herramientas de Investigador</div>
+        <div class="tools-grid">
+            
+          <!-- Инструмент 1: Конструктор вопросов -->
+          <div class="tool-card">
+            <div class="tool-title">📝 <span id="tool1-title">Constructor de Preguntas</span></div>
+            <div class="tool-desc" id="tool1-desc">Creación de escalas estructuradas (Likert, categorías, rangos) y exportación a JSON para estudios.</div>
+            <a href="constructor_quest.html" class="btn" id="tool1-btn">Abrir Constructor</a>
+          </div>
+            
+          <!-- Инструмент 2: Конвертация данных -->
+          <div class="tool-card">
+            <div class="tool-title">🔄 <span id="tool2-title">Conversión de Datos</span></div>
+            <div class="tool-desc" id="tool2-desc">Transformación de exportaciones brutas de CSV/Excel al formato estandarizado de Research OS.</div>
+            <a href="importer.html" class="btn" id="tool2-btn">Abrir Conversor</a>
+          </div>
+            
+          <!-- Инструмент 3: Мультиязычный перевод -->
+          <div class="tool-card">
+            <div class="tool-title">🌐 <span id="tool3-title">Traducción Multilingüe</span></div>
+            <div class="tool-desc" id="tool3-desc">Localización de cuestionarios y escalas en inglés, español y ruso para pilotos internacionales.</div>
+            <a href="translator.html" class="btn" id="tool3-btn">Abrir Traductor</a>
+          </div>
+            
+          <!-- Инструмент 4: Валидация выборки -->
+          <div class="tool-card">
+            <div class="tool-title">🛡️ <span id="tool4-title">Validación de Muestra</span></div>
+            <div class="tool-desc" id="tool4-desc">Verificación de requisitos de volumen de datos, valores perdidos y protección contra errores estadísticos.</div>
+            <a href="validator.html" class="btn" id="tool4-btn">Abrir Validador</a>
+          </div>
+            
+          <!-- Инструмент 5: Статистический анализ -->
+          <div class="tool-card">
+            <div class="tool-title">📊 <span id="tool5-title">Análisis Estadístico</span></div>
+            <div class="tool-desc" id="tool5-desc">Seguimiento longitudinal, cortes de cohortes, cálculo de correlaciones de Pearson y dinámica de pistas.</div>
+            <a href="analyzer.html" class="btn" id="tool5-btn">Abrir Analizador</a>
+          </div>
+            
+        </div>
+      </div>
     </div>
   </div>
-
-  <!-- Управление банками вопросов из папок -->
-  <div class="manager-section">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div class="section-title" id="lbl-banks-header" style="margin:0;">📂 Carga y gestión de bancos de preguntas (carpetas / archivos)</div>
-      <input type="file" id="folder-loader" accept=".json" multiple style="display:none;" onchange="handleFolderUpload(event)">
-      <button class="btn btn-secondary" onclick="document.getElementById('folder-loader').click()" id="lbl-upload-btn">📁 Cargar archivos bancarios</button>
-    </div>
-    <div class="banks-table-container">
-      <table>
-        <thead>
-          <tr>
-            <th id="th-name">Nombre del banco / cuestionario</th>
-            <th id="th-author">Autor ID</th>
-            <th id="th-status">Estado del sistema</th>
-            <th id="th-action"> Acción </th>
-          </tr>
-        </thead>
-        <tbody id="banks-table-body">
-          <!-- Динамические строки -->
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Навигация по инструментам -->
-  <div>
-    <div class="section-title" id="lbl-tools-header">🛠️ Инструменты исследователя</div>
-    <div class="tools-grid">
-      
-      <!-- Инструмент 1: Конструктор вопросов -->
-      <div class="tool-card">
-        <div class="tool-title">📝 <span id="tool1-title">Конструктор вопросов</span></div>
-        <div class="tool-desc" id="tool1-desc">Создание структурированных шкал (Ликерта, категории, ранжирование) и экспорт в формат JSON для исследований.</div>
-        <a href="builder.html" class="btn" id="tool1-btn">Открыть конструктор</a>
-      </div>
-
-      <!-- Инструмент 2: Конвертация данных -->
-      <div class="tool-card">
-        <div class="tool-title">🔄 <span id="tool2-title">Конвертация данных</span></div>
-        <div class="tool-desc" id="tool2-desc">Преобразование сырых выгрузок респондентов из CSV/Excel в единый стандартизированный формат Research OS.</div>
-        <a href="converter.html" class="btn" id="tool2-btn">Открыть конвертер</a>
-      </div>
-
-      <!-- Инструмент 3: Мультиязычный перевод -->
-      <div class="tool-card">
-        <div class="tool-title">🌐 <span id="tool3-title">Мультиязычный перевод</span></div>
-        <div class="tool-desc" id="tool3-desc">Локализация опросников и шкал на английский, испанский и русский языки для международных пилотов.</div>
-        <a href="translator.html" class="btn" id="tool3-btn">Открыть переводчик</a>
-      </div>
-
-      <!-- Инструмент 4: Валидация выборки -->
-      <div class="tool-card">
-        <div class="tool-title">🛡️ <span id="tool4-title">Валидация выборки</span></div>
-        <div class="tool-desc" id="tool4-desc">Проверка минимальных требований к объему данных, проверка пропущенных значений и защита от статистических ошибок.</div>
-        <a href="validator.html" class="btn" id="tool4-btn">Открыть валидатор</a>
-      </div>
-
-      <!-- Инструмент 5: Статистический анализ -->
-      <div class="tool-card">
-        <div class="tool-title">📊 <span id="tool5-title">Статистический анализ</span></div>
-        <div class="tool-desc" id="tool5-desc">Лонгитюдный трекинг, когортные срезы, расчет корреляций Пирсона и динамики индивидуальных треков.</div>
-        <a href="analyzer.html" class="btn" id="tool5-btn">Открыть анализатор</a>
-      </div>
-
-    </div>
-  </div>
-
-</div>
-
-<script>
-  let currentLang = 'ru';
-  let researcherId = '';
-
-  const i18n = {
-    ru: {
-      subtitle: "— Панель управления исследователя",
-      idTitle: "Идентификационный номер исследователя (Авторство):",
-      sessionStatus: "● Сессия активна",
-      settingsBtn: "⚙️ Настройки и ИИ",
-      genHeader: "📱 Генератор персональных ссылок и QR-кодов для респондентов",
-      genDesc: "Введите ID участника (например, префикс + номер сессии), чтобы мгновенно сформировать защищенную ссылку и QR-код для бесшовного входа со смартфона:",
-      genBtn: "Сгенерировать доступ",
-      qrHint: "Участник сканирует этот код со смартфона для входа в личный кабинет",
-      banksHeader: "📂 Загрузка и управление банками вопросов (Папки / Файлы)",
-      uploadBtn: "📁 Загрузить файлы банков",
-      thName: "Название банка / опросника",
-      thAuthor: "Автор ID",
-      thStatus: "Статус в системе",
-      thAction: "Действие",
-      toolsHeader: "🛠️ Инструменты исследователя",
-      tool1Title: "Конструктор вопросов",
-      tool1Desc: "Создание структурированных шкал (Ликерта, категории, ранжирование) и экспорт в формат JSON для исследований.",
-      tool1Btn: "Открыть конструктор",
-      tool2Title: "Конвертация данных",
-      tool2Desc: "Преобразование сырых выгрузок респондентов из CSV/Excel в единый стандартизированный формат Research OS.",
-      tool2Btn: "Открыть конвертер",
-      tool3Title: "Мультиязычный перевод",
-      tool3Desc: "Локализация опросников и шкал на английский, испанский и русский языки для международных пилотов.",
-      tool3Btn: "Открыть переводчик",
-      tool4Title: "Валидация выборки",
-      tool4Desc: "Проверка минимальных требований к объему данных, проверка пропущенных значений и защита от статистических ошибок.",
-      tool4Btn: "Открыть валидатор",
-      tool5Title: "Статистический анализ",
-      tool5Desc: "Лонгитюдный трекинг, когортные срезы, расчет корреляций Пирсона и динамики индивидуальных треков.",
-      tool5Btn: "Открыть анализатор",
-      activeStatus: "Подключен",
-      disconnect: "Отключить"
-    },
-    en: {
-      subtitle: "— Researcher Control Panel",
-      idTitle: "Researcher Identification Number (Authorship):",
-      sessionStatus: "● Session Active",
-      settingsBtn: "⚙️ Settings & AI",
-      genHeader: "📱 Personal Link & QR Code Generator for Respondents",
-      genDesc: "Enter participant ID to instantly generate a secure link and QR code for seamless smartphone access:",
-      genBtn: "Generate Access",
-      qrHint: "Participant scans this QR code with a smartphone to enter their personal cabinet",
-      banksHeader: "📂 Question Bank Upload & Management (Folders / Files)",
-      uploadBtn: "📁 Upload Bank Files",
-      thName: "Bank / Survey Name",
-      thAuthor: "Author ID",
-      thStatus: "System Status",
-      thAction: "Action",
-      toolsHeader: "🛠️ Researcher Tools",
-      tool1Title: "Question Builder",
-      tool1Desc: "Create structured scales (Likert, categories, ranking) and export to JSON format for research studies.",
-      tool1Btn: "Open Builder",
-      tool2Title: "Data Conversion",
-      tool2Desc: "Convert raw respondent exports from CSV/Excel into a standardized Research OS format.",
-      tool2Btn: "Open Converter",
-      tool3Title: "Multilingual Translation",
-      tool3Desc: "Localize questionnaires and scales into English, Spanish, and Russian for international pilots.",
-      tool3Btn: "Open Translator",
-      tool4Title: "Sample Validation",
-      tool4Desc: "Check minimum data volume requirements, missing values, and protect against statistical errors.",
-      tool4Btn: "Open Validator",
-      tool5Title: "Statistical Analysis",
-      tool5Desc: "Longitudinal tracking, cohort slices, Pearson correlation calculations, and individual track dynamics.",
-      tool5Btn: "Open Analyzer",
-      activeStatus: "Connected",
-      disconnect: "Disconnect"
-    },
-    es: {
-      subtitle: "— Panel de Control del Investigador",
-      idTitle: "Número de Identificación del Investigador (Autoría):",
-      sessionStatus: "● Sesión Activa",
-      settingsBtn: "⚙️ Configuración y IA",
-      genHeader: "📱 Generador de Enlaces y Códigos QR para Encuestados",
-      genDesc: "Ingrese el ID del participante para generar instantáneamente un enlace seguro y un código QR para acceso móvil:",
-      genBtn: "Generar Acceso",
-      qrHint: "El participante escanea este código QR con su smartphone para entrar a su gabinete",
-      banksHeader: "📂 Carga y Gestión de Bancos de Preguntas (Carpetas / Archivos)",
-      uploadBtn: "📁 Cargar Archivos de Bancos",
-      thName: "Nombre del Banco / Encuesta",
-      thAuthor: "ID de Autor",
-      thStatus: "Estado en Sistema",
-      thAction: "Acción",
-      toolsHeader: "🛠️ Herramientas de Investigador",
-      tool1Title: "Constructor de Preguntas",
-      tool1Desc: "Creación de escalas estructuradas (Likert, categorías, rangos) y exportación a JSON para estudios.",
-      tool1Btn: "Abrir Constructor",
-      tool2Title: "Conversión de Datos",
-      tool2Desc: "Transformación de exportaciones brutas de CSV/Excel al formato estandarizado de Research OS.",
-      tool2Btn: "Abrir Conversor",
-      tool3Title: "Traducción Multilingüe",
-      tool3Desc: "Localización de cuestionarios y escalas en inglés, español y ruso para pilotos internacionales.",
-      tool3Btn: "Abrir Traductor",
-      tool4Title: "Validación de Muestra",
-      tool4Desc: "Verificación de requisitos de volumen de datos, valores perdidos y protección contra errores estadísticos.",
-      tool4Btn: "Abrir Validador",
-      tool5Title: "Análisis Estadístico",
-      tool5Desc: "Seguimiento longitudinal, cortes de cohortes, cálculo de correlaciones de Pearson y dinámica de pistas.",
-      tool5Btn: "Abrir Analizador",
-      activeStatus: "Conectado",
-      disconnect: "Desconectar"
-    }
-  };
-
-  let uploadedBanks = [
-    { id: "bank_01", title: "Стресс и рабочая нагрузка (Wave 1)", authorId: "", active: true }
-  ];
-
-  function initSession() {
-    let storedId = localStorage.getItem('researcher_os_author_id');
-    if (!storedId) {
-      storedId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
-      localStorage.setItem('researcher_os_author_id', storedId);
-    }
-    researcherId = storedId;
-    document.getElementById('author-id-display').innerText = researcherId;
-    uploadedBanks.forEach(b => { if (!b.authorId) b.authorId = researcherId; });
-    renderBanksTable();
-  }
-
-  function setLanguage(lang) {
-    currentLang = lang;
-    document.querySelectorAll('.lang-selector button').forEach(b => b.classList.remove('active'));
-    document.getElementById(`lang-${lang}`).classList.add('active');
-
-    const t = i18n[lang];
-    document.getElementById('lbl-subtitle').innerText = t.subtitle;
-    document.getElementById('lbl-id-title').innerText = t.idTitle;
-    document.getElementById('lbl-session-status').innerText = t.sessionStatus;
-    document.getElementById('lbl-settings-btn').innerText = t.settingsBtn;
-    document.getElementById('lbl-gen-header').innerText = t.genHeader;
-    document.getElementById('lbl-gen-desc').innerText = t.genDesc;
-    document.getElementById('lbl-gen-btn').innerText = t.genBtn;
-    document.getElementById('lbl-qr-hint').innerText = t.qrHint;
-    document.getElementById('lbl-banks-header').innerText = t.banksHeader;
-    document.getElementById('lbl-upload-btn').innerText = t.uploadBtn;
-    document.getElementById('th-name').innerText = t.thName;
-    document.getElementById('th-author').innerText = t.thAuthor;
-    document.getElementById('th-status').innerText = t.thStatus;
-    document.getElementById('th-action').innerText = t.thAction;
-    document.getElementById('lbl-tools-header').innerText = t.toolsHeader;
-
-    document.getElementById('tool1-title').innerText = t.tool1Title;
-    document.getElementById('tool1-desc').innerText = t.tool1Desc;
-    document.getElementById('tool1-btn').innerText = t.tool1Btn;
-
-    document.getElementById('tool2-title').innerText = t.tool2Title;
-    document.getElementById('tool2-desc').innerText = t.tool2Desc;
-    document.getElementById('tool2-btn').innerText = t.tool2Btn;
-
-    document.getElementById('tool3-title').innerText = t.tool3Title;
-    document.getElementById('tool3-desc').innerText = t.tool3Desc;
-    document.getElementById('tool3-btn').innerText = t.tool3Btn;
-
-    document.getElementById('tool4-title').innerText = t.tool4Title;
-    document.getElementById('tool4-desc').innerText = t.tool4Desc;
-    document.getElementById('tool4-btn').innerText = t.tool4Btn;
-
-    document.getElementById('tool5-title').innerText = t.tool5Title;
-    document.getElementById('tool5-desc').innerText = t.tool5Desc;
-    document.getElementById('tool5-btn').innerText = t.tool5Btn;
-
-    renderBanksTable();
-  }
-
-  function generateAccess() {
-    const id = document.getElementById('participantId').value.trim();
-    const resultBox = document.getElementById('accessResult');
-    const textLinkBox = document.getElementById('textLinkBox');
-    const qrContainer = document.getElementById('qrcode');
     
-    if(!id) {
-        alert(currentLang === 'es' ? 'Ingrese el ID del participante' : currentLang === 'en' ? 'Enter participant ID' : 'Введите ID участника');
-        return;
-    }
-    
-    const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-    const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(id)}`;
-    
-    resultBox.style.display = 'flex';
-    textLinkBox.innerHTML = `${currentLang === 'es' ? 'Enlace personal:' : currentLang === 'en' ? 'Personal link:' : 'Персональная ссылка:'}<br><strong>${generatedLink}</strong>`;
-    
-    qrContainer.innerHTML = '';
-    new QRCode(qrContainer, {
-        text: generatedLink,
-        width: 160,
-        height: 160,
-        colorDark: "#0f172a",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
-    });
-  }
-
-  async function handleFolderUpload(event) {
-    const files = event.target.files;
-    if (!files.length) return;
-
-    for (let file of files) {
-      try {
-        const text = await file.text();
-        const json = JSON.parse(text);
-        uploadedBanks.push({
-          id: json.id || ('bank_' + Date.now()),
-          title: json.title || file.name,
-          authorId: researcherId,
-          active: true
-        });
-      } catch (e) {
-        uploadedBanks.push({
-          id: 'bank_' + Date.now(),
-          title: file.name,
-          authorId: researcherId,
-          active: true
-        });
+  <script>
+    let currentLang = 'es';
+    let researcherId = '';
+        
+    const i18n = {
+      es: {
+        subtitle: "— Panel de Control del Investigador",
+        idTitle: "Número de Identificación del Investigador (Autoría):",
+        sessionStatus: "● Sesión Activa (Derechos de Administrador)",
+        banksHeader: "📂 Carga y Gestión de Bancos de Preguntas (Carpetas / Archivos)",
+        uploadBtn: "📁 Cargar Archivos de Bancos",
+        thName: "Nombre del Banco / Encuesta",
+        thAuthor: "ID de Autor",
+        thStatus: "Estado en Sistema",
+        thAction: "Acción",
+        toolsHeader: "🛠️ Herramientas de Investigador",
+        tool1Title: "Constructor de Preguntas",
+        tool1Desc: "Creación de escalas estructuradas (Likert, categorías, rangos) y exportación a JSON para estudios.",
+        tool1Btn: "Abrir Constructor",
+        tool2Title: "Conversión de Datos",
+        tool2Desc: "Transformación de exportaciones brutas de CSV/Excel al formato estandarizado de Research OS.",
+        tool2Btn: "Abrir Conversor",
+        tool3Title: "Traducción Multilingüe",
+        tool3Desc: "Localización de cuestionarios y escalas en inglés, español y ruso para pilotos internacionales.",
+        tool3Btn: "Abrir Traductor",
+        tool4Title: "Validación de Muestra",
+        tool4Desc: "Verificación de requisitos de volumen de datos, valores perdidos y protección contra errores estadísticos.",
+        tool4Btn: "Abrir Validador",
+        tool5Title: "Análisis Estadístico",
+        tool5Desc: "Seguimiento longitudinal, cortes de cohortes, cálculo de correlaciones de Pearson y dinámica de pistas.",
+        tool5Btn: "Abrir Analizador",
+        activeStatus: "Conectado",
+        disconnect: "Desconectar"
+      },
+      en: {
+        subtitle: "— Researcher Control Panel",
+        idTitle: "Researcher Identification Number (Authorship):",
+        sessionStatus: "● Session Active (Study Administrator Rights)",
+        banksHeader: "📂 Question Bank Upload & Management (Folders / Files)",
+        uploadBtn: "📁 Upload Bank Files",
+        thName: "Bank / Survey Name",
+        thAuthor: "Author ID",
+        thStatus: "System Status",
+        thAction: "Action",
+        toolsHeader: "🛠️ Researcher Tools",
+        tool1Title: "Question Builder",
+        tool1Desc: "Create structured scales (Likert, categories, ranking) and export to JSON format for research studies.",
+        tool1Btn: "Open Builder",
+        tool2Title: "Data Conversion",
+        tool2Desc: "Convert raw respondent exports from CSV/Excel into a standardized Research OS format.",
+        tool2Btn: "Open Converter",
+        tool3Title: "Multilingual Translation",
+        tool3Desc: "Localize questionnaires and scales into English, Spanish, and Russian for international pilots.",
+        tool3Btn: "Open Translator",
+        tool4Title: "Sample Validation",
+        tool4Desc: "Check minimum data volume requirements, missing values, and protect against statistical errors.",
+        tool4Btn: "Open Validator",
+        tool5Title: "Statistical Analysis",
+        tool5Desc: "Longitudinal tracking, cohort slices, Pearson correlation calculations, and individual track dynamics.",
+        tool5Btn: "Open Analyzer",
+        activeStatus: "Connected",
+        disconnect: "Disconnect"
+      },
+      ru: {
+        subtitle: "— Панель управления исследователя",
+        idTitle: "Идентификационный номер исследователя (Авторство):",
+        sessionStatus: "● Сессия активна (Права администратора исследования)",
+        banksHeader: "📂 Загрузка и управление банками вопросов (Папки / Файлы)",
+        uploadBtn: "📁 Загрузить файлы банков",
+        thName: "Название банка / опросника",
+        thAuthor: "Автор ID",
+        thStatus: "Статус в системе",
+        thAction: "Действие",
+        toolsHeader: "🛠️ Инструменты исследователя",
+        tool1Title: "Конструктор вопросов",
+        tool1Desc: "Создание структурированных шкал (Ликерта, категории, ранжирование) и экспорт в формат JSON для исследований.",
+        tool1Btn: "Открыть конструктор",
+        tool2Title: "Конвертация данных",
+        tool2Desc: "Преобразование сырых выгрузок респондентов из CSV/Excel в единый стандартизированный формат Research OS.",
+        tool2Btn: "Открыть конвертер",
+        tool3Title: "Мультиязычный перевод",
+        tool3Desc: "Локализация опросников и шкал на английский, испанский и русский языки для международных пилотов.",
+        tool3Btn: "Открыть переводчик",
+        tool4Title: "Валидация выборки",
+        tool4Desc: "Проверка минимальных требований к объему данных, проверка пропущенных значений и защита от статистических ошибок.",
+        tool4Btn: "Открыть валидатор",
+        tool5Title: "Статистический анализ",
+        tool5Desc: "Лонгитюдный трекинг, когортные срезы, расчет корреляций Пирсона и динамики индивидуальных треков.",
+        tool5Btn: "Открыть анализатор",
+        activeStatus: "Conectado",
+        disconnect: "Desconectar"
       }
+    };
+        
+    let uploadedBanks = [
+      { id: "bank_01", title: "Estrés y carga laboral (Wave 1)", authorId: "", active: true }
+    ];
+                             
+    function initSession() {
+      const urlParams = new URLSearchParams(window.location.search);
+      let token = urlParams.get('token') || urlParams.get('auth');
+
+      if (token) {
+        localStorage.setItem('researcher_token', token);
+      } else {
+        token = localStorage.getItem('researcher_token');
+      }
+
+      if (!token) {
+        document.getElementById('researcherContent').style.display = 'none';
+        document.getElementById('errorBanner').style.display = 'block';
+        return;
+      }
+
+      document.getElementById('errorBanner').style.display = 'none';
+      document.getElementById('researcherContent').style.display = 'flex';
+
+      let storedId = localStorage.getItem('researcher_os_author_id');
+      if (!storedId) {
+        storedId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
+        localStorage.setItem('researcher_os_author_id', storedId);
+      }
+      researcherId = storedId;
+      document.getElementById('author-id-display').innerText = researcherId;
+      uploadedBanks.forEach(b => { if (!b.authorId) b.authorId = researcherId; });
+         
+      const savedLang = localStorage.getItem('app_language') || 'es';
+      setLanguage(savedLang);
     }
-    renderBanksTable();
-  }
-
-  function toggleBank(index) {
-    uploadedBanks[index].active = !uploadedBanks[index].active;
-    renderBanksTable();
-  }
-
-  function renderBanksTable() {
-    const tbody = document.getElementById('banks-table-body');
-    const t = i18n[currentLang];
-    tbody.innerHTML = '';
-
-    uploadedBanks.forEach((bank, idx) => {
-      tbody.innerHTML += `
-        <tr>
-          <td>📋 ${bank.title}</td>
-          <td><code style="color: var(--accent-color);">${bank.authorId || researcherId}</code></td>
-          <td><span style="color: ${bank.active ? 'var(--success-color)' : 'var(--text-muted)'};">${bank.active ? t.activeStatus : 'Отключен'}</span></td>
-          <td><button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="toggleBank(${idx})">${bank.active ? t.disconnect : t.activeStatus}</button></td>
-        </tr>
-      `;
-    });
-  }
-
-  window.onload = function() {
-    initSession();
-  };
-</script>
+        
+    function setLanguage(lang) {
+      currentLang = lang;
+      localStorage.setItem('app_language', lang);
+      document.documentElement.setAttribute('lang', lang);
+      document.querySelectorAll('.lang-selector button').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById(`lang-${lang}`);
+      if (btn) btn.classList.add('active');
+            
+      const t = i18n[lang] || i18n.es;
+      document.getElementById('lbl-subtitle').innerText = t.subtitle;
+      document.getElementById('lbl-id-title').innerText = t.idTitle;
+      document.getElementById('lbl-session-status').innerText = t.sessionStatus;
+      document.getElementById('lbl-banks-header').innerText = t.banksHeader;
+      document.getElementById('lbl-upload-btn').innerText = t.uploadBtn;
+      document.getElementById('th-name').innerText = t.thName;
+      document.getElementById('th-author').innerText = t.thAuthor;
+      document.getElementById('th-status').innerText = t.thStatus;
+      document.getElementById('th-action').innerText = t.thAction;
+      document.getElementById('lbl-tools-header').innerText = t.toolsHeader;
+            
+      document.getElementById('tool1-title').innerText = t.tool1Title;
+      document.getElementById('tool1-desc').innerText = t.tool1Desc;
+      document.getElementById('tool1-btn').innerText = t.tool1Btn;
+            
+      document.getElementById('tool2-title').innerText = t.tool2Title;
+      document.getElementById('tool2-desc').innerText = t.tool2Desc;
+      document.getElementById('tool2-btn').innerText = t.tool2Btn;
+            
+      document.getElementById('tool3-title').innerText = t.tool3Title;
+      document.getElementById('tool3-desc').innerText = t.tool3Desc;
+      document.getElementById('tool3-btn').innerText = t.tool3Btn;
+            
+      document.getElementById('tool4-title').innerText = t.tool4Title;
+      document.getElementById('tool4-desc').innerText = t.tool4Desc;
+      document.getElementById('tool4-btn').innerText = t.tool4Btn;
+            
+      document.getElementById('tool5-title').innerText = t.tool5Title;
+      document.getElementById('tool5-desc').innerText = t.tool5Desc;
+      document.getElementById('tool5-btn').innerText = t.tool5Btn;
+            
+      renderBanksTable();
+    }
+        
+    async function handleFolderUpload(event) {
+      const files = event.target.files;
+      if (!files.length) return;
+            
+      for (let file of files) {
+        try {
+          const text = await file.text();
+          const json = JSON.parse(text);
+          uploadedBanks.push({
+            id: json.id || ('bank_' + Date.now()),
+            title: json.title || file.name,
+            authorId: researcherId,
+            active: true
+          });
+        } catch (e) {
+          uploadedBanks.push({
+            id: 'bank_' + Date.now(),
+            title: file.name,
+            authorId: researcherId,
+            active: true
+          });
+        }
+      }
+      renderBanksTable();
+    }
+        
+    function toggleBank(index) {
+      uploadedBanks[index].active = !uploadedBanks[index].active;
+      renderBanksTable();
+    }
+        
+    function renderBanksTable() {
+      const tbody = document.getElementById('banks-table-body');
+      const t = i18n[currentLang] || i18n.es;
+      tbody.innerHTML = '';
+            
+      uploadedBanks.forEach((bank, idx) => {
+        tbody.innerHTML += `
+          <tr>
+            <td>📋 ${bank.title}</td>
+            <td><code style="color: var(--accent-color);">${bank.authorId || researcherId}</code></td>
+            <td><span style="color: ${bank.active ? 'var(--success-color)' : 'var(--text-muted)'};">${bank.active ? t.activeStatus : (currentLang === 'es' ? 'Desconectado' : 'Отключен')}</span></td>
+            <td><button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="toggleBank(${idx})">${bank.active ? t.disconnect : t.activeStatus}</button></td>
+          </tr>
+        `;
+      });
+    }
+        
+    window.onload = function() {
+      initSession();
+    };
+  </script>
 </body>
 </html>
