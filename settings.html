@@ -7,7 +7,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
-        .container { max-width: 900px; margin: 0 auto; padding: 24px; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 24px; }
         .app-header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; }
         .header-left { display: flex; align-items: center; gap: 16px; }
         .back-btn { background: #334155; color: #38bdf8; text-decoration: none; padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; }
@@ -19,6 +19,7 @@
         h1 { color: #38bdf8; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-top: 16px; }
         .section { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
         .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
         label { font-size: 13px; color: #94a3b8; font-weight: 600; }
         input, select { background: #0f172a; border: 1px solid #475569; padding: 10px; border-radius: 6px; color: #f8fafc; outline: none; }
@@ -66,24 +67,47 @@
         </div>
     </div>
 
-    <!-- 2. Генератор ссылки и QR-кода для исследователя -->
+    <!-- 2. Генераторы доступов (Две колонки: Исследователь слева, Респондент справа) -->
     <div class="section" style="border-color: #38bdf8;">
-        <h2 style="color: #38bdf8;" data-i18n="sec_generator">🔗 Генератор ссылки и QR-кода исследователя</h2>
-        <p style="color: #94a3b8; font-size: 13px;" data-i18n="generator_desc">Введите секретный код или ID исследователя для формирования защищенного доступа к панели управления:</p>
-        
-        <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
-            <input type="text" id="researcherId" placeholder="Например: admin_tijuana_2026" style="flex: 1; min-width: 200px;">
-            <button class="btn btn-blue" onclick="generateAccess()" data-i18n="btn_generate">Сгенерировать доступ</button>
-        </div>
-        
-        <!-- Результат: Ссылка + QR-код -->
-        <div id="accessResult" style="display: none; background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; flex-direction: column; align-items: center; gap: 16px;">
-            <div id="textLinkBox" style="word-break: break-all; font-family: monospace; font-size: 13px; color: #38bdf8; width: 100%;"></div>
+        <h2 style="color: #38bdf8;" data-i18n="sec_generator">🔗 Генераторы ссылок и QR-кодов</h2>
+        <div class="grid">
             
-            <div style="background: #fff; padding: 12px; border-radius: 8px; display: inline-block;" id="qrcode"></div>
-            
-            <button class="btn btn-dark" onclick="downloadQRCode()" data-i18n="btn_download_qr">📥 Скачать QR-код (PNG)</button>
-            <span style="font-size: 12px; color: #94a3b8; text-align: center;" data-i18n="hint_qr">Исследователь сканирует этот код для входа в панель управления</span>
+            <!-- Левая колонка: Исследователь -->
+            <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <h3 style="color: #38bdf8; margin-top: 0; font-size: 15px;" data-i18n="col_researcher_title">👨‍💻 Кабинет исследователя</h3>
+                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_researcher_desc">Генерация ссылки для входа в панель управления:</p>
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <input type="text" id="researcherId" placeholder="admin_tijuana_2026">
+                    </div>
+                    <button class="btn btn-blue" style="width: 100%; margin-bottom: 12px;" onclick="generateResearcherAccess()" data-i18n="btn_generate_res">Сгенерировать вход</button>
+                </div>
+
+                <div id="researcherResult" style="display: none; flex-direction: column; align-items: center; gap: 10px; border-top: 1px solid #334155; padding-top: 12px;">
+                    <div id="resTextLink" style="word-break: break-all; font-family: monospace; font-size: 11px; color: #38bdf8; width: 100%;"></div>
+                    <div style="background: #fff; padding: 8px; border-radius: 6px; display: inline-block;" id="qrcodeRes"></div>
+                    <button class="btn btn-dark" onclick="downloadResQR()" data-i18n="btn_download_qr">📥 Скачать QR (PNG)</button>
+                </div>
+            </div>
+
+            <!-- Правая колонка: Респондент -->
+            <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                    <h3 style="color: #10b981; margin-top: 0; font-size: 15px;" data-i18n="col_respondent_title">📋 Кабинет респондента</h3>
+                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Генерация персональной ссылки для прохождения опросников:</p>
+                    <div class="form-group" style="margin-bottom: 12px;">
+                        <input type="text" id="respondentId" placeholder="resp_tijuana_01">
+                    </div>
+                    <button class="btn" style="width: 100%; margin-bottom: 12px;" onclick="generateRespondentAccess()" data-i18n="btn_generate_resp">Сгенерировать ссылку</button>
+                </div>
+
+                <div id="respondentResult" style="display: none; flex-direction: column; align-items: center; gap: 10px; border-top: 1px solid #334155; padding-top: 12px;">
+                    <div id="respTextLink" style="word-break: break-all; font-family: monospace; font-size: 11px; color: #34d399; width: 100%;"></div>
+                    <div style="background: #fff; padding: 8px; border-radius: 6px; display: inline-block;" id="qrcodeResp"></div>
+                    <button class="btn btn-dark" onclick="downloadRespQR()" data-i18n="btn_download_qr">📥 Скачать QR (PNG)</button>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -135,11 +159,14 @@ const i18n = {
         hint_researcher: "Дает полный доступ к панели управления.",
         label_participant_prefix: "🏷️ Префикс для участников:",
         hint_participant: "Используется для генерации персональных ссылок.",
-        sec_generator: "🔗 Генератор ссылки и QR-кода исследователя",
-        generator_desc: "Введите секретный код или ID исследователя для формирования защищенного доступа к панели управления:",
-        btn_generate: "Сгенерировать доступ",
-        btn_download_qr: "📥 Скачать QR-код (PNG)",
-        hint_qr: "Исследователь сканирует этот код для входа в панель управления",
+        sec_generator: "🔗 Генераторы ссылок и QR-кодов",
+        col_researcher_title: "👨‍💻 Кабинет исследователя",
+        col_researcher_desc: "Генерация ссылки для входа в панель управления:",
+        btn_generate_res: "Сгенерировать вход",
+        col_respondent_title: "📋 Кабинет респондента",
+        col_respondent_desc: "Генерация персональной ссылки для прохождения опросников:",
+        btn_generate_resp: "Сгенерировать ссылку",
+        btn_download_qr: "📥 Скачать QR (PNG)",
         sec1_title: "3. Ваши API-ключи ИИ",
         sec2_title: "4. Какой ИИ отвечает за задачи?",
         label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
@@ -155,11 +182,14 @@ const i18n = {
         hint_researcher: "Brinda acceso completo al panel de control.",
         label_participant_prefix: "🏷️ Prefijo para participantes:",
         hint_participant: "Se utiliza para generar enlaces personales.",
-        sec_generator: "🔗 Generador de enlace y código QR del investigador",
-        generator_desc: "Ingrese el código secreto o ID del investigador para acceder al panel de control:",
-        btn_generate: "Generar acceso",
-        btn_download_qr: "📥 Descargar código QR (PNG)",
-        hint_qr: "El investigador escanea este código para ingresar al panel de control",
+        sec_generator: "🔗 Generadores de enlaces y códigos QR",
+        col_researcher_title: "👨‍💻 Panel del Investigador",
+        col_researcher_desc: "Generar enlace de acceso al panel de control:",
+        btn_generate_res: "Generar acceso",
+        col_respondent_title: "📋 Panel del Participante",
+        col_respondent_desc: "Generar enlace personal para completar cuestionarios:",
+        btn_generate_resp: "Generar enlace",
+        btn_download_qr: "📥 Descargar QR (PNG)",
         sec1_title: "3. Sus Claves API de IA",
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
         label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
@@ -175,11 +205,14 @@ const i18n = {
         hint_researcher: "Grants full control panel access.",
         label_participant_prefix: "🏷️ Participant Token Prefix:",
         hint_participant: "Used for personal link generation.",
-        sec_generator: "🔗 Researcher Link & QR Code Generator",
-        generator_desc: "Enter researcher secret code or ID to generate secure access to the control panel:",
-        btn_generate: "Generate Access",
-        btn_download_qr: "📥 Download QR Code (PNG)",
-        hint_qr: "Researcher scans this code to enter the control panel",
+        sec_generator: "🔗 Link & QR Code Generators",
+        col_researcher_title: "👨‍💻 Researcher Dashboard",
+        col_researcher_desc: "Generate access link to the control panel:",
+        btn_generate_res: "Generate Access",
+        col_respondent_title: "📋 Participant Hub",
+        col_respondent_desc: "Generate personal link to complete questionnaires:",
+        btn_generate_resp: "Generate Link",
+        btn_download_qr: "📥 Download QR (PNG)",
         sec1_title: "3. Your AI API Keys",
         sec2_title: "4. Assign AI models to tasks",
         label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
@@ -201,52 +234,85 @@ function setLang(lang, e) {
     });
 }
 
-function generateAccess() {
+function generateResearcherAccess() {
     const id = document.getElementById('researcherId').value.trim();
-    const resultBox = document.getElementById('accessResult');
-    const textLinkBox = document.getElementById('textLinkBox');
-    const qrContainer = document.getElementById('qrcode');
+    const resultBox = document.getElementById('researcherResult');
+    const textLinkBox = document.getElementById('resTextLink');
+    const qrContainer = document.getElementById('qrcodeRes');
     
     if(!id) {
         alert('Введите код или ID исследователя');
         return;
     }
     
-    // Формируем ссылку на индексную страницу исследователя (index.html) с токеном
     const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
     const generatedLink = `${currentUrl}index.html?token=${encodeURIComponent(id)}`;
     
     resultBox.style.display = 'flex';
-    textLinkBox.innerHTML = `Ссылка исследователя:<br><strong>${generatedLink}</strong>`;
+    textLinkBox.innerHTML = `<strong>${generatedLink}</strong>`;
     
     qrContainer.innerHTML = '';
     new QRCode(qrContainer, {
         text: generatedLink,
-        width: 160,
-        height: 160,
+        width: 130,
+        height: 130,
         colorDark: "#0f172a",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
     });
 }
 
-function downloadQRCode() {
-    const qrCanvas = document.querySelector('#qrcode canvas');
-    const qrImg = document.querySelector('#qrcode img');
-    let url = '';
-
-    if (qrCanvas) {
-        url = qrCanvas.toDataURL("image/png");
-    } else if (qrImg) {
-        url = qrImg.src;
-    } else {
-        alert('QR-код еще не сгенерирован');
+function generateRespondentAccess() {
+    const id = document.getElementById('respondentId').value.trim();
+    const resultBox = document.getElementById('respondentResult');
+    const textLinkBox = document.getElementById('respTextLink');
+    const qrContainer = document.getElementById('qrcodeResp');
+    
+    if(!id) {
+        alert('Введите ID или имя респондента');
         return;
     }
+    
+    // Ссылка ведет строго в кабинет участника: cabinet.html
+    const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+    const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(id)}`;
+    
+    resultBox.style.display = 'flex';
+    textLinkBox.innerHTML = `<strong>${generatedLink}</strong>`;
+    
+    qrContainer.innerHTML = '';
+    new QRCode(qrContainer, {
+        text: generatedLink,
+        width: 130,
+        height: 130,
+        colorDark: "#0f172a",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
 
-    const researcherIdVal = document.getElementById('researcherId').value.trim() || 'researcher';
+function downloadResQR() {
+    const qrCanvas = document.querySelector('#qrcodeRes canvas');
+    const qrImg = document.querySelector('#qrcodeRes img');
+    let url = qrCanvas ? qrCanvas.toDataURL("image/png") : (qrImg ? qrImg.src : '');
+    if(!url) { alert('QR-код не найден'); return; }
+
+    const id = document.getElementById('researcherId').value.trim() || 'researcher';
     const link = document.createElement('a');
-    link.download = `qrcode_researcher_${researcherIdVal}.png`;
+    link.download = `qrcode_researcher_${id}.png`;
+    link.href = url;
+    link.click();
+}
+
+function downloadRespQR() {
+    const qrCanvas = document.querySelector('#qrcodeResp canvas');
+    const qrImg = document.querySelector('#qrcodeResp img');
+    let url = qrCanvas ? qrCanvas.toDataURL("image/png") : (qrImg ? qrImg.src : '');
+    if(!url) { alert('QR-код не найден'); return; }
+
+    const id = document.getElementById('respondentId').value.trim() || 'respondent';
+    const link = document.createElement('a');
+    link.download = `qrcode_respondent_${id}.png`;
     link.href = url;
     link.click();
 }
@@ -278,7 +344,10 @@ function saveAllSettings() {
 function loadSettings() {
     const accessConfig = JSON.parse(localStorage.getItem('ros_access_config') || '{}');
     if (accessConfig.researcherCode) document.getElementById('access_researcher').value = accessConfig.researcherCode;
-    if (accessConfig.participantPrefix) document.getElementById('access_participant_prefix').value = accessConfig.participantPrefix;
+    if (accessConfig.participantPrefix) {
+        document.getElementById('access_participant_prefix').value = accessConfig.participantPrefix;
+        document.getElementById('respondentId').value = accessConfig.participantPrefix;
+    }
 
     const keys = JSON.parse(localStorage.getItem('ai_api_keys') || '{}');
     if (keys.groq) document.getElementById('key_groq').value = keys.groq;
