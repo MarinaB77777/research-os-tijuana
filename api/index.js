@@ -138,6 +138,56 @@ export default async function handler(req, res) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+    if (path === '/auth/register' && method === 'POST') {
+        const normalizedUsername = String(req.body?.username || '').trim();
+        const password = String(req.body?.password || '');
+        if (!/^[A-Za-z0-9_.@+-]{3,128}$/.test(normalizedUsername)) {
+            return res.status(400).json({
+                ok: false,
+                error: "Username must be 3 to 128 characters and contain only letters, numbers, '.', '_', '@', '+' or '-'"
+            });
+        }
+        if (password.length < 10) {
+            return res.status(400).json({ ok: false, error: 'Password must contain at least 10 characters' });
+        }
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Server-side authentication is not configured' });
+        }
+        const sessionToken = randomBytes(32).toString('base64url');
+        const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+        try {
+            const result = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'register_research_os_respondent',
+                {
+                    p_username: normalizedUsername,
+                    p_password: password,
+                    p_session_id: randomUUID(),
+                    p_token_hash: sessionTokenHash(sessionToken),
+                    p_expires_at: expiresAt
+                }
+            );
+            const registered = Array.isArray(result) ? result[0] : result;
+            if (!registered?.account_id) {
+                return res.status(500).json({ ok: false, error: 'Registration did not create an account' });
+            }
+            return res.status(201).json({
+                ok: true,
+                session_token: sessionToken,
+                account_id: registered.account_id,
+                role: 'respondent',
+                user_identifier: registered.user_identifier,
+                expires_at: registered.expires_at || expiresAt
+            });
+        } catch (error) {
+            if (/Username is already registered/i.test(error.message)) {
+                return res.status(409).json({ ok: false, error: 'Username is already registered' });
+            }
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
     if (path === '/auth/login' && method === 'POST') {
         const { username, password, expected_role: expectedRole } = req.body || {};
         if (expectedRole && !['researcher', 'respondent'].includes(expectedRole)) {

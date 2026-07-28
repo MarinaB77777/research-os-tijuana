@@ -77,23 +77,12 @@
                 </div>
             </div>
 
-            <!-- Правая колонка: Респондент -->
+            <!-- Правая колонка: самостоятельная регистрация респондента -->
             <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <h3 style="color: #10b981; margin-top: 0; font-size: 15px;" data-i18n="col_respondent_title">📋 Кабинет респондента</h3>
-                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Создать отдельный логин и пароль респондента:</p>
-                    <div class="form-group" style="margin-bottom: 12px;">
-                        <input type="text" id="respondentId" placeholder="ID / имя респондента">
-                        <input type="text" id="respondentUsername" placeholder="Логин" autocomplete="off" minlength="3" maxlength="128" pattern="[A-Za-z0-9_.@+-]+">
-                        <input type="password" id="respondentPassword" placeholder="Пароль (не менее 10 символов)" autocomplete="new-password">
-                    </div>
-                    <button class="btn" style="width: 100%; margin-bottom: 12px;" onclick="createRespondentAccount()" data-i18n="btn_generate_resp">Создать респондента</button>
-                </div>
-
-                <div id="respondentResult" style="display: none; flex-direction: column; align-items: center; gap: 10px; border-top: 1px solid #334155; padding-top: 12px;">
-                    <div id="respTextLink" style="word-break: break-word; font-family: monospace; font-size: 11px; color: #34d399; width: 100%;"></div>
-                    <div style="background: #fff; padding: 8px; border-radius: 6px; display: inline-block;" id="qrcodeResp"></div>
-                    <button class="btn btn-dark" onclick="downloadRespQR()" data-i18n="btn_download_qr">📥 Скачать QR (PNG)</button>
+                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Респонденты регистрируются самостоятельно. Исследователю не нужно создавать каждого пользователя.</p>
+                    <a class="btn" style="display:block;text-align:center;text-decoration:none;width:100%;margin-bottom:12px;" href="register.html" data-i18n="btn_open_registration">Открыть регистрацию</a>
                 </div>
             </div>
 
@@ -154,15 +143,13 @@ const i18n = {
         col_researcher_desc: "Создать отдельный логин и пароль исследователя:",
         btn_generate_res: "Создать исследователя",
         col_respondent_title: "📋 Кабинет респондента",
-        col_respondent_desc: "Создать отдельный логин и пароль респондента:",
-        btn_generate_resp: "Создать респондента",
-        account_signed_in: "Вход исследователя подтверждён. Можно создавать учётные записи исследователей и респондентов.",
-        account_public: "Открытый просмотр настроек. Для создания учётных записей войдите как исследователь; bootstrap-секрет используется один раз для первого исследователя.",
+        col_respondent_desc: "Респонденты регистрируются самостоятельно. Исследователю не нужно создавать каждого пользователя.",
+        btn_open_registration: "Открыть регистрацию",
+        account_signed_in: "Вход исследователя подтверждён. Респонденты регистрируются самостоятельно.",
+        account_public: "Открытый просмотр настроек. Для создания учётной записи исследователя войдите как исследователь; bootstrap-секрет используется один раз для первого исследователя.",
         researcher_required: "Введите ID, логин и пароль исследователя не короче 10 символов.",
-        respondent_required: "Введите ID, логин и пароль респондента не короче 10 символов.",
         username_invalid: "Логин должен содержать от 3 до 128 символов: только латинские буквы, цифры и . _ @ + - без пробелов.",
         researcher_create_failed: "Не удалось создать исследователя: ",
-        respondent_create_failed: "Не удалось создать респондента: ",
         btn_download_qr: "📥 Скачать QR (PNG)",
         sec1_title: "3. Ваши API-ключи ИИ",
         sec2_title: "4. Какой ИИ отвечает за задачи?",
@@ -184,15 +171,13 @@ const i18n = {
         col_researcher_desc: "Crear un usuario y contraseña independientes para el investigador:",
         btn_generate_res: "Crear investigador",
         col_respondent_title: "📋 Panel del Participante",
-        col_respondent_desc: "Crear un usuario y contraseña independientes para el participante:",
-        btn_generate_resp: "Crear participante",
-        account_signed_in: "Acceso de investigador confirmado. Puede crear cuentas de investigadores y participantes.",
-        account_public: "Vista pública de configuración. Inicie sesión como investigador para crear cuentas; el secreto bootstrap se usa una sola vez para el primer investigador.",
+        col_respondent_desc: "Los participantes se registran por sí mismos. El investigador no necesita crear cada cuenta.",
+        btn_open_registration: "Abrir registro",
+        account_signed_in: "Acceso de investigador confirmado. Los participantes se registran por sí mismos.",
+        account_public: "Vista pública de configuración. Inicie sesión como investigador para crear una cuenta de investigador; el secreto bootstrap se usa una sola vez para el primer investigador.",
         researcher_required: "Introduzca el ID, el usuario y una contraseña de investigador de al menos 10 caracteres.",
-        respondent_required: "Introduzca el ID, el usuario y una contraseña de participante de al menos 10 caracteres.",
         username_invalid: "El usuario debe tener entre 3 y 128 caracteres: solo letras latinas, números y . _ @ + -, sin espacios.",
         researcher_create_failed: "No se pudo crear el investigador: ",
-        respondent_create_failed: "No se pudo crear el participante: ",
         btn_download_qr: "📥 Descargar QR (PNG)",
         sec1_title: "3. Sus Claves API de IA",
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
@@ -214,15 +199,13 @@ const i18n = {
         col_researcher_desc: "Create an individual researcher username and password:",
         btn_generate_res: "Create researcher",
         col_respondent_title: "📋 Participant Hub",
-        col_respondent_desc: "Create an individual respondent username and password:",
-        btn_generate_resp: "Create respondent",
-        account_signed_in: "Researcher access confirmed. You may create researcher and respondent accounts.",
-        account_public: "Public settings view. Sign in as a researcher to create accounts; the bootstrap secret is used once for the first researcher.",
+        col_respondent_desc: "Participants register themselves. The researcher does not need to create each account.",
+        btn_open_registration: "Open registration",
+        account_signed_in: "Researcher access confirmed. Participants register themselves.",
+        account_public: "Public settings view. Sign in as a researcher to create a researcher account; the bootstrap secret is used once for the first researcher.",
         researcher_required: "Enter the researcher ID, username and a password of at least 10 characters.",
-        respondent_required: "Enter the respondent ID, username and a password of at least 10 characters.",
         username_invalid: "The username must be 3 to 128 characters: Latin letters, numbers and . _ @ + - only, with no spaces.",
         researcher_create_failed: "Could not create the researcher: ",
-        respondent_create_failed: "Could not create the respondent: ",
         btn_download_qr: "📥 Download QR (PNG)",
         sec1_title: "3. Your AI API Keys",
         sec2_title: "4. Assign AI models to tasks",
@@ -303,50 +286,6 @@ function setLang(lang, e) {
         }
     }
 
-    async function createRespondentAccount() {
-        const id = document.getElementById('respondentId').value.trim();
-        const username = document.getElementById('respondentUsername').value.trim();
-        const password = document.getElementById('respondentPassword').value;
-        const resultBox = document.getElementById('respondentResult');
-        const textLinkBox = document.getElementById('respTextLink');
-        const qrContainer = document.getElementById('qrcodeResp');
-
-        if(!id || !username || password.length < 10) {
-            alert(translatedText('respondent_required'));
-            return;
-        }
-        if(!USERNAME_PATTERN.test(username)) {
-            alert(translatedText('username_invalid'));
-            return;
-        }
-
-        try {
-            const result = await ResearchAuth.createAccount({
-                role: 'respondent',
-                user_identifier: id,
-                username,
-                password
-            });
-            const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-            const generatedLink = `${currentUrl}login.html?role=respondent&return=cabinet.html`;
-
-            resultBox.style.display = 'flex';
-            textLinkBox.textContent = `ID: ${result.user_identifier} | Login: ${result.username} | ${generatedLink}`;
-            qrContainer.innerHTML = '';
-            new QRCode(qrContainer, {
-                text: generatedLink,
-                width: 130,
-                height: 130,
-                colorDark: "#0f172a",
-                colorLight: "#ffffff",
-                correctLevel: QRCode.CorrectLevel.H
-            });
-            document.getElementById('respondentPassword').value = '';
-        } catch (err) {
-            alert(translatedText('respondent_create_failed') + err.message);
-        }
-    }
-
 function downloadResQR() {
     const qrCanvas = document.querySelector('#qrcodeRes canvas');
     const qrImg = document.querySelector('#qrcodeRes img');
@@ -356,19 +295,6 @@ function downloadResQR() {
     const id = document.getElementById('researcherId').value.trim() || 'researcher';
     const link = document.createElement('a');
     link.download = `qrcode_researcher_${id}.png`;
-    link.href = url;
-    link.click();
-}
-
-function downloadRespQR() {
-    const qrCanvas = document.querySelector('#qrcodeResp canvas');
-    const qrImg = document.querySelector('#qrcodeResp img');
-    let url = qrCanvas ? qrCanvas.toDataURL("image/png") : (qrImg ? qrImg.src : '');
-    if(!url) { alert('QR-код не найден'); return; }
-
-    const id = document.getElementById('respondentId').value.trim() || 'respondent';
-    const link = document.createElement('a');
-    link.download = `qrcode_respondent_${id}.png`;
     link.href = url;
     link.click();
 }

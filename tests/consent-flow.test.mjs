@@ -72,7 +72,7 @@ function respondentAccessFetches(extraFetch) {
         user_identifier: 'RESPONDENT-001',
         role: 'respondent',
         status: 'active',
-        created_by_account_id: 'e1d14a75-acde-4ca8-87e0-243ce6ac3f26'
+        created_by_account_id: null
       }]);
     }
     return extraFetch(url, options, call);
@@ -251,4 +251,56 @@ test('login interface recovers from an authentication timeout', async () => {
   assert.match(authSource, /controller\.abort\(\)/);
   assert.match(loginSource, /AUTH_REQUEST_TIMEOUT/);
   assert.match(loginSource, /finally\{submitButton\.disabled=false\}/);
+});
+
+test('public respondent registration creates its account and session atomically', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (url, options) => {
+    assert.match(url, /rpc\/register_research_os_respondent$/);
+    rpcBody = JSON.parse(options.body);
+    return jsonFetch({
+      account_id: '23572089-acde-4b51-8566-f770a0be2c3c',
+      username: 'new.respondent',
+      role: 'respondent',
+      user_identifier: 'RSP-0ea04476fdac4b89a4c9df9451cb25d2',
+      expires_at: '2099-01-01T00:00:00.000Z'
+    });
+  };
+  try {
+    const res = response();
+    await handler(
+      request('POST', '/auth/register', {
+        username: 'New.Respondent',
+        password: 'a-valid-password'
+      }),
+      res
+    );
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.payload.role, 'respondent');
+    assert.equal(res.payload.user_identifier, 'RSP-0ea04476fdac4b89a4c9df9451cb25d2');
+    assert.match(rpcBody.p_token_hash, /^[0-9a-f]{64}$/);
+    assert.equal(Object.hasOwn(rpcBody, 'p_created_by_account_id'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('self-registered respondents derive researcher ownership from the questionnaire', async () => {
+  const [migration, registerPage, settingsPage, loginSource, authSource] = await Promise.all([
+    fs.readFile(new URL('../supabase/public_respondent_registration_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../register.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../settings.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../login.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../auth.js', import.meta.url), 'utf8')
+  ]);
+  assert.match(migration, /register_research_os_respondent/);
+  assert.match(migration, /created_by_account_id\s*\)\s*values\s*\([\s\S]*null/i);
+  assert.match(migration, /owner\.researcher_account_id[\s\S]*research_os_collection_sessions/i);
+  assert.doesNotMatch(migration, /respondent\.created_by_account_id/);
+  assert.match(registerPage, /registerRespondent/);
+  assert.match(loginSource, /href="register\.html"/);
+  assert.match(authSource, /\/api\/auth\/register/);
+  assert.doesNotMatch(settingsPage, /id="respondentId"/);
+  assert.doesNotMatch(settingsPage, /qrcodeResp/);
 });
