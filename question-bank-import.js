@@ -262,6 +262,27 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function normalizeScale(value, source) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return clone(value);
+    const scaleId = valueOrNull(value) ??
+      valueOrNull(source?.scale_id) ??
+      valueOrNull(source?.scale_type);
+    const scale = {
+      id: scaleId,
+      psychometric_level: valueOrNull(source?.psychometric_level),
+      min: numericOrNull(source?.scale_min ?? source?.min),
+      max: numericOrNull(source?.scale_max ?? source?.max),
+      step: numericOrNull(source?.scale_step ?? source?.step),
+      unit: valueOrNull(source?.scale_unit || source?.unit),
+      direction: valueOrNull(source?.scale_direction || source?.direction)
+    };
+    return Object.values(scale).some(item => item !== null) ? scale : null;
+  }
+
+  function mayFallbackToPlainText(sourceFormat) {
+    return new Set(['text', 'txt']).has(String(sourceFormat || '').toLowerCase());
+  }
+
   function questionFromTabularRows(rows, index) {
     const first = rows[0];
     const qCode = code(first.code || first.question_code || `Q_${index + 1}`, `Q_${index + 1}`);
@@ -281,17 +302,9 @@
       domain: valueOrNull(first.domain),
       parameter: valueOrNull(first.parameter),
       type: valueOrNull(first.type || first.response_type || first.question_type),
-      prompt: String(first.prompt || first.question || first.text || '').trim(),
+      prompt: String(first.prompt || first.question_prompt || first.question || first.text || '').trim(),
       options: explicitOptions,
-      scale: {
-        id: valueOrNull(first.scale_id || first.scale_type),
-        psychometric_level: valueOrNull(first.psychometric_level),
-        min: numericOrNull(first.scale_min ?? first.min),
-        max: numericOrNull(first.scale_max ?? first.max),
-        step: numericOrNull(first.scale_step ?? first.step),
-        unit: valueOrNull(first.scale_unit || first.unit),
-        direction: valueOrNull(first.scale_direction || first.direction)
-      },
+      scale: normalizeScale(first.scale_contract || first.scale, first),
       score_direction: valueOrNull(first.score_direction),
       time: {
         tracking_mode: valueOrNull(first.tracking_mode) || 'time_invariant',
@@ -433,9 +446,9 @@
         domain: valueOrNull(raw.domain),
         parameter: valueOrNull(raw.parameter),
         type: valueOrNull(raw.type || raw.response_type || raw.question_type),
-        prompt: String(raw.prompt || raw.question || raw.text || '').trim(),
-        options: normalizeOptions(raw.options || raw.choices),
-        scale: raw.scale && typeof raw.scale === 'object' ? clone(raw.scale) : null,
+        prompt: String(raw.prompt || raw.question_prompt || raw.question || raw.text || '').trim(),
+        options: normalizeOptions(raw.options || raw.answer_options || raw.choices),
+        scale: normalizeScale(raw.scale_contract || raw.scale, raw),
         score_direction: valueOrNull(raw.score_direction),
         time: raw.time && typeof raw.time === 'object'
           ? clone(raw.time)
@@ -445,6 +458,104 @@
     });
     if (!Object.keys(questions).length) throw new Error('The imported structure contains no question definitions.');
     return questions;
+  }
+
+  function responseTypeFromPsychometrics(properties) {
+    const codingSchema = Array.isArray(properties?.coding_schema) ? properties.coding_schema : [];
+    if (codingSchema.length) return 'single_select';
+    if (properties?.bounds && typeof properties.bounds === 'object') return 'number';
+    return null;
+  }
+
+  function strictCyanProtocolToQuestionBank(input, metadata) {
+    if (!Array.isArray(input?.variables) || !input.variables.length) {
+      throw new Error('The Strict Cyan Protocol contains no variables.');
+    }
+    const questions = {};
+    input.variables.forEach((raw, index) => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
+      const properties = raw.psychometric_properties &&
+        typeof raw.psychometric_properties === 'object' &&
+        !Array.isArray(raw.psychometric_properties)
+        ? raw.psychometric_properties
+        : {};
+      const bounds = properties.bounds &&
+        typeof properties.bounds === 'object' &&
+        !Array.isArray(properties.bounds)
+        ? properties.bounds
+        : null;
+      const codingSchema = Array.isArray(properties.coding_schema)
+        ? properties.coding_schema
+        : [];
+      const baseCode = code(raw.code || raw.variable_id, `Q_${index + 1}`);
+      let qCode = baseCode;
+      let suffix = 2;
+      while (questions[qCode]) qCode = `${baseCode}_${suffix++}`;
+      questions[qCode] = {
+        question_id: UUID_V4.test(String(raw.question_id || '')) ? raw.question_id : uuid(),
+        code: qCode,
+        version: Math.max(1, Number(raw.version) || 1),
+        block: valueOrNull(raw.block),
+        family: valueOrNull(raw.family),
+        domain: valueOrNull(raw.domain),
+        parameter: valueOrNull(raw.parameter),
+        source_variable_id: valueOrNull(raw.variable_id),
+        type: valueOrNull(raw.type || raw.response_type) || responseTypeFromPsychometrics(properties),
+        prompt: String(raw.prompt || raw.question_prompt || '').trim(),
+        options: codingSchema.map((item, optionIndex) => ({
+          value: item && Object.prototype.hasOwnProperty.call(item, 'code_or_weight')
+            ? item.code_or_weight
+            : optionIndex,
+          text: String(item?.label ?? ''),
+          target_transition: valueOrNull(item?.target_transition)
+        })),
+        scale: {
+          id: valueOrNull(properties.scale_subtype),
+          psychometric_level: valueOrNull(properties.measurement_level),
+          min: numericOrNull(bounds?.min),
+          max: numericOrNull(bounds?.max),
+          step: numericOrNull(bounds?.step),
+          unit: valueOrNull(bounds?.unit),
+          direction: valueOrNull(properties.direction)
+        },
+        score_direction: valueOrNull(raw.score_direction || properties.direction),
+        time: {
+          tracking_mode: valueOrNull(properties.tracking_mode) || 'time_invariant',
+          wave: valueOrNull(properties.wave),
+          lag: valueOrNull(properties.time_lag)
+        },
+        routing: raw.routing && typeof raw.routing === 'object' ? clone(raw.routing) : null,
+        inversion_metadata: properties.inversion_metadata &&
+          typeof properties.inversion_metadata === 'object'
+          ? clone(properties.inversion_metadata)
+          : null,
+        text_constraints: properties.text_constraints &&
+          typeof properties.text_constraints === 'object'
+          ? clone(properties.text_constraints)
+          : valueOrNull(properties.text_constraints),
+        status: STATUS.has(raw.status) ? raw.status : 'draft'
+      };
+    });
+    if (!Object.keys(questions).length) {
+      throw new Error('The Strict Cyan Protocol contains no usable variable definitions.');
+    }
+    const bank = newQuestionBank(questions, {
+      ...metadata,
+      title: input.title || input.engine || metadata?.title,
+      code: input.code || input.engine || metadata?.code,
+      version: input.bank_version,
+      primary_language: input.language || metadata?.primary_language,
+      global_mode: input.global_mode,
+      global_time_reference: input.global_time_reference || input.timestamp
+    });
+    bank.source_contract = {
+      schema: 'research_os.strict_cyan_protocol',
+      engine: valueOrNull(input.engine),
+      version: valueOrNull(input.version),
+      psychometric_integrity: valueOrNull(input.psychometric_integrity),
+      timestamp: valueOrNull(input.timestamp)
+    };
+    return bank;
   }
 
   function newQuestionBank(questions, metadata) {
@@ -470,6 +581,9 @@
 
   function canonicalOrConverted(value, metadata) {
     if (value?.schema === 'research_os.question_bank') return clone(value);
+    if (Array.isArray(value?.variables) && value?.engine) {
+      return strictCyanProtocolToQuestionBank(value, metadata);
+    }
     if (Array.isArray(value)) return rowsToQuestionBank(value, metadata);
     return newQuestionBank(normalizeQuestionMap(value), {
       ...metadata,
@@ -513,6 +627,9 @@
       if (!UUID_V4.test(String(question.question_id || ''))) issue('error', 'INVALID_QUESTION_ID', 'A valid question UUID is required.', questionCode);
       if (question.code !== questionCode) issue('error', 'CODE_MISMATCH', 'Question key and code do not match.', questionCode);
       if (!String(question.prompt || '').trim()) issue('error', 'MISSING_PROMPT', `Question ${index + 1} has no prompt.`, questionCode);
+      if (/^(?:new research question|nueva pregunta de investigaci[oó]n|новый вопрос исследования)\s*\?$/i.test(String(question.prompt || '').trim())) {
+        issue('error', 'PLACEHOLDER_PROMPT', 'The question still contains an unfinished placeholder prompt.', questionCode);
+      }
       if (!question.type) issue('error', 'UNRESOLVED_TYPE', 'Response type must be selected before this question can be registered.', questionCode);
       const scaleResolved = question.scale && typeof question.scale === 'object' &&
         Object.values(question.scale).some(value => value !== null && value !== undefined && value !== '');
@@ -544,10 +661,12 @@
   global.QuestionBankImport = Object.freeze({
     parseLiteralDocument,
     parseStructuredText,
+    mayFallbackToPlainText,
     rowsToQuestionBank,
     extractPlainTextQuestions,
     plainTextToQuestionBank,
     canonicalOrConverted,
+    strictCyanProtocolToQuestionBank,
     validateQuestionBank,
     summarize
   });
