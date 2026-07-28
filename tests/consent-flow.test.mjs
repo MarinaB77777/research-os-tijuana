@@ -4,6 +4,7 @@ import test from 'node:test';
 
 process.env.SUPABASE_URL = 'https://supabase.test';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+process.env.UPSTREAM_TIMEOUT_MS = '20';
 
 const apiSource = await fs.readFile(new URL('../api/index.js', import.meta.url), 'utf8');
 const apiModule = await import(
@@ -213,4 +214,41 @@ test('respondent pages contain no Health Model or simulated AI flow', async () =
   assert.doesNotMatch(assessment, /Health Model|\/pilot\/questionnaire-banks|consent_record/);
   assert.match(cabinet, /Прочитать согласие и начать/);
   assert.match(assessment, /questionnaire_item_id/);
+});
+
+test('login returns a gateway timeout when authentication storage stalls', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+    options.signal.addEventListener('abort', () => {
+      const error = new Error('aborted');
+      error.name = 'AbortError';
+      reject(error);
+    }, { once: true });
+  });
+  try {
+    const res = response();
+    await handler(
+      request('POST', '/auth/login', {
+        username: 'respondent',
+        password: 'not-a-real-password',
+        expected_role: 'respondent'
+      }),
+      res
+    );
+    assert.equal(res.statusCode, 504);
+    assert.match(res.payload.error, /did not respond in time/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('login interface recovers from an authentication timeout', async () => {
+  const [authSource, loginSource] = await Promise.all([
+    fs.readFile(new URL('../auth.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../login.html', import.meta.url), 'utf8')
+  ]);
+  assert.match(authSource, /AUTH_REQUEST_TIMEOUT_MS/);
+  assert.match(authSource, /controller\.abort\(\)/);
+  assert.match(loginSource, /AUTH_REQUEST_TIMEOUT/);
+  assert.match(loginSource, /finally\{submitButton\.disabled=false\}/);
 });

@@ -3,6 +3,7 @@
 
   const STORAGE_KEY = 'research_os.auth.v1';
   const ALLOWED_ROLES = new Set(['researcher', 'respondent']);
+  const AUTH_REQUEST_TIMEOUT_MS = 15000;
 
   function readSession() {
     try {
@@ -48,10 +49,32 @@
     return payload;
   }
 
+  async function fetchWithTimeout(url, options, timeoutMs) {
+    const controller = new AbortController();
+    const timer = global.setTimeout(
+      () => controller.abort(),
+      timeoutMs || AUTH_REQUEST_TIMEOUT_MS
+    );
+    try {
+      return await fetch(url, Object.assign({}, options || {}, {
+        signal: controller.signal
+      }));
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        const timeoutError = new Error('Authentication request timed out');
+        timeoutError.code = 'AUTH_REQUEST_TIMEOUT';
+        throw timeoutError;
+      }
+      throw error;
+    } finally {
+      global.clearTimeout(timer);
+    }
+  }
+
   async function login(username, password, expectedRole) {
     if (!username || !password) throw new Error('Username and password are required');
     if (expectedRole && !ALLOWED_ROLES.has(expectedRole)) throw new Error('Invalid expected role');
-    const response = await fetch('/api/auth/login', {
+    const response = await fetchWithTimeout('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -76,7 +99,7 @@
   async function verify(requiredRole) {
     const session = readSession();
     if (!session) return null;
-    const response = await fetch('/api/auth/verify', {
+    const response = await fetchWithTimeout('/api/auth/verify', {
       method: 'GET',
       headers: { Authorization: `Bearer ${session.token}` },
       cache: 'no-store'
@@ -122,7 +145,7 @@
     const session = readSession();
     if (session && (!options || options.revoke !== false)) {
       try {
-        await fetch('/api/auth/revoke', {
+        await fetchWithTimeout('/api/auth/revoke', {
           method: 'POST',
           headers: { Authorization: `Bearer ${session.token}` }
         });
@@ -139,7 +162,7 @@
     const authorized = authHeaders('researcher', headers);
     if (authorized) Object.assign(headers, authorized);
     if (bootstrapSecret) headers['X-Research-OS-Bootstrap-Secret'] = bootstrapSecret;
-    const response = await fetch('/api/accounts', {
+    const response = await fetchWithTimeout('/api/accounts', {
       method: 'POST',
       headers,
       body: JSON.stringify(account)
