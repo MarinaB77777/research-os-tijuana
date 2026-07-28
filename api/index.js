@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
+const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 function bearerToken(req) {
     const authorization = req.headers.authorization || '';
     if (/^Bearer\s+/i.test(authorization)) {
@@ -274,47 +276,13 @@ export default async function handler(req, res) {
         });
     }
 
-    // Старт исследовательской сессии: только подтвержденный респондент,
-    // с серверной привязкой сессии к его идентичности и времени.
+    // Legacy browser-authored consent records are no longer accepted. Consent
+    // must be resolved from the questionnaire version and accepted through the
+    // atomic respondent endpoint below.
     if (path === '/pilot/accounts/start-session' && method === 'POST') {
-        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
-        if (!access.ok) {
-            return res.status(access.status).json({ ok: false, error: access.error });
-        }
-        const { account_id: accountId, study_id: studyId, consent_record: consentRecord } = req.body || {};
-        if (accountId !== access.principal.user_identifier || !studyId ||
-            !access.principal.created_by_account_id ||
-            consentRecord?.consent_status !== 'granted' || !consentRecord?.granted_at) {
-            return res.status(400).json({ ok: false, error: 'Respondent identity, researcher ownership, study, and explicit consent are required' });
-        }
-        const sessionId = randomUUID();
-        const globalTimeReference = new Date().toISOString();
-        const write = await fetch(`${supabaseUrl}/rest/v1/research_os_collection_sessions`, {
-            method: 'POST',
-            headers: {
-                'apikey': supabaseAdminKey,
-                'Authorization': `Bearer ${supabaseAdminKey}`,
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                session_id: sessionId,
-                respondent_account_id: access.principal.account_id,
-                researcher_account_id: access.principal.created_by_account_id,
-                respondent_identifier: access.principal.user_identifier,
-                study_id: studyId,
-                status: 'active',
-                consent_record: consentRecord,
-                global_time_reference: globalTimeReference
-            })
-        });
-        if (!write.ok) {
-            return res.status(write.status).json({ ok: false, error: `Collection session write failed: ${await write.text()}` });
-        }
-        return res.status(200).json({
-            ok: true,
-            session_id: sessionId,
-            global_time_reference: globalTimeReference
+        return res.status(410).json({
+            ok: false,
+            error: 'Use the questionnaire consent endpoint; browser-authored consent records are not accepted'
         });
     }
 
@@ -340,7 +308,9 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true, account_id: accountId });
     }
 
-    // Загрузка списка доступных опросников
+    // Legacy bank listing remains available to old internal tooling. The
+    // participant cabinet uses /respondent/questionnaires and never treats a
+    // question bank as a questionnaire.
     if (path.startsWith('/pilot/questionnaire-banks')) {
         if (!supabaseUrl || !supabaseAdminKey) {
             return res.status(503).json({ ok: false, error: 'Questionnaire catalog is not configured' });
@@ -363,9 +333,277 @@ export default async function handler(req, res) {
         }
     }
 
-    // Получение текста информированного согласия
+    // Legacy hard-coded consent text is intentionally retired.
     if (path.startsWith('/consent/')) {
-        return res.status(200).send(`<h3>Consentimiento Informado / Информированное согласие</h3><p>Pilot project in Tijuana, Mexico. Data will be stored securely for research purposes.</p>`);
+        return res.status(410).json({
+            ok: false,
+            error: 'Consent is versioned and must be loaded from the respondent questionnaire endpoint'
+        });
+    }
+
+    // Versioned consent registry for researchers. The system standard document
+    // and the researcher's own special documents share one catalog.
+    if (path === '/consents' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const requestedStatus = requestUrl.searchParams.get('status') || 'all';
+        if (!['all', 'draft', 'trial', 'active'].includes(requestedStatus)) {
+            return res.status(400).json({ ok: false, error: 'Consent status filter is invalid' });
+        }
+        try {
+            const documents = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_consent_documents_for_account',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    requested_status: requestedStatus
+                }
+            );
+            return res.status(200).json({
+                ok: true,
+                consents: Array.isArray(documents) ? documents : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/consents/save' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const consentData = req.body;
+        if (consentData?.schema !== 'research_os.consent_document' ||
+            consentData?.schema_version !== 1 ||
+            !UUID_V4.test(consentData?.consent_id || '') ||
+            !Number.isInteger(consentData?.version) ||
+            consentData.version < 1 ||
+            consentData?.consent_kind !== 'special' ||
+            consentData?.is_system !== false ||
+            !['draft', 'trial', 'active'].includes(consentData?.status) ||
+            !consentData?.title ||
+            !consentData?.code ||
+            !consentData?.primary_language ||
+            !consentData?.texts ||
+            Array.isArray(consentData.texts) ||
+            typeof consentData.texts !== 'object') {
+            return res.status(400).json({
+                ok: false,
+                error: 'Valid research_os.consent_document v1 special-consent package is required'
+            });
+        }
+        try {
+            const saved = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_owned_consent_document',
+                {
+                    consent_data: consentData,
+                    p_researcher_account_id: access.principal.account_id
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const consentLoadMatch = path.match(/^\/consents\/([0-9a-f-]+)$/i);
+    if (consentLoadMatch && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const requestedVersion = Number(requestUrl.searchParams.get('version'));
+        if (!UUID_V4.test(consentLoadMatch[1]) ||
+            !Number.isInteger(requestedVersion) || requestedVersion < 1) {
+            return res.status(400).json({ ok: false, error: 'Valid consent UUID and positive version are required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_consent_document_for_account',
+                {
+                    p_consent_id: consentLoadMatch[1],
+                    p_consent_version: requestedVersion,
+                    p_researcher_account_id: access.principal.account_id
+                }
+            );
+            const consent = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!consent) {
+                return res.status(404).json({ ok: false, error: 'Consent document not found' });
+            }
+            return res.status(200).json({ ok: true, consent });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // A respondent sees all active questionnaire versions owned by the
+    // researcher who registered that account. No per-respondent consent setup
+    // is required.
+    if (path === '/respondent/questionnaires' && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        try {
+            const questionnaires = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_respondent_questionnaires',
+                { p_respondent_account_id: access.principal.account_id }
+            );
+            return res.status(200).json({
+                ok: true,
+                questionnaires: Array.isArray(questionnaires) ? questionnaires : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const respondentConsentMatch = path.match(
+        /^\/respondent\/questionnaires\/([0-9a-f-]+)\/consent$/i
+    );
+    if (respondentConsentMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const questionnaireVersion = Number(requestUrl.searchParams.get('version'));
+        const language = String(requestUrl.searchParams.get('lang') || 'es').trim();
+        if (!UUID_V4.test(respondentConsentMatch[1]) ||
+            !Number.isInteger(questionnaireVersion) || questionnaireVersion < 1 || !language) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Questionnaire version and requested language are required'
+            });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'get_respondent_questionnaire_consent',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_questionnaire_id: respondentConsentMatch[1],
+                    p_questionnaire_version: questionnaireVersion,
+                    p_requested_language: language
+                }
+            );
+            const consent = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!consent) {
+                return res.status(409).json({
+                    ok: false,
+                    error: 'This questionnaire does not have an active non-empty consent in an available language'
+                });
+            }
+            return res.status(200).json({ ok: true, consent });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const respondentStartMatch = path.match(
+        /^\/respondent\/questionnaires\/([0-9a-f-]+)\/start$/i
+    );
+    if (respondentStartMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const questionnaireVersion = Number(req.body?.questionnaire_version);
+        const language = String(req.body?.language || 'es').trim();
+        const explicitAcceptance = req.body?.explicit_acceptance === true;
+        if (!UUID_V4.test(respondentStartMatch[1]) ||
+            !Number.isInteger(questionnaireVersion) || questionnaireVersion < 1 ||
+            !language || !explicitAcceptance) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Questionnaire version, language and explicit acceptance are required'
+            });
+        }
+        try {
+            const started = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'accept_consent_and_start_questionnaire',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_questionnaire_id: respondentStartMatch[1],
+                    p_questionnaire_version: questionnaireVersion,
+                    p_requested_language: language,
+                    p_explicit_acceptance: true
+                }
+            );
+            const result = Array.isArray(started) ? started[0] : started;
+            if (!result?.session_id) {
+                return res.status(500).json({
+                    ok: false,
+                    error: 'Consent acceptance did not create a collection session'
+                });
+            }
+            return res.status(201).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/respondent/sessions' && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        try {
+            const sessions = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_respondent_collection_sessions',
+                { p_respondent_account_id: access.principal.account_id }
+            );
+            return res.status(200).json({
+                ok: true,
+                sessions: Array.isArray(sessions) ? sessions : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const respondentSessionMatch = path.match(/^\/respondent\/sessions\/([0-9a-f-]+)$/i);
+    if (respondentSessionMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        if (!UUID_V4.test(respondentSessionMatch[1])) {
+            return res.status(400).json({ ok: false, error: 'Valid collection session UUID is required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_respondent_collection_session',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_session_id: respondentSessionMatch[1]
+                }
+            );
+            const session = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!session) {
+                return res.status(404).json({ ok: false, error: 'Collection session not found' });
+            }
+            return res.status(200).json({ ok: true, session });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
     // Каталог зарегистрированных банков используется конструкторами анкеты
@@ -512,20 +750,23 @@ export default async function handler(req, res) {
         const questionnaireData = req.body;
         if (questionnaireData?.schema !== 'research_os.questionnaire' ||
             questionnaireData?.schema_version !== 1 ||
-            !questionnaireData?.questionnaire_id ||
+            !UUID_V4.test(questionnaireData?.questionnaire_id || '') ||
             !questionnaireData?.global_time_reference ||
             !Array.isArray(questionnaireData?.items) ||
-            !questionnaireData?.routing?.nodes) {
+            !questionnaireData?.routing?.nodes ||
+            !UUID_V4.test(questionnaireData?.consent?.consent_id || '') ||
+            !Number.isInteger(questionnaireData?.consent?.consent_version) ||
+            !['standard', 'special'].includes(questionnaireData?.consent?.mode)) {
             return res.status(400).json({
                 ok: false,
-                error: 'research_os.questionnaire v1 with identity, items, routing and Global Time Reference is required'
+                error: 'research_os.questionnaire v1 with identity, items, routing, consent binding and Global Time Reference is required'
             });
         }
         try {
             const saved = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'save_owned_questionnaire_package',
+                'save_owned_questionnaire_with_consent',
                 {
                     questionnaire_data: questionnaireData,
                     p_researcher_account_id: authorization.principal.account_id
@@ -782,7 +1023,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ ok: false, error: 'Non-empty response_records array is required' });
         }
         const sessionResponse = await fetch(
-            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference&limit=1`,
+            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference,questionnaire_id,questionnaire_version&limit=1`,
             {
                 headers: {
                     'apikey': supabaseAdminKey,
@@ -797,13 +1038,22 @@ export default async function handler(req, res) {
         if (!Array.isArray(sessionRows) || sessionRows.length !== 1) {
             return res.status(403).json({ ok: false, error: 'The collection session is invalid or belongs to another respondent' });
         }
-        const sessionGlobalTimeReference = sessionRows[0].global_time_reference;
+        const collectionSession = sessionRows[0];
+        const sessionGlobalTimeReference = collectionSession.global_time_reference;
         if (sourceIdentity.global_time_reference !== sessionGlobalTimeReference) {
             return res.status(400).json({ ok: false, error: 'Global Time Reference does not match the collection session' });
+        }
+        if (sourceIdentity.questionnaire_id !== collectionSession.questionnaire_id ||
+            Number(sourceIdentity.questionnaire_version) !== Number(collectionSession.questionnaire_version)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Questionnaire identity does not match the collection session'
+            });
         }
         for (const record of responseRecords) {
             if (record?.session_id !== pathSessionId ||
                 !record?.response_id ||
+                !record?.questionnaire_item_id ||
                 !record?.question_id ||
                 !record?.question_version ||
                 !record?.bank_id ||
@@ -838,7 +1088,7 @@ export default async function handler(req, res) {
                 });
             }
             const saved = await response.json();
-            await fetch(
+            const completionWrite = await fetch(
                 `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}`,
                 {
                     method: 'PATCH',
@@ -854,6 +1104,12 @@ export default async function handler(req, res) {
                     })
                 }
             );
+            if (!completionWrite.ok) {
+                return res.status(completionWrite.status).json({
+                    ok: false,
+                    error: `Answers were stored but session completion failed: ${await completionWrite.text()}`
+                });
+            }
             return res.status(200).json({ ok: true, saved_count: responseRecords.length, database_result: saved });
         } catch (error) {
             console.error('Supabase response write error:', error);

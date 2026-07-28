@@ -1,6 +1,9 @@
 {
   "name": "research-os-tijuana",
   "version": "1.0.0",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0"
   }
