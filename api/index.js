@@ -1,6 +1,10 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UPSTREAM_TIMEOUT_MS = (() => {
+    const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
+    return Number.isFinite(configured) && configured > 0 ? configured : 8000;
+})();
 
 function bearerToken(req) {
     const authorization = req.headers.authorization || '';
@@ -20,6 +24,23 @@ function serviceHeaders(key, extra) {
 
 function sessionTokenHash(token) {
     return createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+async function fetchWithTimeout(url, options, timeoutMs = UPSTREAM_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        return await fetch(url, { ...(options || {}), signal: controller.signal });
+    } catch (error) {
+        if (error?.name === 'AbortError') {
+            const timeoutError = new Error('Authentication storage did not respond in time');
+            timeoutError.status = 504;
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
 }
 
 async function verifyAccess(req, expectedRole, supabaseUrl, supabaseAdminKey) {
@@ -90,7 +111,7 @@ async function ownedEntityIds(entityType, researcherAccountId, supabaseUrl, supa
 }
 
 async function callSupabaseRpc(supabaseUrl, key, functionName, body) {
-    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+    const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
         method: 'POST',
         headers: {
             'apikey': key,
@@ -146,19 +167,27 @@ export default async function handler(req, res) {
         }
         const sessionToken = randomBytes(32).toString('base64url');
         const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
-        const sessionWrite = await fetch(`${supabaseUrl}/rest/v1/research_os_auth_sessions`, {
-            method: 'POST',
-            headers: serviceHeaders(supabaseAdminKey, {
-                'Content-Type': 'application/json',
-                'Prefer': 'return=minimal'
-            }),
-            body: JSON.stringify({
-                session_id: randomUUID(),
-                account_id: authenticated.account_id,
-                token_hash: sessionTokenHash(sessionToken),
-                expires_at: expiresAt
-            })
-        });
+        let sessionWrite;
+        try {
+            sessionWrite = await fetchWithTimeout(
+                `${supabaseUrl}/rest/v1/research_os_auth_sessions`,
+                {
+                    method: 'POST',
+                    headers: serviceHeaders(supabaseAdminKey, {
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    }),
+                    body: JSON.stringify({
+                        session_id: randomUUID(),
+                        account_id: authenticated.account_id,
+                        token_hash: sessionTokenHash(sessionToken),
+                        expires_at: expiresAt
+                    })
+                }
+            );
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
         if (!sessionWrite.ok) {
             return res.status(sessionWrite.status).json({ ok: false, error: `Session creation failed: ${await sessionWrite.text()}` });
         }
