@@ -245,7 +245,10 @@
       if (item && typeof item === 'object') {
         return {
           value: Object.prototype.hasOwnProperty.call(item, 'value') ? item.value : index,
-          text: String(item.text ?? item.label ?? '')
+          text: String(item.text ?? item.label ?? ''),
+          ...Object.fromEntries(
+            Object.entries(item).filter(([key]) => !['value', 'text', 'label'].includes(key))
+          )
         };
       }
       return { value: index, text: String(item) };
@@ -279,6 +282,127 @@
     return Object.values(scale).some(item => item !== null) ? scale : null;
   }
 
+  function normalizedWords(value) {
+    return String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim();
+  }
+
+  function numericSequence(options) {
+    if (!Array.isArray(options) || options.length < 2) return null;
+    const values = options.map(option => numericOrNull(option?.value));
+    if (values.some(value => value === null)) return null;
+    const step = values[1] - values[0];
+    if (!(step > 0) || values.some((value, index) => index > 0 && value - values[index - 1] !== step)) {
+      return null;
+    }
+    return { min: values[0], max: values.at(-1), step };
+  }
+
+  function includesAny(value, candidates) {
+    const words = normalizedWords(value);
+    return candidates.some(candidate => words.includes(candidate));
+  }
+
+  function inferQuestionContract(question) {
+    const result = clone(question || {});
+    result.options = normalizeOptions(result.options);
+    const labels = result.options.map(option => normalizedWords(option.text));
+    const prompt = normalizedWords(result.prompt);
+    const joined = labels.join(' ');
+    const sequence = numericSequence(result.options);
+    const hasOptions = result.options.length >= 2;
+    const multipleInstruction = includesAny(prompt, [
+      'select all', 'choose all', 'multiple answers', 'mark all',
+      'seleccione todas', 'elija todas', 'respuestas multiples',
+      'выберите все', 'несколько вариантов', 'множественный выбор'
+    ]);
+
+    if (!result.type && hasOptions) {
+      result.type = multipleInstruction ? 'multiple_select' : 'single_select';
+    }
+
+    if (!result.scale && hasOptions) {
+      const yesNo = labels.length === 2 &&
+        includesAny(joined, ['yes', 'si', 'да']) &&
+        includesAny(joined, ['no', 'нет']);
+      const frequency = labels.length >= 3 &&
+        includesAny(joined, ['never', 'nunca', 'никогда']) &&
+        includesAny(joined, ['always', 'siempre', 'всегда']);
+      const agreement = labels.length >= 3 &&
+        includesAny(joined, ['disagree', 'desacuerdo', 'не соглас']) &&
+        includesAny(joined, ['agree', 'acuerdo', 'соглас']);
+      const explicitNps = includesAny(prompt, ['nps', 'net promoter']) &&
+        sequence?.min === 0 && sequence?.max === 10;
+
+      if (yesNo) {
+        result.scale = {
+          id: 'dichotomous',
+          psychometric_level: 'nominal',
+          min: sequence?.min ?? null,
+          max: sequence?.max ?? null,
+          step: sequence?.step ?? null,
+          unit: null,
+          direction: null
+        };
+      } else if (frequency) {
+        result.scale = {
+          id: 'frequency_scale',
+          psychometric_level: 'ordinal',
+          min: sequence?.min,
+          max: sequence?.max,
+          step: sequence?.step,
+          unit: null,
+          direction: null
+        };
+      } else if (agreement && [5, 7].includes(result.options.length)) {
+        result.scale = {
+          id: `likert_${result.options.length}`,
+          psychometric_level: 'ordinal',
+          min: sequence?.min ?? 1,
+          max: sequence?.max ?? result.options.length,
+          step: sequence?.step ?? 1,
+          unit: null,
+          direction: null
+        };
+      } else if (explicitNps) {
+        result.scale = {
+          id: 'nps_scale',
+          psychometric_level: 'ordinal',
+          min: 0,
+          max: 10,
+          step: 1,
+          unit: null,
+          direction: null
+        };
+      } else if (sequence) {
+        result.scale = {
+          id: `ordinal_${sequence.min}_${sequence.max}`,
+          psychometric_level: 'ordinal',
+          min: sequence.min,
+          max: sequence.max,
+          step: sequence.step,
+          unit: null,
+          direction: null
+        };
+      } else {
+        result.scale = {
+          id: multipleInstruction ? 'multiple_choice' : 'single_choice',
+          psychometric_level: 'nominal',
+          min: null,
+          max: null,
+          step: null,
+          unit: null,
+          direction: null
+        };
+      }
+    }
+    return result;
+  }
+
   function mayFallbackToPlainText(sourceFormat) {
     return new Set(['text', 'txt']).has(String(sourceFormat || '').toLowerCase());
   }
@@ -293,7 +417,7 @@
         text: String(valueOrNull(row.option_text) ?? '')
       }));
     const explicitOptions = options.length ? options : normalizeOptions(first.options || first.choices);
-    return {
+    return inferQuestionContract({
       question_id: UUID_V4.test(String(first.question_id || '')) ? first.question_id : uuid(),
       code: qCode,
       version: Math.max(1, Number(first.version || first.question_version) || 1),
@@ -307,12 +431,12 @@
       scale: normalizeScale(first.scale_contract || first.scale, first),
       score_direction: valueOrNull(first.score_direction),
       time: {
-        tracking_mode: valueOrNull(first.tracking_mode) || 'time_invariant',
+        tracking_mode: valueOrNull(first.tracking_mode),
         wave: valueOrNull(first.wave),
         lag: valueOrNull(first.lag)
       },
       status: STATUS.has(first.status) ? first.status : 'draft'
-    };
+    });
   }
 
   function rowsToQuestionBank(rows, metadata) {
@@ -346,51 +470,235 @@
     });
   }
 
+  function numericRangeOptions(line) {
+    const compact = String(line || '').trim();
+    let match = compact.match(/^(?:scale|escala|шкала)?\s*:?\s*(-?\d+(?:[.,]\d+)?)\s*(?:-|–|—|to|до|a)\s*(-?\d+(?:[.,]\d+)?)\s*$/i);
+    if (!match) {
+      const values = compact.split(/\s+/).map(value => numericOrNull(value.replace(',', '.')));
+      if (values.length >= 3 && values.length <= 21 && values.every(value => value !== null)) {
+        const step = values[1] - values[0];
+        if (step > 0 && values.every((value, index) => index === 0 || value - values[index - 1] === step)) {
+          return values.map(value => ({ value, text: String(value) }));
+        }
+      }
+      return null;
+    }
+    const min = numericOrNull(match[1].replace(',', '.'));
+    const max = numericOrNull(match[2].replace(',', '.'));
+    if (
+      min === null || max === null ||
+      !Number.isInteger(min) || !Number.isInteger(max) ||
+      max < min || max - min > 20
+    ) return null;
+    return Array.from({ length: max - min + 1 }, (_, index) => {
+      const value = min + index;
+      return { value, text: String(value) };
+    });
+  }
+
+  function optionFromLine(line) {
+    const value = String(line || '').trim();
+    const bullet = value.match(/^[-*•]\s+(.+)$/);
+    if (bullet) return { value: null, text: bullet[1].trim() };
+    const letter = value.match(/^([A-Za-zА-Яа-я])\s*[\.)]\s+(.+)$/);
+    if (letter) return { value: letter[1], text: letter[2].trim() };
+    const numeric = value.match(/^(-?\d+(?:[.,]\d+)?)\s*(?:[\.)]|[-–—:])\s+(.+)$/);
+    if (numeric) {
+      return {
+        value: numericOrNull(numeric[1].replace(',', '.')),
+        text: numeric[2].trim()
+      };
+    }
+    return null;
+  }
+
   function extractPlainTextQuestions(text) {
     const clean = String(text || '')
       .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '')
       .replace(/\r/g, '');
-    const lines = clean.split('\n').map(line => line.trim()).filter(Boolean);
+    const lines = clean.split('\n');
     const candidates = [];
     let current = null;
     let awaitingQuestion = false;
     let collectingQuestion = false;
+    let collectingExplanation = false;
+    let collectingVariables = false;
+    let collectingOptions = false;
+    let blankBefore = true;
+    let pendingDomain = null;
     const questionHeading = /^(?:глубинный\s+)?(?:исследовательский\s+)?вопрос\s*:|^(?:deep\s+)?research\s+question\s*:|^pregunta\s+(?:de\s+)?investigaci[oó]n\s*:/i;
     const explanationHeading = /^(?:пояснение|explanation|explicaci[oó]n)\s*:/i;
-    const numberedQuestion = /^(?:q(?:uestion)?\s*)?\d+\s*[\.)-]\s+/i;
-    const optionLine = /^(?:[-*•]\s+|[A-Za-zА-Яа-я\d]+\s*[\.)]\s+)/;
+    const variablesHeading = /^(?:переменные|variables|variables del modelo)\s*:/i;
+    const optionsHeading = /^(?:варианты(?:\s+ответов)?|answers?|options?|opciones(?:\s+de\s+respuesta)?)\s*:/i;
+    const domainHeading = /^([A-ZА-Я])\s*[-–—]\s+(.+)$/;
+    const numberedLine = /^(?:q(?:uestion)?\s*)?(\d+)\s*[\.)]\s+(.+)$/i;
 
-    lines.forEach(line => {
-      if (questionHeading.test(line)) {
-        awaitingQuestion = true;
+    function startQuestion(prompt, sourceNumber) {
+      current = {
+        prompt: String(prompt || '').trim(),
+        options: [],
+        source_question_number: sourceNumber || null,
+        explanation: null,
+        domain: pendingDomain ? clone(pendingDomain) : null,
+        source_variables: []
+      };
+      candidates.push(current);
+      collectingQuestion = !/[?？]\s*$/.test(current.prompt);
+      collectingExplanation = false;
+      collectingVariables = false;
+      collectingOptions = false;
+      awaitingQuestion = false;
+    }
+
+    function storeVariables(candidate, variableText) {
+      const cleanVariables = String(variableText || '').trim();
+      candidate.source_variables = Array.from(
+        cleanVariables.matchAll(/\b([A-Za-zА-Яа-я]\d+)\b/g),
+        match => match[1]
+      );
+      candidate.source_variables_text = cleanVariables || null;
+    }
+
+    function appendExplanation(candidate, textValue) {
+      const value = String(textValue || '').trim();
+      const variablesIndex = value.search(/(?:переменные|variables del modelo|variables)\s*:/i);
+      const explanationPart = variablesIndex >= 0 ? value.slice(0, variablesIndex).trim() : value;
+      const variablesPart = variablesIndex >= 0
+        ? value.slice(variablesIndex).replace(variablesHeading, '').trim()
+        : '';
+      candidate.explanation = `${candidate.explanation || ''} ${explanationPart}`
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (variablesIndex >= 0) {
+        storeVariables(candidate, variablesPart);
+        collectingExplanation = false;
+        collectingVariables = true;
+      }
+    }
+
+    lines.forEach(rawLine => {
+      const line = rawLine.trim();
+      if (!line) {
+        blankBefore = true;
+        return;
+      }
+      const domain = line.match(domainHeading);
+      if (domain) {
+        pendingDomain = { code: domain[1], title: domain[2].trim() };
         collectingQuestion = false;
+        collectingExplanation = false;
+        collectingVariables = false;
+        collectingOptions = false;
+        awaitingQuestion = false;
+        blankBefore = false;
+        return;
+      }
+      if (questionHeading.test(line)) {
+        const inline = line.replace(questionHeading, '').trim();
+        if (inline) startQuestion(inline, null);
+        else {
+          awaitingQuestion = true;
+          collectingQuestion = false;
+          collectingExplanation = false;
+          collectingVariables = false;
+          collectingOptions = false;
+        }
+        blankBefore = false;
+        return;
+      }
+      if (optionsHeading.test(line)) {
+        if (current) {
+          const inlineOptions = line.replace(optionsHeading, '').trim();
+          if (inlineOptions) {
+            inlineOptions
+              .split(/\s*(?:\||;)\s*/)
+              .filter(Boolean)
+              .forEach(textValue => {
+                current.options.push({
+                  value: current.options.length + 1,
+                  text: textValue
+                });
+              });
+          }
+          collectingQuestion = false;
+          collectingExplanation = false;
+          collectingVariables = false;
+          collectingOptions = true;
+        }
+        blankBefore = false;
+        return;
+      }
+      if (variablesHeading.test(line)) {
+        if (current) {
+          const variableText = line.replace(variablesHeading, '').trim();
+          storeVariables(current, variableText);
+          collectingExplanation = false;
+          collectingQuestion = false;
+          collectingVariables = true;
+        }
+        blankBefore = false;
         return;
       }
       if (explanationHeading.test(line)) {
-        current = null;
-        awaitingQuestion = false;
-        collectingQuestion = false;
-        return;
-      }
-      if (current && collectingQuestion) {
-        current.prompt = `${current.prompt} ${line}`.replace(/\s+/g, ' ').trim();
-        collectingQuestion = !line.includes('?');
-        return;
-      }
-      const isQuestion = awaitingQuestion || line.includes('?') || numberedQuestion.test(line);
-      if (isQuestion) {
-        const prompt = line.replace(numberedQuestion, '').trim();
-        if (prompt) {
-          current = { prompt, options: [] };
-          candidates.push(current);
-          collectingQuestion = !line.includes('?');
+        const inline = line.replace(explanationHeading, '').trim();
+        if (current) {
+          current.explanation = '';
+          appendExplanation(current, inline);
+          if (!collectingVariables) collectingExplanation = true;
         }
+        awaitingQuestion = true;
+        collectingQuestion = false;
         awaitingQuestion = false;
+        blankBefore = false;
         return;
       }
-      if (current && optionLine.test(line)) {
-        current.options.push(line.replace(optionLine, '').trim());
+      if (awaitingQuestion) {
+        const numbered = line.match(numberedLine);
+        startQuestion(numbered ? numbered[2] : line, numbered?.[1] || null);
+        blankBefore = false;
+        return;
       }
+
+      const numbered = line.match(numberedLine);
+      const option = current ? optionFromLine(line) : null;
+      const rangeOptions = current ? numericRangeOptions(line) : null;
+      const mustStartQuestion = numbered && (
+        !current ||
+        /[?？]\s*$/.test(numbered[2]) ||
+        (blankBefore && current.options.length >= 2)
+      );
+
+      if (mustStartQuestion) {
+        startQuestion(numbered[2], numbered[1]);
+      } else if (current && rangeOptions) {
+        current.options.push(...rangeOptions);
+        collectingQuestion = false;
+        collectingExplanation = false;
+      } else if (current && option && !collectingExplanation) {
+        const optionValue = option.value === null ? current.options.length + 1 : option.value;
+        current.options.push({ value: optionValue, text: option.text });
+        collectingQuestion = false;
+        collectingVariables = false;
+        collectingOptions = true;
+      } else if (current && collectingOptions) {
+        current.options.push({
+          value: current.options.length + 1,
+          text: line
+        });
+      } else if (current && collectingVariables) {
+        storeVariables(
+          current,
+          `${current.source_variables_text || ''} ${line}`.replace(/\s+/g, ' ').trim()
+        );
+      } else if (current && collectingExplanation) {
+        appendExplanation(current, line);
+      } else if (current && collectingQuestion) {
+        current.prompt = `${current.prompt} ${line}`.replace(/\s+/g, ' ').trim();
+        collectingQuestion = !/[?？]\s*$/.test(line);
+      } else if (/[?？]\s*$/.test(line)) {
+        startQuestion(line, null);
+      }
+      blankBefore = false;
     });
     return candidates;
   }
@@ -403,26 +711,33 @@
     const questions = {};
     candidates.forEach((candidate, index) => {
       const qCode = `Q_${index + 1}`;
-      questions[qCode] = {
+      questions[qCode] = inferQuestionContract({
         question_id: uuid(),
         code: qCode,
         version: 1,
         block: null,
         family: null,
-        domain: null,
+        domain: candidate.domain?.code || null,
         parameter: null,
         type: null,
         prompt: candidate.prompt,
-        options: normalizeOptions(candidate.options),
+        options: candidate.options,
         scale: null,
         score_direction: null,
         time: {
-          tracking_mode: 'time_invariant',
+          tracking_mode: null,
           wave: null,
           lag: null
         },
-        status: 'draft'
-      };
+        status: 'draft',
+        source_context: {
+          question_number: candidate.source_question_number,
+          explanation: valueOrNull(candidate.explanation),
+          domain_title: valueOrNull(candidate.domain?.title),
+          variables: candidate.source_variables,
+          variables_text: valueOrNull(candidate.source_variables_text)
+        }
+      });
     });
     return newQuestionBank(questions, metadata);
   }
@@ -436,7 +751,7 @@
     Object.entries(source).forEach(([key, raw], index) => {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
       const qCode = code(raw.code || key, `Q_${index + 1}`);
-      questions[qCode] = {
+      questions[qCode] = inferQuestionContract({
         ...clone(raw),
         question_id: UUID_V4.test(String(raw.question_id || '')) ? raw.question_id : uuid(),
         code: qCode,
@@ -452,9 +767,9 @@
         score_direction: valueOrNull(raw.score_direction),
         time: raw.time && typeof raw.time === 'object'
           ? clone(raw.time)
-          : { tracking_mode: 'time_invariant', wave: null, lag: null },
+          : { tracking_mode: null, wave: null, lag: null },
         status: STATUS.has(raw.status) ? raw.status : 'draft'
-      };
+      });
     });
     if (!Object.keys(questions).length) throw new Error('The imported structure contains no question definitions.');
     return questions;
@@ -491,7 +806,7 @@
       let qCode = baseCode;
       let suffix = 2;
       while (questions[qCode]) qCode = `${baseCode}_${suffix++}`;
-      questions[qCode] = {
+      questions[qCode] = inferQuestionContract({
         question_id: UUID_V4.test(String(raw.question_id || '')) ? raw.question_id : uuid(),
         code: qCode,
         version: Math.max(1, Number(raw.version) || 1),
@@ -520,7 +835,7 @@
         },
         score_direction: valueOrNull(raw.score_direction || properties.direction),
         time: {
-          tracking_mode: valueOrNull(properties.tracking_mode) || 'time_invariant',
+          tracking_mode: valueOrNull(properties.tracking_mode),
           wave: valueOrNull(properties.wave),
           lag: valueOrNull(properties.time_lag)
         },
@@ -534,7 +849,7 @@
           ? clone(properties.text_constraints)
           : valueOrNull(properties.text_constraints),
         status: STATUS.has(raw.status) ? raw.status : 'draft'
-      };
+      });
     });
     if (!Object.keys(questions).length) {
       throw new Error('The Strict Cyan Protocol contains no usable variable definitions.');
@@ -632,7 +947,7 @@
       }
       if (!question.type) issue('error', 'UNRESOLVED_TYPE', 'Response type must be selected before this question can be registered.', questionCode);
       const scaleResolved = question.scale && typeof question.scale === 'object' &&
-        Object.values(question.scale).some(value => value !== null && value !== undefined && value !== '');
+        String(question.scale.id || '').trim();
       if (!scaleResolved) issue('error', 'UNRESOLVED_SCALE', 'A scale contract must be selected before this question can be registered.', questionCode);
       if (!Array.isArray(question.options)) issue('error', 'INVALID_OPTIONS', 'Question options must be an array.', questionCode);
       if (!STATUS.has(question.status)) issue('error', 'INVALID_STATUS', 'Question status must be draft, trial, or active.', questionCode);
@@ -665,6 +980,7 @@
     rowsToQuestionBank,
     extractPlainTextQuestions,
     plainTextToQuestionBank,
+    inferQuestionContract,
     canonicalOrConverted,
     strictCyanProtocolToQuestionBank,
     validateQuestionBank,

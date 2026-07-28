@@ -264,6 +264,90 @@ test('unstructured research prose is previewed but cannot silently become a usab
   assert.ok(result.diagnostics.some(item => item.code === 'UNRESOLVED_SCALE'));
 });
 
+test('bare numbered questionnaire becomes a canonical editable bank with inferred scales', () => {
+  const text = [
+    '1. How often do you recover fully after ordinary exertion?',
+    '1) Never',
+    '2) Rarely',
+    '3) Sometimes',
+    '4) Often',
+    '5) Always',
+    '',
+    '2. Which environment do you work in most often?',
+    'a) Laboratory',
+    'b) Office',
+    'c) Outdoors'
+  ].join('\n');
+  const imported = importer.plainTextToQuestionBank(text, { title: 'Bare questionnaire' });
+  const result = importer.summarize(imported, 'txt');
+
+  assert.equal(result.counts.questions, 2);
+  assert.equal(result.can_use, true);
+  assert.match(imported.questions.Q_1.question_id, /^[0-9a-f-]{36}$/i);
+  assert.equal(imported.questions.Q_1.source_context.question_number, '1');
+  assert.equal(imported.questions.Q_1.type, 'single_select');
+  assert.equal(imported.questions.Q_1.scale.id, 'frequency_scale');
+  assert.equal(imported.questions.Q_1.scale.psychometric_level, 'ordinal');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(imported.questions.Q_1.options.map(option => option.value))),
+    [1, 2, 3, 4, 5]
+  );
+  assert.equal(imported.questions.Q_2.type, 'single_select');
+  assert.equal(imported.questions.Q_2.scale.id, 'single_choice');
+  assert.equal(imported.questions.Q_2.scale.psychometric_level, 'nominal');
+});
+
+test('an explicit bare numeric range is preserved without being mislabeled as Likert', () => {
+  const text = [
+    '1. Насколько выражена текущая нагрузка?',
+    'Шкала: 1–5'
+  ].join('\n');
+  const imported = importer.plainTextToQuestionBank(text, { title: 'Numeric scale' });
+  const question = imported.questions.Q_1;
+
+  assert.equal(question.type, 'single_select');
+  assert.equal(question.scale.id, 'ordinal_1_5');
+  assert.equal(question.scale.psychometric_level, 'ordinal');
+  assert.equal(question.scale.min, 1);
+  assert.equal(question.scale.max, 5);
+  assert.equal(question.scale.step, 1);
+  assert.equal(question.options.length, 5);
+  assert.equal(importer.summarize(imported, 'txt').can_use, true);
+});
+
+test('answer options without service fields or bullets are collected after an options heading', () => {
+  const imported = importer.plainTextToQuestionBank([
+    '1. ¿La condición está presente?',
+    'Opciones:',
+    'Sí',
+    'No'
+  ].join('\n'), { title: 'Headerless options' });
+  const question = imported.questions.Q_1;
+
+  assert.equal(question.type, 'single_select');
+  assert.equal(question.scale.id, 'dichotomous');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(question.options)),
+    [{ value: 1, text: 'Sí' }, { value: 2, text: 'No' }]
+  );
+});
+
+test('missing content remains empty while generated service identity stays valid', () => {
+  const imported = importer.plainTextToQuestionBank(
+    '1. Describe the factor that mattered most?',
+    { title: 'Incomplete questionnaire' }
+  );
+  const question = imported.questions.Q_1;
+  const result = importer.summarize(imported, 'txt');
+
+  assert.match(imported.bank_id, /^[0-9a-f-]{36}$/i);
+  assert.match(question.question_id, /^[0-9a-f-]{36}$/i);
+  assert.equal(question.version, 1);
+  assert.equal(question.type, null);
+  assert.equal(question.scale, null);
+  assert.equal(result.can_use, false);
+});
+
 test('constructor routes all file imports through preview and consumes only validated banks', async () => {
   const [constructor, page] = await Promise.all([
     fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8'),
@@ -274,6 +358,31 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.doesNotMatch(constructor, /accept="\.json,application\/json"/);
   assert.match(page, /\.docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages/);
   assert.match(page, /QuestionBankImport\.summarize/);
+  assert.match(page, /renameImportedQuestion/);
+  assert.match(page, /parseEditedOptions/);
+  assert.match(page, /currentImportResult\.bank/);
   assert.match(page, /ResearchContracts\.requestJson\('\/question-banks\/save'/);
   assert.match(page, /research_os\.imported_question_bank\.v1/);
+  assert.match(page, /Designed and built in collaboration with Ray AI/);
+  assert.doesNotMatch(page, /Gemini AI/);
+});
+
+test('multi-format readers are local and the editing workspace stays compact', async () => {
+  const page = await fs.readFile(new URL('../importer.html', import.meta.url), 'utf8');
+  const localAssets = [
+    '../vendor/mammoth.browser.min.js',
+    '../vendor/pdf.min.js',
+    '../vendor/pdf.worker.min.js',
+    '../vendor/xlsx.full.min.js',
+    '../vendor/js-yaml.min.js',
+    '../vendor/jszip.min.js',
+    '../vendor/pdfjs/standard_fonts/LICENSE_FOXIT'
+  ];
+
+  await Promise.all(localAssets.map(asset => fs.access(new URL(asset, import.meta.url))));
+  assert.doesNotMatch(page, /<script[^>]+https?:\/\//i);
+  assert.match(page, /workerSrc = 'vendor\/pdf\.worker\.min\.js'/);
+  assert.match(page, /standardFontDataUrl: 'vendor\/pdfjs\/standard_fonts\/'/);
+  assert.match(page, /height:\s*280px/);
+  assert.match(page, /max-height:\s*500px/);
 });
