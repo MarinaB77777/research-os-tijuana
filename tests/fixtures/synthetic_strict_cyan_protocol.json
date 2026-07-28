@@ -1,0 +1,181 @@
+{
+  "engine": "Research OS Strict Cyan Protocol Engine",
+  "version": "2.6.0",
+  "timestamp": "2026-01-15T12:00:00.000Z",
+  "language": "en-US",
+  "global_mode": "static",
+  "psychometric_integrity": "validated_strict",
+  "variables": [
+    {
+      "variable_id": "synthetic_context_group",
+      "routing": {
+        "default_next": "next"
+      },
+      "psychometric_properties": {
+        "measurement_level": "nominal",
+        "scale_subtype": "single_choice",
+        "tracking_mode": "time_invariant",
+        "wave": "baseline",
+        "time_lag": "immediate",
+        "direction": "direct",
+        "inversion_metadata": {
+          "is_inverted": false,
+          "applied_transform": "identity"
+        },
+        "bounds": null,
+        "text_constraints": null,
+        "coding_schema": [
+          {
+            "label": "Group Alpha",
+            "code_or_weight": "alpha",
+            "target_transition": "next"
+          },
+          {
+            "label": "Group Beta",
+            "code_or_weight": "beta",
+            "target_transition": "next"
+          },
+          {
+            "label": "Prefer not to answer",
+            "code_or_weight": "not_reported",
+            "target_transition": "next"
+          }
+        ]
+      },
+      "question_prompt": "Select a synthetic context group for this importer test:"
+    },
+    {
+      "variable_id": "synthetic_load_t1",
+      "routing": {
+        "default_next": "next"
+      },
+      "psychometric_properties": {
+        "measurement_level": "ordinal",
+        "scale_subtype": "likert_7",
+        "tracking_mode": "time_variant",
+        "wave": "wave_1",
+        "time_lag": "days_7",
+        "direction": "direct",
+        "inversion_metadata": {
+          "is_inverted": false,
+          "applied_transform": "identity"
+        },
+        "bounds": null,
+        "text_constraints": null,
+        "coding_schema": [
+          {
+            "label": "Strongly disagree",
+            "code_or_weight": 1,
+            "target_transition": "next"
+          },
+          {
+            "label": "Disagree",
+            "code_or_weight": 2,
+            "target_transition": "next"
+          },
+          {
+            "label": "Slightly disagree",
+            "code_or_weight": 3,
+            "target_transition": "next"
+          },
+          {
+            "label": "Neutral",
+            "code_or_weight": 4,
+            "target_transition": "next"
+          },
+          {
+            "label": "Slightly agree",
+            "code_or_weight": 5,
+            "target_transition": "next"
+          },
+          {
+            "label": "Agree",
+            "code_or_weight": 6,
+            "target_transition": "next"
+          },
+          {
+            "label": "Strongly agree",
+            "code_or_weight": 7,
+            "target_transition": "next"
+          }
+        ]
+      },
+      "question_prompt": "Rate the synthetic workload statement for the configured time window:"
+    },
+    {
+      "variable_id": "synthetic_metric",
+      "routing": {
+        "default_next": "next"
+      },
+      "psychometric_properties": {
+        "measurement_level": "interval_ratio",
+        "scale_subtype": "currency_metric",
+        "tracking_mode": "time_invariant",
+        "wave": "wave_1",
+        "time_lag": "immediate",
+        "direction": "direct",
+        "inversion_metadata": {
+          "is_inverted": false,
+          "applied_transform": "identity"
+        },
+        "bounds": {
+          "min": 1,
+          "max": 5,
+          "step": 1,
+          "unit": ""
+        },
+        "text_constraints": null,
+        "coding_schema": null
+      },
+      "question_prompt": "New research question?"
+    },
+    {
+      "variable_id": "synthetic_unfinished_scale",
+      "routing": {
+        "default_next": "next"
+      },
+      "psychometric_properties": {
+        "measurement_level": "ordinal",
+        "scale_subtype": "likert_5",
+        "tracking_mode": "time_invariant",
+        "wave": "wave_1",
+        "time_lag": "immediate",
+        "direction": "direct",
+        "inversion_metadata": {
+          "is_inverted": false,
+          "applied_transform": "identity"
+        },
+        "bounds": null,
+        "text_constraints": null,
+        "coding_schema": [
+          {
+            "label": "Strongly Disagree",
+            "code_or_weight": 1,
+            "target_transition": "next"
+          },
+          {
+            "label": "Disagree",
+            "code_or_weight": 2,
+            "target_transition": "next"
+          },
+          {
+            "label": "Neutral",
+            "code_or_weight": 3,
+            "target_transition": "next"
+          },
+          {
+            "label": "Agree",
+            "code_or_weight": 4,
+            "target_transition": "next"
+          },
+          {
+            "label": "Strongly Agree",
+            "code_or_weight": 5,
+            "target_transition": "next"
+          }
+        ]
+      },
+      "question_prompt": "New research question?"
+    }
+  ]
+}
