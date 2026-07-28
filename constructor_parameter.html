@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research OS · Parameter Constructor</title>
+  <style>
+    :root{--bg:#030a0c;--panel:#071419;--card:#0c1b21;--input:#050e12;--line:#1e3a45;--cyan:#06b6d4;--light:#a5f3fc;--text:#ecfeff;--muted:#8faeb8;--bad:#f87171;--ok:#34d399}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    header{position:sticky;top:0;z-index:4;background:var(--input);border-bottom:2px solid var(--line);padding:12px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px}h1{font-size:14px;color:var(--cyan);margin:0;text-transform:uppercase;letter-spacing:.5px}
+    button,a,.file-label{border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:var(--input);color:var(--text);font-weight:700;font-size:12px;text-decoration:none;cursor:pointer}button.primary{background:var(--cyan);border-color:var(--cyan);color:#031014}button.danger{color:var(--bad)}
+    input,select,textarea{width:100%;background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}textarea{min-height:82px;resize:vertical}
+    label{display:block;color:var(--light);font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+    .top,.actions,.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.container{max-width:1280px;margin:auto;padding:16px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}.card h2{font-size:13px;color:var(--cyan);margin:0 0 14px}.field{margin-bottom:11px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+    .entry{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px;margin-top:8px}.entry-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}.meta{font-size:10px;color:var(--muted);overflow-wrap:anywhere}.fixed{border:1px solid rgba(6,182,212,.4);background:rgba(6,182,212,.08);padding:10px;border-radius:8px;color:var(--light)}
+    .status{min-height:36px;padding:9px;border-radius:8px;background:var(--input);color:var(--muted);white-space:pre-wrap;margin-top:10px}.status.error{color:var(--bad);border:1px solid rgba(248,113,113,.45)}.status.ok{color:var(--ok);border:1px solid rgba(52,211,153,.4)}
+    footer{text-align:center;color:#6e8790;padding:18px;font-size:12px}.hidden{display:none}@media(max-width:850px){.grid,.grid2,.grid3,.entry-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">Research OS · Constructor de parámetros</h1>
+  <div class="top">
+    <a href="index.html" data-i18n="home">← Inicio</a>
+    <a href="parameter_registry.html" data-i18n="registry">Registro de parámetros</a>
+    <a href="constructor_quest.html?return=constructor_parameter.html" data-i18n="newQuestion">＋ Crear pregunta</a>
+    <select id="lang" style="width:auto" onchange="setLanguage(this.value)"><option value="es">🇲🇽 ES</option><option value="en">🇺🇸 EN</option><option value="ru">🇷🇺 RU</option></select>
+  </div>
+</header>
+<main class="container">
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2 data-i18n="identity">1. Qué medimos / cómo nombrar</h2>
+        <div class="field"><label data-i18n="name">Nombre del parámetro</label><input id="name" oninput="onName()"></div>
+        <div class="grid2">
+          <div class="field"><label data-i18n="code">Código automático</label><input id="code" readonly></div>
+          <div class="field"><label>UUID</label><input id="uuid" readonly></div>
+        </div>
+        <div class="grid3">
+          <div class="field"><label data-i18n="version">Versión</label><input id="version" type="number" min="1" step="1" onchange="saveDraft()"></div>
+          <div class="field"><label data-i18n="statusLabel">Estado</label><select id="status" onchange="saveDraft()"><option value="draft">Draft</option><option value="trial">Trial</option><option value="active">Active</option></select></div>
+          <div class="field"><label data-i18n="domain">Dominio</label><input id="domain" oninput="saveDraft()"></div>
+        </div>
+        <div class="field"><label data-i18n="definition">Definición preliminar</label><textarea id="definition" oninput="saveDraft()" data-i18n-placeholder="definitionPlaceholder"></textarea></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="markers">2. Marcadores observables</h2>
+        <div class="grid2">
+          <div class="field"><label data-i18n="markerCode">Código del marcador</label><input id="markerCode"></div>
+          <div class="field"><label data-i18n="sourceType">Tipo de fuente</label><select id="markerSource"><option value="questionnaire">Questionnaire</option><option value="sensor">Sensor</option><option value="game">Game</option><option value="observation">Observation</option><option value="record">Record</option></select></div>
+        </div>
+        <div class="field"><label data-i18n="operational">Definición operacional</label><textarea id="markerDefinition"></textarea></div>
+        <button onclick="addMarker()" data-i18n="addMarker">＋ Añadir marcador</button>
+        <div id="markerList"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="dependencies">3. Dependencias</h2>
+        <div class="grid2">
+          <div class="field"><label data-i18n="parameterRef">Parámetro registrado</label><select id="dependencySelect"></select></div>
+          <div class="field"><label data-i18n="role">Rol</label><select id="dependencyRole"><option value="input">Input</option><option value="modifier">Modifier</option><option value="comparator">Comparator</option><option value="exclusion">Exclusion</option></select></div>
+        </div>
+        <button onclick="addDependency()" data-i18n="addDependency">＋ Añadir dependencia</button>
+        <div id="dependencyList"></div>
+      </section>
+    </div>
+
+    <div>
+      <section class="card">
+        <h2 data-i18n="time">4. Dependencia temporal</h2>
+        <div class="fixed" data-i18n="gtrRule">Toda medición se interpreta respecto a Global Time Reference. El tiempo desconocido permanece desconocido.</div>
+        <div class="grid2" style="margin-top:10px">
+          <div class="field"><label data-i18n="timeScale">Escala temporal</label><select id="timeScale" onchange="saveDraft()"><option value="instant">Instant</option><option value="hours">Hours</option><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option><option value="years">Years</option><option value="event_relative">Event relative</option><option value="unknown">Unknown</option></select></div>
+          <div class="field"><label data-i18n="timeQuestion">Pregunta temporal</label><select id="timeQuestion" onchange="saveDraft()"></select></div>
+        </div>
+        <div class="field"><label data-i18n="timeFormula">Fórmula temporal / ventana</label><textarea id="timeFormula" oninput="saveDraft()" placeholder="e.g. mean(values within [GTR - 7 days, GTR])"></textarea></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="measurement">5. Medición por preguntas y шкалам</h2>
+        <div class="actions">
+          <button onclick="loadBankCatalog()" data-i18n="refreshBanks">Actualizar bancos</button>
+          <label class="file-label" for="bankFile" data-i18n="importBank">Importar banco JSON</label>
+          <input id="bankFile" class="hidden" type="file" accept=".json,application/json" onchange="importBankFile(this.files[0])">
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <div class="field"><label data-i18n="bank">Banco</label><div class="row"><select id="bankSelect"></select><button onclick="loadSelectedBank()" data-i18n="open">Abrir</button></div></div>
+          <div class="field"><label data-i18n="question">Pregunta</label><select id="questionSelect"></select></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label data-i18n="measurementRole">Rol en la medición</label><select id="measurementRole"><option value="direct_indicator">Direct indicator</option><option value="component">Component</option><option value="modifier">Modifier</option><option value="validation_marker">Validation marker</option><option value="exclusion">Exclusion</option></select></div>
+          <div class="field"><label data-i18n="weight">Peso (opcional, no Unknown)</label><input id="measurementWeight" type="number" step="any"></div>
+        </div>
+        <button onclick="addMeasurement()" data-i18n="addMeasurement">＋ Añadir medición</button>
+        <div id="measurementList"></div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="computation">6. Cálculo explícito</h2>
+        <div class="grid2">
+          <div class="field"><label data-i18n="operation">Operación</label><select id="operation"><option value="compare">Compare</option><option value="count">Count</option><option value="aggregate_mean">Aggregate: mean</option><option value="aggregate_sum">Aggregate: sum</option><option value="aggregate_median">Aggregate: median</option><option value="aggregate_rms">Aggregate: RMS</option><option value="transform">Transform</option><option value="condition">Condition</option></select></div>
+          <div class="field"><label data-i18n="inputs">Entradas (códigos, separados por coma)</label><input id="operationInputs"></div>
+        </div>
+        <div class="field"><label data-i18n="formula">Expresión / regla</label><textarea id="operationFormula"></textarea></div>
+        <button onclick="addOperation()" data-i18n="addOperation">＋ Añadir paso</button>
+        <div id="operationList"></div>
+        <div class="fixed" style="margin-top:10px"><strong>Unknown policy:</strong> propagate_unknown — Unknown ≠ 0.</div>
+      </section>
+
+      <section class="card">
+        <h2 data-i18n="save">7. Validación y guardado</h2>
+        <div class="field"><label>Global Time Reference</label><input id="gtr" readonly></div>
+        <div class="actions"><button onclick="newParameter()" data-i18n="new">Nuevo</button><button onclick="validateShow()" data-i18n="validate">Validar</button><button class="primary" onclick="exportParameter()" data-i18n="export">Guardar archivo</button><button class="primary" onclick="syncParameter()" data-i18n="database">Guardar en BD</button></div>
+        <div id="statusBox" class="status"></div>
+      </section>
+    </div>
+  </div>
+</main>
+<footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
+<script src="research-contracts.js"></script>
+<script>
+'use strict';
+const RC=window.ResearchContracts,DRAFT_KEY='research_os.parameter_constructor.draft.v1';
+const t={
+ es:{title:'Research OS · Constructor de parámetros',home:'← Inicio',registry:'Registro de parámetros',newQuestion:'＋ Crear pregunta',identity:'1. Qué medimos / cómo nombrar',name:'Nombre del parámetro',code:'Código automático',version:'Versión',statusLabel:'Estado',domain:'Dominio',definition:'Definición preliminar',definitionPlaceholder:'Pressure = discrepancia entre lo deseado y lo real, cuya magnitud depende de la importancia.',markers:'2. Marcadores observables',markerCode:'Código del marcador',sourceType:'Tipo de fuente',operational:'Definición operacional',addMarker:'＋ Añadir marcador',dependencies:'3. Dependencias',parameterRef:'Parámetro registrado',role:'Rol',addDependency:'＋ Añadir dependencia',time:'4. Dependencia temporal',gtrRule:'Toda medición se interpreta respecto a Global Time Reference. El tiempo desconocido permanece desconocido.',timeScale:'Escala temporal',timeQuestion:'Pregunta temporal',timeFormula:'Fórmula temporal / ventana',measurement:'5. Medición por preguntas y escalas',refreshBanks:'Actualizar bancos',importBank:'Importar banco JSON',bank:'Banco',open:'Abrir',question:'Pregunta',measurementRole:'Rol en la medición',weight:'Peso (opcional, no Unknown)',addMeasurement:'＋ Añadir medición',computation:'6. Cálculo explícito',operation:'Operación',inputs:'Entradas (códigos, separados por coma)',formula:'Expresión / regla',addOperation:'＋ Añadir paso',save:'7. Validación y guardado',new:'Nuevo',validate:'Validar',export:'Guardar archivo',database:'Guardar en BD',remove:'Eliminar',fallback:'Este navegador no permite elegir la ubicación. Se usará la descarga estándar.',valid:'Contrato válido.',draftOnly:'El borrador se guarda solamente en este navegador hasta sincronizarlo con la base de datos.'},
+ en:{title:'Research OS · Parameter Constructor',home:'← Home',registry:'Parameter Registry',newQuestion:'＋ Create question',identity:'1. What is measured / how to name it',name:'Parameter name',code:'Automatic code',version:'Version',statusLabel:'Status',domain:'Domain',definition:'Preliminary definition',definitionPlaceholder:'Pressure = discrepancy between desired and actual, with magnitude depending on significance.',markers:'2. Observable markers',markerCode:'Marker code',sourceType:'Source type',operational:'Operational definition',addMarker:'＋ Add marker',dependencies:'3. Dependencies',parameterRef:'Registered parameter',role:'Role',addDependency:'＋ Add dependency',time:'4. Time dependency',gtrRule:'Every measurement is interpreted relative to Global Time Reference. Unknown time remains unknown.',timeScale:'Time scale',timeQuestion:'Time question',timeFormula:'Time formula / window',measurement:'5. Measurement by questions and scales',refreshBanks:'Refresh banks',importBank:'Import bank JSON',bank:'Bank',open:'Open',question:'Question',measurementRole:'Measurement role',weight:'Weight (optional, never Unknown)',addMeasurement:'＋ Add measurement',computation:'6. Explicit computation',operation:'Operation',inputs:'Inputs (codes, comma-separated)',formula:'Expression / rule',addOperation:'＋ Add step',save:'7. Validation and saving',new:'New',validate:'Validate',export:'Save file',database:'Save to DB',remove:'Remove',fallback:'This browser cannot choose a location. Standard download will be used.',valid:'Contract is valid.',draftOnly:'The draft is stored only in this browser until it is synchronized with the database.'},
+ ru:{title:'Research OS · Конструктор параметров',home:'← На главную',registry:'Реестр параметров',newQuestion:'＋ Создать вопрос',identity:'1. Что измеряем / как назвать',name:'Название параметра',code:'Автоматический код',version:'Версия',statusLabel:'Статус',domain:'Домен',definition:'Предварительное определение',definitionPlaceholder:'Pressure = рассогласование между желаемым и действительным, величина зависит от значимости.',markers:'2. Наблюдаемые маркеры',markerCode:'Код маркера',sourceType:'Тип источника',operational:'Операциональное определение',addMarker:'＋ Добавить маркер',dependencies:'3. Зависимости',parameterRef:'Зарегистрированный параметр',role:'Роль',addDependency:'＋ Добавить зависимость',time:'4. Зависимость от времени',gtrRule:'Все измерения интерпретируются относительно Global Time Reference. Неизвестное время остается неизвестным.',timeScale:'Шкала времени',timeQuestion:'Вопрос о времени',timeFormula:'Формула времени / окно',measurement:'5. Измерение вопросами и шкалами',refreshBanks:'Обновить банки',importBank:'Импорт банка JSON',bank:'Банк',open:'Открыть',question:'Вопрос',measurementRole:'Роль в измерении',weight:'Вес (необязательно, но не Unknown)',addMeasurement:'＋ Добавить измерение',computation:'6. Явный расчет',operation:'Операция',inputs:'Входы (коды через запятую)',formula:'Выражение / правило',addOperation:'＋ Добавить шаг',save:'7. Проверка и сохранение',new:'Новый',validate:'Проверить',export:'Сохранить файл',database:'Сохранить в БД',remove:'Удалить',fallback:'Этот браузер не позволяет выбрать место. Будет использована стандартная загрузка.',valid:'Контракт корректен.',draftOnly:'Черновик хранится только в этом браузере до синхронизации с базой данных.'}
+};
+let lang='es',state,registered=[],catalog=[],bankQuestions=[];
+function blank(){return{parameter_id:RC.createUuid(),version:1,status:'draft',name:'',code:'PARAMETER',domain:'',preliminary_definition:'',global_time_reference:RC.nowIso(),observable_markers:[],dependencies:[],time:{scale:'unknown',question_reference:null,formula:''},measurements:[],computation:{unknown_policy:'propagate_unknown',steps:[]}};}
+function setLanguage(value){lang=['es','en','ru'].includes(value)?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;document.getElementById('lang').value=lang;document.querySelectorAll('[data-i18n]').forEach(el=>{if(t[lang][el.dataset.i18n])el.textContent=t[lang][el.dataset.i18n];});document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>el.placeholder=t[lang][el.dataset.i18nPlaceholder]||'');renderAll();}
+function onName(){state.name=document.getElementById('name').value;state.code=RC.normalizeCode(state.name,'PARAMETER');renderIdentity(false);saveDraft();}
+function readForm(){state.name=document.getElementById('name').value.trim();state.code=RC.normalizeCode(state.name,'PARAMETER');state.version=Number(document.getElementById('version').value);state.status=document.getElementById('status').value;state.domain=document.getElementById('domain').value.trim();state.preliminary_definition=document.getElementById('definition').value.trim();state.time.scale=document.getElementById('timeScale').value;state.time.formula=document.getElementById('timeFormula').value.trim();const q=document.getElementById('timeQuestion').value;state.time.question_reference=q?JSON.parse(q):null;}
+function saveDraft(){if(!state)return;readForm();RC.writeJson(DRAFT_KEY,state);setStatus(t[lang].draftOnly,'');}
+function renderIdentity(write=true){if(write){document.getElementById('name').value=state.name;document.getElementById('version').value=state.version;document.getElementById('status').value=state.status;document.getElementById('domain').value=state.domain;document.getElementById('definition').value=state.preliminary_definition;document.getElementById('timeScale').value=state.time.scale;document.getElementById('timeFormula').value=state.time.formula;}document.getElementById('code').value=state.code;document.getElementById('uuid').value=state.parameter_id;document.getElementById('gtr').value=state.global_time_reference;}
+function renderAll(){if(!state)return;renderIdentity();renderMarkers();renderDependencies();renderMeasurements();renderOperations();renderQuestionSelects();}
+function renderMarkers(){const box=document.getElementById('markerList');box.innerHTML='';state.observable_markers.forEach((m,i)=>box.appendChild(entry(`${m.code} · ${m.source_type}`,m.operational_definition,()=>{state.observable_markers.splice(i,1);renderMarkers();saveDraft();})));}
+function addMarker(){const code=RC.normalizeCode(document.getElementById('markerCode').value,'');const def=document.getElementById('markerDefinition').value.trim();if(!code||!def)return setStatus('Marker code and operational definition are required','error');state.observable_markers.push({marker_id:RC.createUuid(),code,source_type:document.getElementById('markerSource').value,operational_definition:def});document.getElementById('markerCode').value='';document.getElementById('markerDefinition').value='';renderMarkers();saveDraft();}
+function renderDependencies(){const select=document.getElementById('dependencySelect');select.innerHTML='';registered.forEach(p=>select.add(new Option(`${p.code} v${p.version}`,JSON.stringify({parameter_id:p.parameter_id,parameter_version:p.version,code:p.code}))));const box=document.getElementById('dependencyList');box.innerHTML='';state.dependencies.forEach((d,i)=>box.appendChild(entry(`${d.code} v${d.parameter_version} · ${d.role}`,d.parameter_id,()=>{state.dependencies.splice(i,1);renderDependencies();saveDraft();})));}
+function addDependency(){const value=document.getElementById('dependencySelect').value;if(!value)return;const ref=JSON.parse(value);if(ref.parameter_id===state.parameter_id)return setStatus('A parameter cannot depend on itself','error');if(state.dependencies.some(x=>x.parameter_id===ref.parameter_id&&x.parameter_version===ref.parameter_version))return;state.dependencies.push({...ref,role:document.getElementById('dependencyRole').value});renderDependencies();saveDraft();}
+function renderQuestionSelects(){const q=document.getElementById('questionSelect'),time=document.getElementById('timeQuestion');q.innerHTML='';time.innerHTML='<option value="">—</option>';bankQuestions.forEach(x=>{const ref={bank_id:x.source_bank_id,bank_version:x.source_bank_version,question_id:x.question_id,question_version:x.question_version,code:x.code};q.add(new Option(`${x.code} · ${x.prompt}`,JSON.stringify(ref)));time.add(new Option(`${x.code} · ${x.prompt}`,JSON.stringify(ref)));});if(state.time.question_reference)time.value=JSON.stringify(state.time.question_reference);}
+function renderMeasurements(){const box=document.getElementById('measurementList');box.innerHTML='';state.measurements.forEach((m,i)=>box.appendChild(entry(`${m.code} · ${m.role}`,`${m.bank_id} v${m.bank_version} · scale ${m.scale_snapshot?.id||''}${m.weight===null?'':` · weight ${m.weight}`}`,()=>{state.measurements.splice(i,1);renderMeasurements();saveDraft();})));}
+function addMeasurement(){const raw=document.getElementById('questionSelect').value;if(!raw)return;const ref=JSON.parse(raw),q=bankQuestions.find(x=>x.question_id===ref.question_id&&x.question_version===ref.question_version&&x.source_bank_id===ref.bank_id&&x.source_bank_version===ref.bank_version);if(!q)return;const weightRaw=document.getElementById('measurementWeight').value.trim(),weight=weightRaw===''?null:Number(weightRaw);if(weightRaw!==''&&!Number.isFinite(weight))return setStatus('Weight must be numeric or empty','error');state.measurements.push({...ref,role:document.getElementById('measurementRole').value,scale_snapshot:q.scale,weight});renderMeasurements();saveDraft();}
+function renderOperations(){const box=document.getElementById('operationList');box.innerHTML='';state.computation.steps.forEach((s,i)=>box.appendChild(entry(`${i+1}. ${s.operation}`,`${s.inputs.join(', ')} → ${s.expression}`,()=>{state.computation.steps.splice(i,1);renderOperations();saveDraft();})));}
+function addOperation(){const operation=document.getElementById('operation').value,inputs=document.getElementById('operationInputs').value.split(',').map(x=>x.trim()).filter(Boolean),expression=document.getElementById('operationFormula').value.trim();if(!inputs.length||!expression)return setStatus('Computation inputs and expression are required','error');state.computation.steps.push({step_id:RC.createUuid(),position:state.computation.steps.length+1,operation,inputs,expression});document.getElementById('operationInputs').value='';document.getElementById('operationFormula').value='';renderOperations();saveDraft();}
+function entry(title,detail,remove){const el=document.createElement('div');el.className='entry';el.innerHTML=`<div class="entry-grid"><div><strong>${esc(title)}</strong><div class="meta">${esc(detail||'')}</div></div><div></div><button class="danger">${t[lang].remove}</button></div>`;el.querySelector('button').onclick=remove;return el;}
+async function loadBankCatalog(){try{const data=await RC.requestJson('/question-banks');catalog=data.banks||[];const s=document.getElementById('bankSelect');s.innerHTML='';catalog.forEach(b=>s.add(new Option(`${b.title} · ${b.code} v${b.version}`,`${b.bank_id}:${b.version}`)));setStatus(`${catalog.length} banks / bancos / банков`,'ok');}catch(e){setStatus(e.message,'error');}}
+async function loadSelectedBank(){const raw=document.getElementById('bankSelect').value;if(!raw)return;const [id,v]=raw.split(':');try{const data=await RC.requestJson(`/question-banks/${encodeURIComponent(id)}?version=${encodeURIComponent(v)}`);bankQuestions=RC.flattenQuestionBank(data);renderQuestionSelects();setStatus(`${data.title} · ${bankQuestions.length}`,'ok');}catch(e){setStatus(e.message,'error');}}
+async function importBankFile(file){if(!file)return;try{const data=JSON.parse(await file.text());bankQuestions=RC.flattenQuestionBank(data);renderQuestionSelects();setStatus(`${data.title} · ${bankQuestions.length}`,'ok');}catch(e){setStatus(e.message,'error');}finally{document.getElementById('bankFile').value='';}}
+async function loadParameters(){try{const visibility=RC.researcherToken()?'all':'active';const data=await RC.requestJson(`/parameters?status=${visibility}`);registered=data.parameters||[];renderDependencies();}catch(e){registered=[];renderDependencies();setStatus(e.message,'error');}}
+function build(){readForm();const errors=[];if(!RC.isUuid(state.parameter_id))errors.push('Invalid parameter UUID');if(!state.name)errors.push('Name is required');if(!state.code)errors.push('Code is required');if(!Number.isInteger(state.version)||state.version<1)errors.push('Version must be a positive integer');if(!RC.ENTITY_STATUSES.includes(state.status))errors.push('Invalid status');if(!state.domain)errors.push('Domain is required');if(!state.preliminary_definition)errors.push('Preliminary definition is required');if(!state.observable_markers.length)errors.push('At least one observable marker is required');if(!state.measurements.length)errors.push('At least one measurement is required');if(!state.computation.steps.length)errors.push('At least one computation step is required');if(!state.time.scale)errors.push('Time scale is required');if(state.time.scale!=='unknown'&&!state.time.formula)errors.push('Time formula/window is required for a known time scale');if(state.status==='active'&&state.measurements.some(m=>!m.scale_snapshot))errors.push('Active parameter requires scale snapshots');if(errors.length)throw new Error(errors.join('\n'));const generated=RC.nowIso();return{schema:'research_os.parameter_definition',schema_version:1,parameter_id:state.parameter_id,code:state.code,name:state.name,version:state.version,status:state.status,domain:state.domain,preliminary_definition:state.preliminary_definition,observable_markers:state.observable_markers,dependencies:state.dependencies,time_dependency:{...state.time,global_time_reference_required:true},measurements:state.measurements,computation:state.computation,primary_language:'es-MX',interface_language:lang,global_time_reference:state.global_time_reference,generated_at:generated};}
+function validateShow(){try{build();setStatus(t[lang].valid,'ok');}catch(e){setStatus(e.message,'error');}}
+async function exportParameter(){try{const p=build();await RC.saveTextFile(`${p.code.toLowerCase()}_v${p.version}.parameter.json`,'application/json',JSON.stringify(p,null,2),t[lang].fallback);setStatus(t[lang].valid,'ok');}catch(e){setStatus(e.message,'error');}}
+async function syncParameter(){try{const p=build(),token=RC.researcherToken();if(!token)throw new Error('Researcher login is required only for database saving');const r=await RC.requestJson('/parameters/save',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify(p)});setStatus(`Saved: ${r.parameter_id} v${r.parameter_version}`,'ok');await loadParameters();}catch(e){setStatus(e.message,'error');}}
+function newParameter(){state=blank();RC.writeJson(DRAFT_KEY,state);renderAll();setStatus(t[lang].draftOnly,'');}
+function setStatus(msg,type){const b=document.getElementById('statusBox');b.textContent=msg||'';b.className=`status ${type||''}`;}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+document.addEventListener('DOMContentLoaded',async()=>{state=RC.readJson(DRAFT_KEY,null)||blank();lang=(localStorage.getItem('app_language')||'es').replace('-MX','').replace('-US','');if(!t[lang])lang='es';setLanguage(lang);await Promise.all([loadParameters(),loadBankCatalog()]);});
+</script>
+</body>
+</html>

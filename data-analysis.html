@@ -575,7 +575,10 @@
         const targetKey = document.getElementById('keyTarget').value;
         let validPairs = 0;
         dataset.forEach(row => {
-          if (!isNaN(Number(row[xKey])) && !isNaN(Number(row[targetKey]))) validPairs++;
+          const x = row[xKey], y = row[targetKey];
+          if (x !== null && x !== undefined && x !== '' &&
+              y !== null && y !== undefined && y !== '' &&
+              Number.isFinite(Number(x)) && Number.isFinite(Number(y))) validPairs++;
         });
         if (validPairs < 3) issues.push(t.errDep);
       } else if (mode === 'cohorts') {
@@ -601,29 +604,36 @@
 
   // НАУЧНЫЙ ДВИЖОК
   class ScientificEngine {
-    mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
+    numeric(value) {
+      if (value === null || value === undefined || value === '') return null;
+      const parsed = Number(value);
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null; }
     median(arr) {
-      if (!arr.length) return 0;
+      if (!arr.length) return null;
       const s = [...arr].sort((a, b) => a - b);
       const m = Math.floor(s.length / 2);
       return s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
     }
     stdDev(arr, m) {
-      if (arr.length <= 1) return 0;
+      if (arr.length <= 1) return null;
       const meanVal = m !== undefined ? m : this.mean(arr);
       return Math.sqrt(arr.reduce((acc, val) => acc + Math.pow(val - meanVal, 2), 0) / (arr.length - 1));
     }
 
     trackLongitudinal(data, cfg) {
       const timelines = {};
+      let excludedMissing = 0;
       data.forEach(row => {
         const id = row[cfg.idKey];
         const time = row[cfg.timeKey];
-        const val = Number(row[cfg.targetKey]);
-        if (id !== undefined && time !== undefined && !isNaN(val)) {
+        const val = this.numeric(row[cfg.targetKey]);
+        const timeValue = new Date(time).getTime();
+        if (id !== undefined && id !== null && Number.isFinite(timeValue) && val !== null) {
           if (!timelines[id]) timelines[id] = [];
-          timelines[id].push({ time: new Date(time).getTime() || time, value: val });
-        }
+          timelines[id].push({ time: timeValue, value: val });
+        } else excludedMissing++;
       });
       let trajectories = {}, deltas = [];
       for (const [id, points] of Object.entries(timelines)) {
@@ -635,38 +645,70 @@
           trajectories[id] = { waves: points.length, initial: init, latest: latest, delta: Number(delta.toFixed(2)) };
         }
       }
-      return { type: 'longitudinal', sample: Object.keys(timelines).length, meanDelta: Number(this.mean(deltas).toFixed(2)), trajectories };
+      const meanDelta = this.mean(deltas);
+      return {
+        type: 'longitudinal',
+        sample: Object.keys(timelines).length,
+        meanDelta: meanDelta === null ? null : Number(meanDelta.toFixed(2)),
+        excludedMissing,
+        trajectories
+      };
     }
 
     analyzeCohorts(data, cfg) {
       const groups = {};
+      let excludedMissing = 0;
       data.forEach(row => {
-        const g = row[cfg.splitKey] !== undefined ? String(row[cfg.splitKey]) : 'N/A';
-        const val = Number(row[cfg.targetKey]);
-        if (!isNaN(val)) { if (!groups[g]) groups[g] = []; groups[g].push(val); }
+        const groupRaw = row[cfg.splitKey];
+        const val = this.numeric(row[cfg.targetKey]);
+        if (groupRaw !== undefined && groupRaw !== null && val !== null) {
+          const g = String(groupRaw);
+          if (!groups[g]) groups[g] = [];
+          groups[g].push(val);
+        } else excludedMissing++;
       });
       const cohorts = {};
       for (const [g, vals] of Object.entries(groups)) {
         const m = this.mean(vals);
-        cohorts[g] = { n: vals.length, mean: Number(m.toFixed(2)), median: Number(this.median(vals).toFixed(2)), stdDev: Number(this.stdDev(vals, m).toFixed(2)) };
+        const median = this.median(vals);
+        const sd = this.stdDev(vals, m);
+        cohorts[g] = {
+          n: vals.length,
+          mean: m === null ? null : Number(m.toFixed(2)),
+          median: median === null ? null : Number(median.toFixed(2)),
+          stdDev: sd === null ? null : Number(sd.toFixed(2))
+        };
       }
-      return { type: 'cohorts', cohorts };
+      return { type: 'cohorts', excludedMissing, cohorts };
     }
 
     calculateDependency(data, cfg) {
       const t = i18n[currentLang];
       const pairs = [];
+      let excludedMissing = 0;
       data.forEach(row => {
-        const x = Number(row[cfg.xKey]), y = Number(row[cfg.targetKey]);
-        if (!isNaN(x) && !isNaN(y)) pairs.push({ x, y });
+        const x = this.numeric(row[cfg.xKey]), y = this.numeric(row[cfg.targetKey]);
+        if (x !== null && y !== null) pairs.push({ x, y });
+        else excludedMissing++;
       });
       const mx = this.mean(pairs.map(p => p.x)), my = this.mean(pairs.map(p => p.y));
       let num = 0, dx = 0, dy = 0;
       pairs.forEach(p => { num += (p.x - mx) * (p.y - my); dx += Math.pow(p.x - mx, 2); dy += Math.pow(p.y - my, 2); });
-      const r = (dx * dy === 0) ? 0 : num / Math.sqrt(dx * dy);
+      if (dx === 0 || dy === 0) {
+        return {
+          type: 'dependency',
+          status: 'not_estimable',
+          reason: 'zero_variance',
+          n: pairs.length,
+          excludedMissing,
+          r: null,
+          strength: null
+        };
+      }
+      const r = num / Math.sqrt(dx * dy);
       const absR = Math.abs(r);
       const strength = absR > 0.5 ? t.strongLink : (absR > 0.3 ? t.modLink : t.weakLink);
-      return { type: 'dependency', n: pairs.length, r: Number(r.toFixed(2)), strength };
+      return { type: 'dependency', n: pairs.length, excludedMissing, r: Number(r.toFixed(2)), strength };
     }
   }
 
@@ -769,5 +811,8 @@
     executeScientificAnalysis();
   };
 </script>
+<div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
+  ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+</div>
 </body>
 </html>

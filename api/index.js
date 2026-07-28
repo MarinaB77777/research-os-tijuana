@@ -1,167 +1,886 @@
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
+
+function bearerToken(req) {
+    const authorization = req.headers.authorization || '';
+    if (/^Bearer\s+/i.test(authorization)) {
+        return authorization.replace(/^Bearer\s+/i, '').trim();
+    }
+    return req.headers['x-researcher-token'] || '';
+}
+
+function serviceHeaders(key, extra) {
+    return {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        ...(extra || {})
+    };
+}
+
+function sessionTokenHash(token) {
+    return createHash('sha256').update(String(token), 'utf8').digest('hex');
+}
+
+async function verifyAccess(req, expectedRole, supabaseUrl, supabaseAdminKey) {
+    const token = bearerToken(req);
+    if (!token) {
+        return { ok: false, status: 401, error: 'Access token is required' };
+    }
+    if (!supabaseUrl || !supabaseAdminKey) {
+        return { ok: false, status: 503, error: 'Server-side access verification is not configured' };
+    }
+    try {
+        const tokenHash = sessionTokenHash(token);
+        const response = await fetch(
+            `${supabaseUrl}/rest/v1/research_os_auth_sessions?token_hash=eq.${encodeURIComponent(tokenHash)}&select=session_id,account_id,expires_at,revoked_at&limit=1`,
+            { headers: serviceHeaders(supabaseAdminKey) }
+        );
+        if (!response.ok) {
+            return { ok: false, status: response.status, error: `Access verification failed: ${await response.text()}` };
+        }
+        const rows = await response.json();
+        if (!Array.isArray(rows) || rows.length !== 1) {
+            return { ok: false, status: 401, error: 'Access token is invalid' };
+        }
+        const authSession = rows[0];
+        if (authSession.revoked_at || !authSession.expires_at ||
+            new Date(authSession.expires_at).getTime() <= Date.now()) {
+            return { ok: false, status: 401, error: 'Access session is not active' };
+        }
+        const accountResponse = await fetch(
+            `${supabaseUrl}/rest/v1/research_os_accounts?account_id=eq.${encodeURIComponent(authSession.account_id)}&select=account_id,username,user_identifier,role,status,created_by_account_id&limit=1`,
+            { headers: serviceHeaders(supabaseAdminKey) }
+        );
+        if (!accountResponse.ok) {
+            return { ok: false, status: accountResponse.status, error: `Account verification failed: ${await accountResponse.text()}` };
+        }
+        const accounts = await accountResponse.json();
+        if (!Array.isArray(accounts) || accounts.length !== 1) {
+            return { ok: false, status: 401, error: 'Account is not available' };
+        }
+        const principal = accounts[0];
+        if (expectedRole && principal.role !== expectedRole) {
+            return { ok: false, status: 403, error: `The ${expectedRole} role is required` };
+        }
+        if (principal.status !== 'active') {
+            return { ok: false, status: 401, error: 'Account is not active' };
+        }
+        return { ok: true, principal, authSession, token, tokenHash };
+    } catch (error) {
+        return { ok: false, status: 500, error: `Access verification error: ${error.message}` };
+    }
+}
+
+async function verifyResearcher(req, supabaseUrl, supabaseAdminKey) {
+    return verifyAccess(req, 'researcher', supabaseUrl, supabaseAdminKey);
+}
+
+async function ownedEntityIds(entityType, researcherAccountId, supabaseUrl, supabaseAdminKey) {
+    const response = await fetch(
+        `${supabaseUrl}/rest/v1/research_os_entity_ownership?entity_type=eq.${encodeURIComponent(entityType)}&researcher_account_id=eq.${encodeURIComponent(researcherAccountId)}&select=entity_id`,
+        { headers: serviceHeaders(supabaseAdminKey) }
+    );
+    if (!response.ok) {
+        const error = new Error(`Entity ownership lookup failed: ${await response.text()}`);
+        error.status = response.status;
+        throw error;
+    }
+    return new Set((await response.json()).map(row => row.entity_id));
+}
+
+async function callSupabaseRpc(supabaseUrl, key, functionName, body) {
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
+        method: 'POST',
+        headers: {
+            'apikey': key,
+            'Authorization': `Bearer ${key}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(body || {})
+    });
+    if (!response.ok) {
+        const details = await response.text();
+        const error = new Error(`Supabase RPC ${functionName} failed: ${details || response.statusText}`);
+        error.status = response.status;
+        throw error;
+    }
+    return response.json();
+}
+
 export default async function handler(req, res) {
     const { url, method } = req;
+    const requestUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
+    const path = requestUrl.pathname.replace(/^\/api(?=\/|$)/, '');
     
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_ANON_KEY;
+    const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-    // 1. Генерация пользователя и его QR-токена
-    if (url.includes('/tokens/generate') && method === 'POST') {
-        const { type, customId } = req.body;
-        
-        if (!type || !['researcher', 'respondent'].includes(type)) {
-            return res.status(400).json({ error: 'Invalid user type specified' });
+    if (path === '/auth/login' && method === 'POST') {
+        const { username, password, expected_role: expectedRole } = req.body || {};
+        if (expectedRole && !['researcher', 'respondent'].includes(expectedRole)) {
+            return res.status(400).json({ ok: false, error: 'Invalid expected role' });
         }
-
-        const prefix = type === 'researcher' ? 'RES-' : 'RESP-';
-        const userIdentifier = customId || (prefix + Math.floor(1000 + Math.random() * 9000));
-        const qrToken = 'QR-' + crypto.randomUUID();
-
-        if (supabaseUrl && supabaseKey) {
-            try {
-                await fetch(`${supabaseUrl}/rest/v1/app_users`, {
-                    method: 'POST',
-                    headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify({
-                        user_identifier: userIdentifier,
-                        token: qrToken,
-                        type: type
-                    })
-                });
-            } catch (e) {
-                console.error('Supabase write error:', e);
-                return res.status(500).json({ error: e.message });
-            }
+        if (!username || !password) {
+            return res.status(400).json({ ok: false, error: 'Username and password are required' });
         }
-
-        return res.status(200).json({ 
-            success: true, 
-            token: qrToken, 
-            userIdentifier: userIdentifier,
-            type: type 
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Server-side authentication is not configured' });
+        }
+        let authenticated;
+        try {
+            const result = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'authenticate_research_os_account', {
+                p_username: username,
+                p_password: password
+            });
+            authenticated = Array.isArray(result) ? result[0] : result;
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+        if (!authenticated?.account_id) {
+            return res.status(401).json({ ok: false, error: 'Invalid username or password' });
+        }
+        if (expectedRole && authenticated.role !== expectedRole) {
+            return res.status(403).json({ ok: false, error: `The ${expectedRole} role is required` });
+        }
+        const sessionToken = randomBytes(32).toString('base64url');
+        const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+        const sessionWrite = await fetch(`${supabaseUrl}/rest/v1/research_os_auth_sessions`, {
+            method: 'POST',
+            headers: serviceHeaders(supabaseAdminKey, {
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            }),
+            body: JSON.stringify({
+                session_id: randomUUID(),
+                account_id: authenticated.account_id,
+                token_hash: sessionTokenHash(sessionToken),
+                expires_at: expiresAt
+            })
+        });
+        if (!sessionWrite.ok) {
+            return res.status(sessionWrite.status).json({ ok: false, error: `Session creation failed: ${await sessionWrite.text()}` });
+        }
+        return res.status(200).json({
+            ok: true,
+            session_token: sessionToken,
+            account_id: authenticated.account_id,
+            role: authenticated.role,
+            user_identifier: authenticated.user_identifier,
+            expires_at: expiresAt
         });
     }
 
-    // 2. Проверка токена при входе (сканирование QR-кода)
-    if (url.includes('/verify') && method === 'GET') {
-        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
-        const token = urlObj.searchParams.get('token');
-
-        if (!token) {
-            return res.status(400).json({ valid: false, error: 'Token missing' });
+    if (path === '/auth/verify' && method === 'GET') {
+        const access = await verifyAccess(req, null, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
         }
-
-        if (supabaseUrl && supabaseKey) {
-            try {
-                const response = await fetch(`${supabaseUrl}/rest/v1/app_users?token=eq.${encodeURIComponent(token)}&select=*`, {
-                    method: 'GET',
-                    headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`
-                    }
-                });
-                const rows = await response.json();
-                const data = rows && rows.length > 0 ? rows[0] : null;
-
-                if (!data) {
-                    return res.status(401).json({ valid: false, error: 'Token not found in database' });
-                }
-
-                return res.status(200).json({
-                    valid: true,
-                    type: data.type,
-                    userIdentifier: data.user_identifier
-                });
-            } catch (e) {
-                console.error('Supabase verification error:', e);
-                return res.status(500).json({ valid: false, error: e.message });
-            }
-        }
-
-        return res.status(500).json({ valid: false, error: 'Supabase credentials missing' });
+        return res.status(200).json({
+            ok: true,
+            account_id: access.principal.account_id,
+            role: access.principal.role,
+            user_identifier: access.principal.user_identifier,
+            expires_at: access.authSession.expires_at
+        });
     }
 
-    // Создание аккаунта участника
-    if (url.startsWith('/pilot/accounts') && method === 'POST') {
-        const accountId = 'acc_' + Math.random().toString(36).substring(2, 10);
+    if (path === '/auth/revoke' && method === 'POST') {
+        const access = await verifyAccess(req, null, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const revokeResponse = await fetch(
+            `${supabaseUrl}/rest/v1/research_os_auth_sessions?token_hash=eq.${encodeURIComponent(access.tokenHash)}`,
+            {
+                method: 'PATCH',
+                headers: serviceHeaders(supabaseAdminKey, {
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=minimal'
+                }),
+                body: JSON.stringify({
+                    revoked_at: new Date().toISOString()
+                })
+            }
+        );
+        if (!revokeResponse.ok) {
+            return res.status(revokeResponse.status).json({ ok: false, error: await revokeResponse.text() });
+        }
+        return res.status(200).json({ ok: true });
+    }
+
+    if (path === '/accounts' && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Server-side account storage is not configured' });
+        }
+        const { username, password, role, user_identifier: userIdentifier } = req.body || {};
+        if (!['researcher', 'respondent'].includes(role) || !username || !password || !userIdentifier) {
+            return res.status(400).json({ ok: false, error: 'Username, password, role and user identifier are required' });
+        }
+        if (String(username).length < 3 || String(password).length < 10) {
+            return res.status(400).json({ ok: false, error: 'Username must contain at least 3 characters and password at least 10 characters' });
+        }
+        let creatorAccountId = null;
+        const presentedToken = bearerToken(req);
+        if (presentedToken) {
+            const authorization = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+            if (!authorization.ok) return res.status(authorization.status).json({ ok: false, error: authorization.error });
+            creatorAccountId = authorization.principal.account_id;
+        } else {
+            const bootstrapSecret = req.headers['x-research-os-bootstrap-secret'];
+            if (role !== 'researcher' || !process.env.RESEARCH_OS_BOOTSTRAP_SECRET ||
+                bootstrapSecret !== process.env.RESEARCH_OS_BOOTSTRAP_SECRET) {
+                return res.status(403).json({ ok: false, error: 'Researcher authorization or first-account bootstrap secret is required' });
+            }
+            const existingResponse = await fetch(
+                `${supabaseUrl}/rest/v1/research_os_accounts?role=eq.researcher&select=account_id&limit=1`,
+                { headers: serviceHeaders(supabaseAdminKey) }
+            );
+            const existing = existingResponse.ok ? await existingResponse.json() : null;
+            if (!existingResponse.ok) {
+                return res.status(existingResponse.status).json({ ok: false, error: await existingResponse.text() });
+            }
+            if (Array.isArray(existing) && existing.length) {
+                return res.status(409).json({ ok: false, error: 'The first researcher already exists; sign in as a researcher to create another account' });
+            }
+        }
+        try {
+            const result = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'create_research_os_account', {
+                p_username: username,
+                p_password: password,
+                p_role: role,
+                p_user_identifier: userIdentifier,
+                p_created_by_account_id: creatorAccountId
+            });
+            const account = Array.isArray(result) ? result[0] : result;
+            return res.status(201).json({ ok: true, ...account });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // Query-string token verification is intentionally disabled: URLs leak into
+    // history and logs. Login uses POST /api/auth/login and immediately cleans the URL.
+    if (path === '/verify') {
+        return res.status(410).json({
+            valid: false,
+            error: 'Use POST /api/auth/login; tokens are not verified in query strings'
+        });
+    }
+
+    // Старт исследовательской сессии: только подтвержденный респондент,
+    // с серверной привязкой сессии к его идентичности и времени.
+    if (path === '/pilot/accounts/start-session' && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const { account_id: accountId, study_id: studyId, consent_record: consentRecord } = req.body || {};
+        if (accountId !== access.principal.user_identifier || !studyId ||
+            !access.principal.created_by_account_id ||
+            consentRecord?.consent_status !== 'granted' || !consentRecord?.granted_at) {
+            return res.status(400).json({ ok: false, error: 'Respondent identity, researcher ownership, study, and explicit consent are required' });
+        }
+        const sessionId = randomUUID();
+        const globalTimeReference = new Date().toISOString();
+        const write = await fetch(`${supabaseUrl}/rest/v1/research_os_collection_sessions`, {
+            method: 'POST',
+            headers: {
+                'apikey': supabaseAdminKey,
+                'Authorization': `Bearer ${supabaseAdminKey}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify({
+                session_id: sessionId,
+                respondent_account_id: access.principal.account_id,
+                researcher_account_id: access.principal.created_by_account_id,
+                respondent_identifier: access.principal.user_identifier,
+                study_id: studyId,
+                status: 'active',
+                consent_record: consentRecord,
+                global_time_reference: globalTimeReference
+            })
+        });
+        if (!write.ok) {
+            return res.status(write.status).json({ ok: false, error: `Collection session write failed: ${await write.text()}` });
+        }
+        return res.status(200).json({
+            ok: true,
+            session_id: sessionId,
+            global_time_reference: globalTimeReference
+        });
+    }
+
+    // Участник не создает локальную поддельную учетную запись: его account_id
+    // всегда равен идентичности подтвержденного respondent-токена.
+    if (path === '/pilot/accounts' && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        return res.status(200).json({ ok: true, account_id: access.principal.user_identifier });
+    }
+
+    if (path.startsWith('/pilot/accounts/') && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const accountId = decodeURIComponent(path.slice('/pilot/accounts/'.length));
+        if (accountId !== access.principal.user_identifier) {
+            return res.status(403).json({ ok: false, error: 'This respondent account is not accessible' });
+        }
         return res.status(200).json({ ok: true, account_id: accountId });
     }
 
     // Загрузка списка доступных опросников
-    if (url.startsWith('/pilot/questionnaire-banks')) {
-        return res.status(200).json({
-            ok: true,
-            banks: [
-                { id: 'psychometric_screening_v1', enabled: true, title_by_lang: { ru: 'Психометрический скрининг шкал', es: 'Evaluación psicométrica de escalas', en: 'Psychometric Scale Screening' } }
-            ]
-        });
+    if (path.startsWith('/pilot/questionnaire-banks')) {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Questionnaire catalog is not configured' });
+        }
+        try {
+            const rows = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'list_question_banks', {});
+            const banks = (Array.isArray(rows) ? rows : [])
+                .filter(bank => bank.status === 'active')
+                .map(bank => ({
+                    id: bank.bank_id || bank.code,
+                    version: bank.version,
+                    enabled: true,
+                    title_by_lang: typeof bank.title === 'object'
+                        ? bank.title
+                        : { ru: bank.title, es: bank.title, en: bank.title }
+                }));
+            return res.status(200).json({ ok: true, banks });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
     // Получение текста информированного согласия
-    if (url.startsWith('/consent/')) {
+    if (path.startsWith('/consent/')) {
         return res.status(200).send(`<h3>Consentimiento Informado / Информированное согласие</h3><p>Pilot project in Tijuana, Mexico. Data will be stored securely for research purposes.</p>`);
     }
 
-    // Старт сессии
-    if (url.startsWith('/pilot/accounts/start-session') && method === 'POST') {
-        const sessionId = 'ses_' + Math.random().toString(36).substring(2, 10);
-        return res.status(200).json({ ok: true, session_id: sessionId });
+    // Каталог зарегистрированных банков используется конструкторами анкеты
+    // и параметров. Он не содержит жёстко заданных тестовых сущностей.
+    if (url.split('?')[0] === '/question-banks' && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        try {
+            const rows = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'list_question_banks', {});
+            let banks = Array.isArray(rows) ? rows : [];
+            if (bearerToken(req)) {
+                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+                const owned = await ownedEntityIds('question_bank', access.principal.account_id, supabaseUrl, supabaseAdminKey);
+                banks = banks.filter(bank => bank.status === 'active' || owned.has(bank.bank_id));
+            } else {
+                banks = banks.filter(bank => bank.status === 'active');
+            }
+            return res.status(200).json({ ok: true, banks });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
-    // Загрузка вопросов опросника
-    if (url.startsWith('/question-banks/')) {
-        return res.status(200).json({
-            ok: true,
-            bank_id: 'psychometric_screening_v1',
-            questions: [
-                { code: 'KCog1', type: 'radio', prompt: 'Когда вы вспоминаете сложную задачу:', options: [{ value: 1, text: 'Нужно много времени' }, { value: 2, text: 'Решаю быстро' }] }
-            ]
-        });
+    // Версионированное определение параметра: научное определение, маркеры,
+    // зависимости, время, измерения и явная вычислительная спецификация.
+    if (url.split('?')[0] === '/parameters/save' && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase URL and server-side service-role key are required' });
+        }
+        const authorization = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!authorization.ok) {
+            return res.status(authorization.status).json({ ok: false, error: authorization.error });
+        }
+        const parameterData = req.body;
+        if (parameterData?.schema !== 'research_os.parameter_definition' ||
+            parameterData?.schema_version !== 1 ||
+            !parameterData?.parameter_id ||
+            !parameterData?.global_time_reference ||
+            parameterData?.computation?.unknown_policy !== 'propagate_unknown') {
+            return res.status(400).json({
+                ok: false,
+                error: 'research_os.parameter_definition v1 with immutable identity, Global Time Reference and propagate_unknown policy is required'
+            });
+        }
+        try {
+            const saved = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_owned_parameter_definition',
+                {
+                    parameter_data: parameterData,
+                    p_researcher_account_id: authorization.principal.account_id
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
-    // Сохранение ответов респондента в базу данных Supabase
-    if (url.includes('/answers') && method === 'POST') {
-        const { answers, domain_data_identity } = req.body;
-        const sessionId = domain_data_identity?.session_id || 'unknown';
+    if (url.split('?')[0] === '/parameters' && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        let requestedStatus = urlObj.searchParams.get('status') || 'active';
+        if (!['all', 'draft', 'trial', 'active'].includes(requestedStatus)) {
+            return res.status(400).json({ ok: false, error: 'Parameter status filter is invalid' });
+        }
+        let access = null;
+        if (bearerToken(req) || requestedStatus !== 'active') {
+            access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+            if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        try {
+            const rows = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_parameter_definitions',
+                { requested_status: requestedStatus }
+            );
+            let parameters = Array.isArray(rows) ? rows : [];
+            if (access) {
+                const owned = await ownedEntityIds('parameter', access.principal.account_id, supabaseUrl, supabaseAdminKey);
+                parameters = parameters.filter(parameter => parameter.status === 'active' || owned.has(parameter.parameter_id));
+            } else {
+                parameters = parameters.filter(parameter => parameter.status === 'active');
+            }
+            return res.status(200).json({ ok: true, parameters });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
 
-        if (supabaseUrl && supabaseKey) {
-            try {
-                await fetch(`${supabaseUrl}/rest/v1/research_sessions`, {
-                    method: 'POST',
-                    headers: {
-                        'apikey': supabaseKey,
-                        'Authorization': `Bearer ${supabaseKey}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'resolution=merge-duplicates'
-                    },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        answers: answers,
-                        updated_at: new Date().toISOString()
-                    })
+    if (url.startsWith('/parameters/') && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        const parameterReference = decodeURIComponent(urlObj.pathname.slice('/parameters/'.length));
+        const requestedVersion = urlObj.searchParams.get('version');
+        if (!parameterReference || parameterReference === 'save') {
+            return res.status(400).json({ ok: false, error: 'Parameter UUID or code is required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_parameter_definition',
+                {
+                    parameter_reference: parameterReference,
+                    requested_version: requestedVersion ? Number(requestedVersion) : null
+                }
+            );
+            const parameter = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!parameter) return res.status(404).json({ ok: false, error: 'Parameter definition not found' });
+            if (parameter.status !== 'active') {
+                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(404).json({ ok: false, error: 'Parameter definition not found' });
+                const owned = await ownedEntityIds('parameter', access.principal.account_id, supabaseUrl, supabaseAdminKey);
+                if (!owned.has(parameter.parameter_id)) {
+                    return res.status(404).json({ ok: false, error: 'Parameter definition not found' });
+                }
+            }
+            return res.status(200).json({ ok: true, parameter });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // Анкета владеет только составом, порядком и маршрутизацией; определения
+    // вопросов остаются независимыми и ссылаются по UUID + версии.
+    if (url.split('?')[0] === '/questionnaires/save' && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase URL and server-side service-role key are required' });
+        }
+        const authorization = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!authorization.ok) {
+            return res.status(authorization.status).json({ ok: false, error: authorization.error });
+        }
+        const questionnaireData = req.body;
+        if (questionnaireData?.schema !== 'research_os.questionnaire' ||
+            questionnaireData?.schema_version !== 1 ||
+            !questionnaireData?.questionnaire_id ||
+            !questionnaireData?.global_time_reference ||
+            !Array.isArray(questionnaireData?.items) ||
+            !questionnaireData?.routing?.nodes) {
+            return res.status(400).json({
+                ok: false,
+                error: 'research_os.questionnaire v1 with identity, items, routing and Global Time Reference is required'
+            });
+        }
+        try {
+            const saved = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_owned_questionnaire_package',
+                {
+                    questionnaire_data: questionnaireData,
+                    p_researcher_account_id: authorization.principal.account_id
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (url.split('?')[0] === '/questionnaires' && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        let requestedStatus = urlObj.searchParams.get('status') || 'active';
+        if (!['all', 'draft', 'trial', 'active'].includes(requestedStatus)) {
+            return res.status(400).json({ ok: false, error: 'Questionnaire status filter is invalid' });
+        }
+        let access = null;
+        if (bearerToken(req) || requestedStatus !== 'active') {
+            access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+            if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        try {
+            const rows = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_questionnaires',
+                { requested_status: requestedStatus }
+            );
+            let questionnaires = Array.isArray(rows) ? rows : [];
+            if (access) {
+                const owned = await ownedEntityIds('questionnaire', access.principal.account_id, supabaseUrl, supabaseAdminKey);
+                questionnaires = questionnaires.filter(questionnaire =>
+                    questionnaire.status === 'active' || owned.has(questionnaire.questionnaire_id)
+                );
+            } else {
+                questionnaires = questionnaires.filter(questionnaire => questionnaire.status === 'active');
+            }
+            return res.status(200).json({ ok: true, questionnaires });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (url.startsWith('/questionnaires/') && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        const questionnaireReference = decodeURIComponent(urlObj.pathname.slice('/questionnaires/'.length));
+        const requestedVersion = urlObj.searchParams.get('version');
+        if (!questionnaireReference || questionnaireReference === 'save') {
+            return res.status(400).json({ ok: false, error: 'Questionnaire UUID or code is required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_questionnaire_package',
+                {
+                    questionnaire_reference: questionnaireReference,
+                    requested_version: requestedVersion ? Number(requestedVersion) : null
+                }
+            );
+            const questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!questionnaire) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
+            if (questionnaire.status !== 'active') {
+                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
+                const owned = await ownedEntityIds('questionnaire', access.principal.account_id, supabaseUrl, supabaseAdminKey);
+                if (!owned.has(questionnaire.questionnaire_id)) {
+                    return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
+                }
+            }
+            return res.status(200).json({ ok: true, questionnaire });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // Сохранение канонического банка вопросов в Supabase.
+    // RPC выполняет запись банка, независимых версий вопросов и таблицы связей
+    // в одной транзакции; вопрос не принадлежит эксклюзивно одному банку.
+    if (url.startsWith('/question-banks/save') && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase URL and server-side service-role key are required' });
+        }
+        const authorization = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!authorization.ok) {
+            return res.status(authorization.status).json({ ok: false, error: authorization.error });
+        }
+
+        const packageData = req.body;
+        const questionMap = packageData?.questions;
+        const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+        if (packageData?.schema !== 'research_os.question_bank' || packageData?.schema_version !== 2) {
+            return res.status(400).json({ ok: false, error: 'research_os.question_bank schema version 2 is required' });
+        }
+        if (!uuidV4.test(packageData.bank_id || '')) {
+            return res.status(400).json({ ok: false, error: 'Valid bank_id UUID is required' });
+        }
+        if (!packageData.code || !packageData.title || !Number.isInteger(packageData.version) || packageData.version < 1) {
+            return res.status(400).json({ ok: false, error: 'Bank code, title, and positive integer version are required' });
+        }
+        if (!['draft', 'trial', 'active'].includes(packageData.status)) {
+            return res.status(400).json({ ok: false, error: 'Bank status must be draft, trial, or active' });
+        }
+        if (!questionMap || typeof questionMap !== 'object' || Array.isArray(questionMap)) {
+            return res.status(400).json({ ok: false, error: 'Canonical questions object is required' });
+        }
+
+        const entries = Object.entries(questionMap);
+        if (entries.length === 0) {
+            return res.status(400).json({ ok: false, error: 'Question bank is empty' });
+        }
+
+        for (const [entryCode, question] of entries) {
+            if (!uuidV4.test(question?.question_id || '') ||
+                question?.code !== entryCode ||
+                !question?.prompt ||
+                !Number.isInteger(question?.version) ||
+                question.version < 1 ||
+                !question?.type ||
+                !question?.scale ||
+                !Array.isArray(question?.options) ||
+                Object.prototype.hasOwnProperty.call(question, 'routing') ||
+                question.options.some(option =>
+                    option && typeof option === 'object' &&
+                    (Object.prototype.hasOwnProperty.call(option, 'next') ||
+                     Object.prototype.hasOwnProperty.call(option, 'target'))
+                )) {
+                return res.status(400).json({
+                    ok: false,
+                    error: `Question ${entryCode} does not satisfy the canonical identity/measurement contract or contains questionnaire routing`
                 });
-            } catch (e) {
-                console.error('Supabase write error:', e);
             }
         }
 
-        return res.status(200).json({ ok: true });
+        try {
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/save_owned_question_bank_package`, {
+                method: 'POST',
+                headers: {
+                    'apikey': supabaseAdminKey,
+                    'Authorization': `Bearer ${supabaseAdminKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    package_data: packageData,
+                    p_researcher_account_id: authorization.principal.account_id
+                })
+            });
+
+            if (!response.ok) {
+                const details = await response.text();
+                return res.status(response.status).json({
+                    ok: false,
+                    error: `Supabase transactional question-bank write failed: ${details || response.statusText}`
+                });
+            }
+
+            const saved = await response.json();
+            return res.status(200).json({
+                ok: true,
+                saved_count: entries.length,
+                bank_id: packageData.bank_id,
+                bank_version: packageData.version,
+                database_result: saved
+            });
+        } catch (error) {
+            console.error('Question bank save error:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // Загрузка сохранённой версии банка без тестовых и жёстко заданных вопросов.
+    if (url.startsWith('/question-banks/') && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        const bankReference = decodeURIComponent(urlObj.pathname.slice('/question-banks/'.length));
+        const requestedVersion = urlObj.searchParams.get('version');
+        if (!bankReference || bankReference === 'save') {
+            return res.status(400).json({ ok: false, error: 'Bank UUID or code is required' });
+        }
+        try {
+            let access = null;
+            if (bearerToken(req)) {
+                access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+            }
+            const loadFunction = access
+                ? 'load_question_bank_package_for_account'
+                : 'load_question_bank_package';
+            const requestBody = {
+                bank_reference: bankReference,
+                requested_version: requestedVersion ? Number(requestedVersion) : null
+            };
+            if (access) requestBody.p_researcher_account_id = access.principal.account_id;
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${loadFunction}`, {
+                method: 'POST',
+                headers: {
+                    'apikey': supabaseAdminKey,
+                    'Authorization': `Bearer ${supabaseAdminKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestBody)
+            });
+            if (!response.ok) {
+                const details = await response.text();
+                return res.status(response.status).json({
+                    ok: false,
+                    error: `Supabase question-bank load failed: ${details || response.statusText}`
+                });
+            }
+            const rows = await response.json();
+            const packageData = Array.isArray(rows) ? rows[0] : rows;
+            if (!packageData) {
+                return res.status(404).json({ ok: false, error: 'Question bank not found' });
+            }
+            if (packageData.status !== 'active') {
+                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(404).json({ ok: false, error: 'Question bank not found' });
+            }
+            return res.status(200).json({ ok: true, ...packageData });
+        } catch (error) {
+            console.error('Question bank load error:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
+    }
+
+    // Сохранение ответов респондента в базу данных Supabase
+    if (path.includes('/answers') && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase URL and server-side service-role key are required' });
+        }
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const { response_records: responseRecords, domain_data_identity: sourceIdentity } = req.body || {};
+        const pathMatch = path.match(/^\/pilot\/sessions\/([^/]+)\/answers/);
+        const pathSessionId = pathMatch ? decodeURIComponent(pathMatch[1]) : null;
+        if (!pathSessionId || !sourceIdentity || sourceIdentity.session_id !== pathSessionId) {
+            return res.status(400).json({ ok: false, error: 'Session identity is missing or inconsistent' });
+        }
+        if (!Array.isArray(responseRecords) || responseRecords.length === 0) {
+            return res.status(400).json({ ok: false, error: 'Non-empty response_records array is required' });
+        }
+        const sessionResponse = await fetch(
+            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference&limit=1`,
+            {
+                headers: {
+                    'apikey': supabaseAdminKey,
+                    'Authorization': `Bearer ${supabaseAdminKey}`
+                }
+            }
+        );
+        if (!sessionResponse.ok) {
+            return res.status(sessionResponse.status).json({ ok: false, error: `Collection session verification failed: ${await sessionResponse.text()}` });
+        }
+        const sessionRows = await sessionResponse.json();
+        if (!Array.isArray(sessionRows) || sessionRows.length !== 1) {
+            return res.status(403).json({ ok: false, error: 'The collection session is invalid or belongs to another respondent' });
+        }
+        const sessionGlobalTimeReference = sessionRows[0].global_time_reference;
+        if (sourceIdentity.global_time_reference !== sessionGlobalTimeReference) {
+            return res.status(400).json({ ok: false, error: 'Global Time Reference does not match the collection session' });
+        }
+        for (const record of responseRecords) {
+            if (record?.session_id !== pathSessionId ||
+                !record?.response_id ||
+                !record?.question_id ||
+                !record?.question_version ||
+                !record?.bank_id ||
+                !record?.bank_version ||
+                !record?.code ||
+                record?.value === undefined ||
+                !record?.answered_at ||
+                !record?.global_time_reference ||
+                record.global_time_reference !== sessionGlobalTimeReference) {
+                return res.status(400).json({ ok: false, error: 'A response record does not satisfy the identity/time contract' });
+            }
+        }
+        try {
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/save_response_records`, {
+                method: 'POST',
+                headers: {
+                    'apikey': supabaseAdminKey,
+                    'Authorization': `Bearer ${supabaseAdminKey}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': 'return=representation'
+                },
+                body: JSON.stringify({
+                    source_identity: sourceIdentity,
+                    response_records: responseRecords
+                })
+            });
+            if (!response.ok) {
+                const details = await response.text();
+                return res.status(response.status).json({
+                    ok: false,
+                    error: `Supabase response write failed: ${details || response.statusText}`
+                });
+            }
+            const saved = await response.json();
+            await fetch(
+                `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}`,
+                {
+                    method: 'PATCH',
+                    headers: {
+                        'apikey': supabaseAdminKey,
+                        'Authorization': `Bearer ${supabaseAdminKey}`,
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    },
+                    body: JSON.stringify({
+                        status: 'completed',
+                        completed_at: new Date().toISOString()
+                    })
+                }
+            );
+            return res.status(200).json({ ok: true, saved_count: responseRecords.length, database_result: saved });
+        } catch (error) {
+            console.error('Supabase response write error:', error);
+            return res.status(500).json({ ok: false, error: error.message });
+        }
     }
 
     // Запуск сессии и генерация отчета
-    if (url.includes('/run') || url.includes('/participant-report')) {
-        return res.status(200).json({
-            ok: true,
-            participant_report: {
-                title: 'Результат пилота',
-                summary: 'Данные успешно зафиксированы.',
-                resource_cards: [],
-                limitations: ['Пилотная версия']
+    if (path.includes('/run') || path.includes('/participant-report')) {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const sessionMatch = path.match(/^\/pilot\/sessions\/([^/]+)\/(?:run|participant-report)/);
+        const sessionId = sessionMatch ? decodeURIComponent(sessionMatch[1]) : null;
+        if (!sessionId) {
+            return res.status(400).json({ ok: false, error: 'Collection session is required' });
+        }
+        const ownedResponse = await fetch(
+            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(sessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&select=session_id&limit=1`,
+            {
+                headers: {
+                    'apikey': supabaseAdminKey,
+                    'Authorization': `Bearer ${supabaseAdminKey}`
+                }
             }
+        );
+        const ownedRows = ownedResponse.ok ? await ownedResponse.json() : [];
+        if (!Array.isArray(ownedRows) || ownedRows.length !== 1) {
+            return res.status(403).json({ ok: false, error: 'The collection session is not accessible' });
+        }
+        return res.status(501).json({
+            ok: false,
+            error: 'The calculation/report engine is not connected to this API route yet; no report was generated'
         });
     }
 

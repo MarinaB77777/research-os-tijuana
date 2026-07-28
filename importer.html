@@ -792,14 +792,33 @@
   }
 
   function convertToCanonicalSchema(parsedInput) {
-    const result = {};
+    const isCanonicalPackage = parsedInput?.schema === 'research_os.question_bank';
+    if (isCanonicalPackage) {
+      if (!parsedInput.questions || typeof parsedInput.questions !== 'object' || Array.isArray(parsedInput.questions)) {
+        throw new Error('El paquete research_os.question_bank no contiene un objeto questions válido.');
+      }
+      /*
+       * A canonical package already owns its identity. Import must not repair,
+       * regenerate, normalize, reorder, or silently upgrade it. The validator
+       * is responsible for reporting contract violations without mutation.
+       */
+      return JSON.parse(JSON.stringify(parsedInput));
+    }
 
-    Object.entries(parsedInput).forEach(([key, item]) => {
+    const sourceQuestions = parsedInput?.questions && typeof parsedInput.questions === 'object'
+      ? parsedInput.questions
+      : parsedInput;
+    if (!sourceQuestions || typeof sourceQuestions !== 'object' || Array.isArray(sourceQuestions)) {
+      throw new Error('El objeto de preguntas no existe o no es válido.');
+    }
+
+    const questions = {};
+    Object.entries(sourceQuestions).forEach(([key, item]) => {
       if (!item || typeof item !== 'object') return;
 
-      const code = item.code || key;
+      const code = String(item.code || key).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
       const questionId = item.question_id || generateUUID();
-      const qType = item.question_type || item.type || "single_select";
+      const qType = item.type || item.response_type || item.question_type || "single_select";
 
       let options = [];
       if (Array.isArray(item.options)) {
@@ -807,39 +826,74 @@
           if (typeof opt === 'object' && opt !== null) {
             return {
               value: opt.value !== undefined ? opt.value : idx,
-              text: String(opt.text || opt.label || '')
+              text: String(opt.text ?? opt.label ?? '')
             };
           }
           return { value: idx, text: String(opt) };
         });
       }
 
-      let isActive = item.active !== undefined ? item.active : true;
-      if (item.status === "active") isActive = true;
-
-      result[code] = {
+      questions[code] = {
+        ...item,
         question_id: questionId,
-        code: code,
-        version: item.version !== undefined ? item.version : 1,
-        block: item.block || "general",
-        family: item.family || "standard",
-        domain: item.domain || "general",
-        question_type: qType,
-        response_type: item.response_type || qType,
-        presentation_type: item.presentation_type || (qType.includes('multi') ? 'checkbox' : 'radio'),
-        scale_type: item.scale_type || "ordinal",
+        code,
+        version: Number.isInteger(Number(item.version)) && Number(item.version) > 0 ? Number(item.version) : 1,
+        block: item.block ?? null,
+        family: item.family ?? null,
+        domain: item.domain ?? null,
+        parameter: item.parameter ?? null,
+        type: qType,
         prompt: item.prompt || "",
-        options: options,
-        score_direction: item.score_direction || "neutral",
-        active: isActive,
-        ...item
+        options,
+        scale: item.scale && typeof item.scale === 'object'
+          ? item.scale
+          : {
+              id: item.scale_type ?? null,
+              psychometric_level: item.psychometric_level ?? null,
+              min: item.min ?? null,
+              max: item.max ?? null,
+              step: item.step ?? null,
+              unit: item.unit ?? null,
+              direction: item.direction ?? null
+            },
+        score_direction: item.score_direction ?? null,
+        time: item.time && typeof item.time === 'object'
+          ? item.time
+          : {
+              tracking_mode: item.tracking_mode ?? 'time_invariant',
+              wave: item.wave ?? null,
+              lag: item.lag ?? null
+            },
+        status: ['draft', 'trial', 'active'].includes(item.status) ? item.status : 'draft'
       };
-
-      delete result[code].type;
-      delete result[code].status;
     });
 
-    return result;
+    const now = new Date().toISOString();
+    const title = window.prompt('Nombre del banco importado / Imported bank name');
+    if (!title || !title.trim()) {
+      throw new Error('El nombre del banco es obligatorio para crear una identidad estable.');
+    }
+    const bankCode = title.normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return {
+      schema: 'research_os.question_bank',
+      schema_version: 2,
+      bank_id: generateUUID(),
+      code: bankCode,
+      title: title.trim(),
+      version: 1,
+      status: 'draft',
+      primary_language: 'es-MX',
+      interface_language: currentLang,
+      global_mode: 'dynamic',
+      global_time_reference: now,
+      generated_at: now,
+      question_order: Object.keys(questions),
+      questions
+    };
   }
 
   function readFileAsText(file) {

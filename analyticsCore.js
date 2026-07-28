@@ -13,20 +13,23 @@ export class ResearchStatsAnalyzer {
     }
 
     sanitize(val) {
+        if (val === null || val === undefined || val === '') return null;
         const num = Number(val);
-        return (typeof num === 'number' && !isNaN(num)) ? num : 0;
+        return Number.isFinite(num) ? num : null;
     }
 
     mean(arr) {
-        if (!arr.length) return 0;
-        return arr.reduce((a, b) => a + b, 0) / arr.length;
+        const values = arr.filter(Number.isFinite);
+        if (!values.length) return null;
+        return values.reduce((a, b) => a + b, 0) / values.length;
     }
 
     stdDev(arr, meanVal) {
-        if (arr.length <= 1) return 0;
-        const m = meanVal !== undefined ? meanVal : this.mean(arr);
-        const sumSq = arr.reduce((acc, val) => acc + Math.pow(val - m, 2), 0);
-        return Math.sqrt(sumSq / (arr.length - 1));
+        const values = arr.filter(Number.isFinite);
+        if (values.length <= 1) return null;
+        const m = meanVal !== undefined && meanVal !== null ? meanVal : this.mean(values);
+        const sumSq = values.reduce((acc, val) => acc + Math.pow(val - m, 2), 0);
+        return Math.sqrt(sumSq / (values.length - 1));
     }
 
     analyze(dataset, config) {
@@ -59,10 +62,16 @@ export class ResearchStatsAnalyzer {
 
             const matrix = {};
             let totalCount = 0;
+            let excludedMissing = 0;
 
             data.forEach(row => {
-                const rVal = row[rowKey] !== undefined ? String(row[rowKey]) : 'N/A';
-                const cVal = row[colKey] !== undefined ? String(row[colKey]) : 'N/A';
+                if (row[rowKey] === undefined || row[rowKey] === null ||
+                    row[colKey] === undefined || row[colKey] === null) {
+                    excludedMissing++;
+                    return;
+                }
+                const rVal = String(row[rowKey]);
+                const cVal = String(row[colKey]);
 
                 if (!matrix[rVal]) matrix[rVal] = {};
                 matrix[rVal][cVal] = (matrix[rVal][cVal] || 0) + 1;
@@ -74,7 +83,8 @@ export class ResearchStatsAnalyzer {
                 rowVariable: rowKey,
                 colVariable: colKey,
                 matrix: matrix,
-                observations: totalCount
+                observations: totalCount,
+                excludedMissing
             };
         });
 
@@ -91,10 +101,11 @@ export class ResearchStatsAnalyzer {
                 const id = row[participantIdKey];
                 const time = row[timestampKey];
                 const val = core.sanitize(row[targetKey]);
+                const timeMs = new Date(time).getTime();
 
-                if (id !== undefined && time !== undefined) {
+                if (id !== undefined && id !== null && Number.isFinite(timeMs) && val !== null) {
                     if (!participantTimelines[id]) participantTimelines[id] = [];
-                    participantTimelines[id].push({ time: new Date(time).getTime(), val });
+                    participantTimelines[id].push({ time: timeMs, val });
                 }
             });
 
@@ -132,10 +143,15 @@ export class ResearchStatsAnalyzer {
             if (!splitKey || !targetKey) return { status: 'skipped', reason: 'splitKey and targetKey required' };
 
             const cohorts = {};
+            let excludedMissing = 0;
 
             data.forEach(row => {
-                const groupValue = row[splitKey] !== undefined ? String(row[splitKey]) : 'Undefined';
                 const metricVal = core.sanitize(row[targetKey]);
+                if (row[splitKey] === undefined || row[splitKey] === null || metricVal === null) {
+                    excludedMissing++;
+                    return;
+                }
+                const groupValue = String(row[splitKey]);
 
                 if (!cohorts[groupValue]) cohorts[groupValue] = [];
                 cohorts[groupValue].push(metricVal);
@@ -144,17 +160,19 @@ export class ResearchStatsAnalyzer {
             const summary = {};
             for (const [cohortName, values] of Object.entries(cohorts)) {
                 const m = core.mean(values);
+                const sd = core.stdDev(values, m);
                 summary[cohortName] = {
                     size: values.length,
-                    mean: Number(m.toFixed(2)),
-                    stdDev: Number(core.stdDev(values, m).toFixed(2))
+                    mean: m === null ? null : Number(m.toFixed(2)),
+                    stdDev: sd === null ? null : Number(sd.toFixed(2))
                 };
             }
 
             return {
                 type: 'cohort_comparison',
                 splitVariable: splitKey,
-                cohorts: summary
+                cohorts: summary,
+                excludedMissing
             };
         });
     }

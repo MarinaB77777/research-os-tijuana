@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research OS · Parameter Registry</title>
+  <style>
+    :root{--bg:#030a0c;--panel:#071419;--card:#0c1b21;--input:#050e12;--line:#1e3a45;--cyan:#06b6d4;--light:#a5f3fc;--text:#ecfeff;--muted:#8faeb8;--bad:#f87171;--ok:#34d399}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    header{background:var(--input);border-bottom:2px solid var(--line);padding:12px 22px;display:flex;justify-content:space-between;align-items:center;gap:10px}h1{font-size:14px;color:var(--cyan);margin:0;text-transform:uppercase}
+    button,a,.file-label{border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:var(--input);color:var(--text);font-weight:700;font-size:12px;text-decoration:none;cursor:pointer}
+    input,select{background:var(--input);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px;font:inherit}.top,.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .layout{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px;min-height:calc(100vh - 60px)}.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}.panel h2{font-size:13px;color:var(--cyan);margin:0 0 12px}
+    .filters{display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:10px}.list{display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 190px);overflow:auto}.entry{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px;cursor:pointer}.entry.active{border-color:var(--cyan)}.title{font-weight:800}.meta{font-size:10px;color:var(--muted);margin-top:4px;overflow-wrap:anywhere}.badge{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 7px;color:var(--light);font-size:9px;margin-right:4px}
+    .detail{display:grid;grid-template-columns:1fr 1fr;gap:12px}.block{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:12px;min-width:0}.block h3{font-size:11px;color:var(--light);text-transform:uppercase;margin:0 0 8px}.value{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5}.status{padding:9px;border-radius:8px;background:var(--input);color:var(--muted);white-space:pre-wrap}.status.error{color:var(--bad)}.status.ok{color:var(--ok)}footer{text-align:center;color:#6e8790;padding:18px;font-size:12px}
+    @media(max-width:850px){.layout,.detail{grid-template-columns:1fr}.list{max-height:420px}}
+  </style>
+</head>
+<body>
+<header>
+  <h1 data-i18n="title">Research OS · Registro de parámetros</h1>
+  <div class="top"><a href="index.html" data-i18n="home">← Inicio</a><a href="constructor_parameter.html" data-i18n="create">＋ Crear parámetro</a><select id="lang" onchange="setLanguage(this.value)"><option value="es">🇲🇽 ES</option><option value="en">🇺🇸 EN</option><option value="ru">🇷🇺 RU</option></select></div>
+</header>
+<main class="layout">
+  <section class="panel">
+    <h2 data-i18n="listTitle">Parámetros registrados</h2>
+    <div class="filters"><input id="search" data-i18n-placeholder="search" oninput="renderList()"><select id="filter" onchange="reload()"><option value="active" selected>Active</option><option value="all">All</option><option value="draft">Draft</option><option value="trial">Trial</option></select></div>
+    <div class="actions"><button onclick="reload()" data-i18n="refresh">Actualizar</button><button onclick="showLocalDraft()" data-i18n="localDraft">Borrador local</button></div>
+    <div id="statusBox" class="status" style="margin:10px 0"></div>
+    <div id="list" class="list"></div>
+  </section>
+  <section class="panel">
+    <h2 data-i18n="detailTitle">Definición del parámetro</h2>
+    <div id="empty" class="status" data-i18n="choose">Seleccione una versión del parámetro.</div>
+    <div id="detail" class="detail" hidden></div>
+  </section>
+</main>
+<footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
+<script src="research-contracts.js"></script>
+<script>
+'use strict';
+const RC=window.ResearchContracts;
+const i18n={
+ es:{title:'Research OS · Registro de parámetros',home:'← Inicio',create:'＋ Crear parámetro',listTitle:'Parámetros registrados',search:'Buscar por nombre, código o dominio',refresh:'Actualizar',localDraft:'Borrador local',detailTitle:'Definición del parámetro',choose:'Seleccione una versión del parámetro.',identity:'Identidad',definition:'Definición preliminar',markers:'Marcadores observables',dependencies:'Dependencias',time:'Tiempo',measurements:'Mediciones',computation:'Cálculo',provenance:'Procedencia',noData:'No hay parámetros para este filtro.'},
+ en:{title:'Research OS · Parameter Registry',home:'← Home',create:'＋ Create parameter',listTitle:'Registered parameters',search:'Search by name, code, or domain',refresh:'Refresh',localDraft:'Local draft',detailTitle:'Parameter definition',choose:'Select a parameter version.',identity:'Identity',definition:'Preliminary definition',markers:'Observable markers',dependencies:'Dependencies',time:'Time',measurements:'Measurements',computation:'Computation',provenance:'Provenance',noData:'No parameters match this filter.'},
+ ru:{title:'Research OS · Реестр параметров',home:'← На главную',create:'＋ Создать параметр',listTitle:'Зарегистрированные параметры',search:'Поиск по названию, коду или домену',refresh:'Обновить',localDraft:'Локальный черновик',detailTitle:'Определение параметра',choose:'Выберите версию параметра.',identity:'Идентичность',definition:'Предварительное определение',markers:'Наблюдаемые маркеры',dependencies:'Зависимости',time:'Время',measurements:'Измерения',computation:'Расчет',provenance:'Происхождение',noData:'Для этого фильтра параметров нет.'}
+};
+let lang='es',parameters=[],selected=null;
+function setLanguage(value){lang=['es','en','ru'].includes(value)?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;document.getElementById('lang').value=lang;document.querySelectorAll('[data-i18n]').forEach(el=>{if(i18n[lang][el.dataset.i18n])el.textContent=i18n[lang][el.dataset.i18n];});document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>el.placeholder=i18n[lang][el.dataset.i18nPlaceholder]||'');renderList();if(selected)renderDetail(selected);}
+async function reload(){try{const status=document.getElementById('filter').value;const data=await RC.requestJson(`/parameters?status=${encodeURIComponent(status)}`);parameters=data.parameters||[];selected=null;renderList();document.getElementById('detail').hidden=true;document.getElementById('empty').hidden=false;setStatus(`${parameters.length} parameters / parámetros / параметров`,'ok');}catch(e){parameters=[];renderList();setStatus(e.message,'error');}}
+function renderList(){const q=(document.getElementById('search').value||'').trim().toLowerCase(),box=document.getElementById('list');box.innerHTML='';const filtered=parameters.filter(p=>[p.name,p.code,p.domain].some(v=>String(v||'').toLowerCase().includes(q)));filtered.forEach(p=>{const el=document.createElement('div');el.className='entry'+(selected&&selected.parameter_id===p.parameter_id&&selected.version===p.version?' active':'');el.innerHTML=`<div><span class="badge">${esc(p.status)}</span><span class="badge">v${p.version}</span></div><div class="title">${esc(p.code)} · ${esc(p.name)}</div><div class="meta">${esc(p.domain)} · ${esc(p.parameter_id)}</div>`;el.onclick=async()=>{try{const data=p.definition||await RC.requestJson(`/parameters/${encodeURIComponent(p.parameter_id)}?version=${p.version}`);selected=data.parameter||data;renderList();renderDetail(selected);}catch(e){setStatus(e.message,'error');}};box.appendChild(el);});if(!filtered.length)box.innerHTML=`<div class="status">${i18n[lang].noData}</div>`;}
+function showLocalDraft(){const draft=RC.readJson('research_os.parameter_constructor.draft.v1',null);if(!draft)return setStatus(i18n[lang].noData,'error');selected={schema:'research_os.parameter_definition',schema_version:1,...draft,time_dependency:{...draft.time,global_time_reference_required:true},interface_language:lang,generated_at:null};renderDetail(selected);setStatus('Local browser draft / borrador local / локальный черновик','');}
+function renderDetail(p){document.getElementById('empty').hidden=true;const box=document.getElementById('detail');box.hidden=false;box.innerHTML='';
+ addBlock(i18n[lang].identity,`${p.code} · ${p.name}\nUUID: ${p.parameter_id}\nVersion: ${p.version}\nStatus: ${p.status}\nDomain: ${p.domain}`);
+ addBlock(i18n[lang].definition,p.preliminary_definition);
+ addBlock(i18n[lang].markers,(p.observable_markers||[]).map(m=>`${m.code} [${m.source_type}]\n${m.operational_definition}`).join('\n\n')||'—');
+ addBlock(i18n[lang].dependencies,(p.dependencies||[]).map(d=>`${d.code} v${d.parameter_version} · ${d.role}`).join('\n')||'—');
+ addBlock(i18n[lang].time,JSON.stringify(p.time_dependency||p.time||{},null,2));
+ addBlock(i18n[lang].measurements,(p.measurements||[]).map(m=>`${m.code} · ${m.role}\n${m.question_id} v${m.question_version} · bank ${m.bank_id} v${m.bank_version}\nscale: ${m.scale_snapshot?.id||'Unknown'} · weight: ${m.weight===null?'not specified':m.weight}`).join('\n\n')||'—');
+ addBlock(i18n[lang].computation,JSON.stringify(p.computation||{},null,2));
+ addBlock(i18n[lang].provenance,`Global Time Reference: ${p.global_time_reference||'Unknown'}\nGenerated: ${p.generated_at||'not synchronized'}\nSchema: ${p.schema||'research_os.parameter_definition'} v${p.schema_version||1}`);
+}
+function addBlock(title,value){const el=document.createElement('div');el.className='block';el.innerHTML=`<h3>${esc(title)}</h3><div class="value">${esc(value||'—')}</div>`;document.getElementById('detail').appendChild(el);}
+function setStatus(msg,type){const b=document.getElementById('statusBox');b.textContent=msg||'';b.className=`status ${type||''}`;}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+document.addEventListener('DOMContentLoaded',()=>{lang=(localStorage.getItem('app_language')||'es').replace('-MX','').replace('-US','');if(!i18n[lang])lang='es';setLanguage(lang);reload();});
+</script>
+</body>
+</html>

@@ -224,6 +224,7 @@
           <button onclick="setLanguage('es')" id="lang-es" class="active">🇲🇽 ES</button>
           <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
           <button onclick="setLanguage('ru')" id="lang-ru">🇷🇺 RU</button>
+          <button onclick="ResearchAuth.logout({returnTo:'index.html'})" id="logout-btn">↪</button>
         </div>
       </header>
         
@@ -305,6 +306,7 @@
     </div>
   </div>
     
+  <script src="auth.js"></script>
   <script>
     let currentLang = 'es';
     let researcherId = '';
@@ -402,41 +404,17 @@
     let uploadedBanks = [
       { id: "bank_01", title: "Estrés y carga laboral (Wave 1)", authorId: "", active: true }
     ];
-    function initSession() {
-          const urlParams = new URLSearchParams(window.location.search);
-          let urlToken = urlParams.get('token') || urlParams.get('auth');
-
-          // Если в отсканированном QR-коде или ссылке есть токен — фиксируем его в памяти устройства
-          if (urlToken) {
-            localStorage.setItem('os_active_session_token', urlToken);
-          } else {
-            // Иначе проверяем, был ли токен сохранен на этом устройстве ранее
-            urlToken = localStorage.getItem('os_active_session_token');
-          }
-
-          // Если устройство открывает страницу впервые и токена нет совсем —
-          // автоматически генерируем и закрепляем его, чтобы интерфейс открывался мгновенно и без сбоев.
-          if (!urlToken) {
-            urlToken = 'SESSION-' + Math.random().toString(36).substring(2, 9);
-            localStorage.setItem('os_active_session_token', urlToken);
-          }
-
-          // Гарантированно убираем блок ошибки и открываем рабочий интерфейс
-          document.getElementById('errorBanner').style.display = 'none';
-          document.getElementById('researcherContent').style.display = 'flex';
-
-          let storedId = localStorage.getItem('researcher_os_author_id');
-          if (!storedId) {
-            storedId = 'RES-' + Math.floor(100000 + Math.random() * 900000);
-            localStorage.setItem('researcher_os_author_id', storedId);
-          }
-          researcherId = storedId;
-          document.getElementById('author-id-display').innerText = researcherId;
-          uploadedBanks.forEach(b => { if (!b.authorId) b.authorId = researcherId; });
-             
-          const savedLang = localStorage.getItem('app_language') || 'es';
-          setLanguage(savedLang);
-        }
+    async function initSession() {
+      const session = await ResearchAuth.requireRole('researcher', 'survey.html');
+      if (!session) return;
+      researcherId = session.user_identifier;
+      document.getElementById('author-id-display').innerText = researcherId;
+      uploadedBanks.forEach(bank => { if (!bank.authorId) bank.authorId = researcherId; });
+      document.getElementById('errorBanner').style.display = 'none';
+      document.getElementById('researcherContent').style.display = 'flex';
+      const savedLang = localStorage.getItem('app_language') || 'es';
+      setLanguage(savedLang);
+    }
         
     function setLanguage(lang) {
       currentLang = lang;
@@ -529,10 +507,10 @@
       });
     }
         
-    window.onload = function() {
-      initSession();
-    };
+    window.addEventListener('DOMContentLoaded', initSession);
   </script>
+  <div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
+    ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+  </div>
 </body>
 </html>
-

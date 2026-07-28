@@ -548,7 +548,15 @@ function loadFile(file) {
     let rawAiResponsesLog = []; // Глобальный массив для сырых ответов ИИ
 
     async function processBankWithAI(bankObj) {
-        const keys = Object.keys(bankObj);
+        const packageData = bankObj?.schema === 'research_os.question_bank' ? bankObj : null;
+        const questionMap = packageData ? packageData.questions : bankObj;
+        if (!questionMap || typeof questionMap !== 'object' || Array.isArray(questionMap)) {
+            alert("В загруженном файле отсутствует объект questions.");
+            return;
+        }
+        const keys = packageData && Array.isArray(packageData.question_order)
+            ? packageData.question_order
+            : Object.keys(questionMap);
         const total = keys.length;
         analyzedResults = [];
         rawAiResponsesLog = []; // Очищаем лог при новом запуске
@@ -567,11 +575,28 @@ function loadFile(file) {
         for (let i = 0; i < total; i += BATCH_SIZE) {
             const batchKeys = keys.slice(i, i + BATCH_SIZE);
             const batchItems = batchKeys.map(code => {
-                const item = bankObj[code] || {};
+                const item = questionMap[code] || {};
                 return {
+                    question_id: item.question_id || null,
                     code: item.code || code,
+                    version: item.version || null,
+                    block: item.block ?? null,
+                    family: item.family ?? null,
+                    domain: item.domain ?? null,
+                    type: item.type || item.response_type || null,
                     prompt: item.prompt || '',
-                    options: item.options || []
+                    options: item.options || [],
+                    scale: item.scale || null,
+                    score_direction: item.score_direction ?? null,
+                    time: item.time || null,
+                    status: item.status || null,
+                    provenance: packageData ? {
+                        bank_id: packageData.bank_id,
+                        bank_version: packageData.version,
+                        bank_code: packageData.code,
+                        schema_version: packageData.schema_version,
+                        global_time_reference: packageData.global_time_reference
+                    } : null
                 };
             });
 
@@ -822,6 +847,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (btn) btn.click();
 });
 </script>
-
+<div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
+  ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+</div>
 </body>
 </html>

@@ -172,6 +172,7 @@
   </div>
 </div>
 
+<script src="auth.js"></script>
 <script>
   let currentAccountId = null;
   let selectedStudy = null;
@@ -179,6 +180,7 @@
   let currentSessionId = null;
   let currentAssessment = null;
   let questionnaireStartedAt = null;
+  let currentGlobalTimeReference = null;
 
   const T = {
     ru: {
@@ -281,14 +283,14 @@
     currentLang = lang;
     localStorage.setItem("health_model_lang", lang);
     applyLanguage();
-    showScreen("loginScreen");
+    showCabinet();
   }
 
   async function createAccount() {
     setStatus("Creating account...");
     const response = await fetch("/pilot/accounts", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: ResearchAuth.authHeaders("respondent", {"Content-Type": "application/json"}),
       body: JSON.stringify({ preferred_language: currentLang || "ru" })
     });
     const data = await response.json();
@@ -310,7 +312,9 @@
       return;
     }
     setStatus("Loading account...");
-    const response = await fetch("/pilot/accounts/" + encodeURIComponent(accountId));
+    const response = await fetch("/pilot/accounts/" + encodeURIComponent(accountId), {
+      headers: ResearchAuth.authHeaders("respondent")
+    });
     const data = await response.json();
     if (!response.ok || !data.ok) {
       alert(t.idNotFound);
@@ -389,7 +393,7 @@
     setStatus("Starting session...");
     const response = await fetch("/pilot/accounts/start-session", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
+      headers: ResearchAuth.authHeaders("respondent", {"Content-Type": "application/json"}),
       body: JSON.stringify({
         account_id: currentAccountId,
         participant_role: "participant",
@@ -416,6 +420,7 @@
       return;
     }
     currentSessionId = data.session_id;
+    currentGlobalTimeReference = data.global_time_reference;
     await renderQuestionnaire();
     showScreen("questionnaireScreen");
   }
@@ -430,9 +435,14 @@
     }
     currentAssessment = {
       assessment_id: data.bank_id,
-      title: { [currentLang || "ru"]: data.bank_id },
+      bank_id: data.bank_id,
+      bank_version: data.version,
+      bank_code: data.code,
+      title: { [currentLang || "ru"]: data.title || data.code },
       description: { [currentLang || "ru"]: "" },
-      questions: data.questions || []
+      questions: Array.isArray(data.question_order)
+        ? data.question_order.map(code => data.questions?.[code]).filter(Boolean)
+        : Object.values(data.questions || {})
     };
     questionnaireStartedAt = new Date().toISOString();
     document.getElementById("questionnaireTitle").innerText = currentAssessment.title[currentLang || "ru"] || currentAssessment.assessment_id;
@@ -443,7 +453,7 @@
 
   function renderQuestion(q) {
     const prompt = q.prompt || q.text?.[currentLang || "ru"] || q.code;
-    if (q.type === "number" || q.type === "numeric") {
+    if (q.type === "number" || q.type === "numeric" || q.type === "numeric_input") {
       return `
         <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
           <label>
@@ -452,7 +462,7 @@
           </label>
         </div>`;
     }
-    if (q.type === "text") {
+    if (q.type === "text" || q.type === "text_input") {
       return `
         <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
           <label>
@@ -461,7 +471,7 @@
           </label>
         </div>`;
     }
-    if (q.type === "multi_select" || q.type === "multiple_choice") {
+    if (q.type === "multi_select" || q.type === "multiple_select" || q.type === "multiple_choice") {
       return `
         <div class="card" style="margin-bottom: 12px; background: var(--bg-color);">
           <b>${q.code}</b><br><span class="small">${prompt}</span>
@@ -484,17 +494,17 @@
   }
 
   function collectAnswer(q) {
-    if (q.type === "number" || q.type === "numeric") {
+    if (q.type === "number" || q.type === "numeric" || q.type === "numeric_input") {
       const el = document.getElementById("answer_" + q.code);
       if (!el || el.value === "") return undefined;
       return Number(el.value);
     }
-    if (q.type === "text") {
+    if (q.type === "text" || q.type === "text_input") {
       const el = document.getElementById("answer_" + q.code);
       if (!el || el.value.trim() === "") return undefined;
       return el.value.trim();
     }
-    if (q.type === "multi_select" || q.type === "multiple_choice") {
+    if (q.type === "multi_select" || q.type === "multiple_select" || q.type === "multiple_choice") {
       const selected = Array.from(document.querySelectorAll(`input[name="answer_${q.code}"]:checked`)).map(el => {
         const raw = el.value;
         return raw === "null" ? null : (isNaN(Number(raw)) ? raw : Number(raw));
@@ -533,15 +543,30 @@
 
   async function submitQuestionnaire() {
     const questions = currentAssessment?.questions || [];
-    const answers = {};
+    const responseRecords = [];
     const submitButton = document.getElementById("submitAnswersButton");
     submitButton.disabled = true;
     setStatus("Submitting answers...");
+    const collectionFinishedAt = new Date().toISOString();
     questions.forEach(q => {
       const value = collectAnswer(q);
-      if (value !== undefined) { answers[q.code] = value; }
+      if (value !== undefined) {
+        responseRecords.push({
+          response_id: crypto.randomUUID ? crypto.randomUUID() : "response-" + Date.now() + "-" + q.code,
+          session_id: currentSessionId,
+          participant_id: currentAccountId,
+          bank_id: currentAssessment.bank_id,
+          bank_version: currentAssessment.bank_version,
+          question_id: q.question_id,
+          question_version: q.version,
+          code: q.code,
+          value,
+          scale: q.scale,
+          answered_at: collectionFinishedAt,
+          global_time_reference: currentGlobalTimeReference
+        });
+      }
     });
-    const collectionFinishedAt = new Date().toISOString();
     const domainDataIdentity = {
       source_instance_id: crypto.randomUUID ? crypto.randomUUID() : "questionnaire-" + Date.now(),
       session_id: currentSessionId,
@@ -550,14 +575,16 @@
       source_type: "self_report",
       data_structure_type: "question_bank",
       data_source_path: selectedStudy,
+      bank_id: currentAssessment.bank_id,
+      bank_version: currentAssessment.bank_version,
       collection_started_at: questionnaireStartedAt,
       collection_finished_at: collectionFinishedAt,
-      global_time_reference: currentSessionId
+      global_time_reference: currentGlobalTimeReference
     };
     const saveResponse = await fetch("/pilot/sessions/" + currentSessionId + "/answers", {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ domain_data_identity: domainDataIdentity, answers })
+      headers: ResearchAuth.authHeaders("respondent", {"Content-Type": "application/json"}),
+      body: JSON.stringify({ domain_data_identity: domainDataIdentity, response_records: responseRecords })
     });
     const saveData = await saveResponse.json();
     if (!saveResponse.ok || !saveData.ok) {
@@ -568,7 +595,10 @@
       return;
     }
     setStatus("Running session...");
-    const runResponse = await fetch("/pilot/sessions/" + currentSessionId + "/run", { method: "POST" });
+    const runResponse = await fetch("/pilot/sessions/" + currentSessionId + "/run", {
+      method: "POST",
+      headers: ResearchAuth.authHeaders("respondent")
+    });
     const runData = await runResponse.json();
     if (!runResponse.ok || !runData.ok) {
       document.getElementById("sessionResult").classList.remove("hidden");
@@ -577,7 +607,9 @@
       return;
     }
     setStatus("Loading result...");
-    const reportResponse = await fetch("/pilot/sessions/" + currentSessionId + "/participant-report");
+    const reportResponse = await fetch("/pilot/sessions/" + currentSessionId + "/participant-report", {
+      headers: ResearchAuth.authHeaders("respondent")
+    });
     const reportData = await reportResponse.json();
     if (reportResponse.ok && reportData.ok) {
       renderParticipantReport(reportData.participant_report);
@@ -588,10 +620,7 @@
   }
 
   function logoutToLogin() {
-    localStorage.removeItem("health_model_account_id");
-    currentAccountId = null;
-    document.getElementById("accountIdInput").value = "";
-    showScreen("loginScreen");
+    ResearchAuth.logout({ returnTo: "index.html" });
   }
 
   function resetLocal() {
@@ -603,15 +632,23 @@
     showScreen("languageScreen");
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     setStatus("JS started");
-    currentLang = null;
-    currentAccountId = null;
+    const session = await ResearchAuth.requireRole("respondent", "assessment.html");
+    if (!session) return;
+    currentAccountId = session.user_identifier;
     selectedStudy = null;
-    localStorage.removeItem("health_model_lang");
-    localStorage.removeItem("health_model_account_id");
-    showScreen("languageScreen");
+    currentLang = localStorage.getItem("health_model_lang") || null;
+    if (currentLang && T[currentLang]) {
+      applyLanguage();
+      showCabinet();
+    } else {
+      showScreen("languageScreen");
+    }
   });
 </script>
+<div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
+  ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+</div>
 </body>
 </html>

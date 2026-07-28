@@ -137,7 +137,7 @@
 <div class="app-header">
     <span class="page-title">🔬 Research OS Hub</span>
     <div class="header-controls">
-        <a href="settings.html" class="settings-btn" data-i18n="settings_btn">⚙️ Configuración IA</a>
+        <a href="settings.html" class="settings-btn" data-i18n="settings_btn">⚙️ Configuración</a>
         
         <div class="lang-picker">
             <button class="lang-btn active" onclick="setLang('es', event)">🇲🇽 ES</button>
@@ -157,7 +157,7 @@
     <div class="section-title" data-i18n="sec_prep">🛠️ 1. Preparación de la Investigación</div>
     <div class="grid">
         <!-- Карта кабинета исследователя (survey.html) -->
-        <a href="survey.html" class="card" style="border-color: #0284c7;">
+        <a href="login.html?role=researcher&return=survey.html" class="card" style="border-color: #0284c7;">
             <div>
                 <div class="card-icon">🔬</div>
                 <div class="card-title" data-i18n="tool_cabinet_title">Gabinete del Investigador</div>
@@ -169,8 +169,35 @@
         <a href="constructor_quest.html" class="card">
             <div>
                 <div class="card-icon">📋</div>
-                <div class="card-title" data-i18n="tool_ctor_title">Constructor de Cuestionarios</div>
-                <div class="card-desc" data-i18n="tool_ctor_desc">Creación y configuración flexible de estructuras y escalas de encuestas.</div>
+                <div class="card-title" data-i18n="tool_ctor_title">Constructor de Preguntas</div>
+                <div class="card-desc" data-i18n="tool_ctor_desc">Definiciones independientes de preguntas, escalas e identidad versionada.</div>
+            </div>
+            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
+        </a>
+
+        <a href="constructor_survey.html" class="card">
+            <div>
+                <div class="card-icon">🔀</div>
+                <div class="card-title" data-i18n="tool_survey_ctor_title">Constructor de Cuestionarios</div>
+                <div class="card-desc" data-i18n="tool_survey_ctor_desc">Composición con preguntas de cualquier banco, orden y transiciones según respuestas.</div>
+            </div>
+            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
+        </a>
+
+        <a href="constructor_parameter.html" class="card">
+            <div>
+                <div class="card-icon">🧩</div>
+                <div class="card-title" data-i18n="tool_parameter_ctor_title">Constructor de Parámetros</div>
+                <div class="card-desc" data-i18n="tool_parameter_ctor_desc">Definición científica, marcadores, dependencias, tiempo, medición y cálculo.</div>
+            </div>
+            <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
+        </a>
+
+        <a href="parameter_registry.html" class="card">
+            <div>
+                <div class="card-icon">🗂️</div>
+                <div class="card-title" data-i18n="tool_parameter_registry_title">Registro de Parámetros</div>
+                <div class="card-desc" data-i18n="tool_parameter_registry_desc">Versiones registradas con identidad, procedencia y especificación completa.</div>
             </div>
             <div class="card-link" data-i18n="open_tool">Abrir herramienta →</div>
         </a>
@@ -215,7 +242,7 @@
     <!-- 2. Recopilación de Datos -->
     <div class="section-title" data-i18n="sec_collection">📝 2. Recopilación de Datos</div>
     <div class="grid">
-        <a href="cabinet.html" class="card">
+        <a href="login.html?role=respondent&return=cabinet.html" class="card">
             <div>
                 <div class="card-icon">👤</div>
                 <div class="card-title" data-i18n="tool_participant_title">Panel de Participante</div>
@@ -228,7 +255,7 @@
     <!-- 3. Procesamiento y Análisis de Datos -->
     <div class="section-title" data-i18n="sec_processing">📈 3. Procesamiento y Análisis de Datos</div>
     <div class="grid">
-        <a href="assessment.html" class="card">
+        <a href="login.html?role=respondent&return=assessment.html" class="card">
             <div>
                 <div class="card-icon">📊</div>
                 <div class="card-title" data-i18n="tool_assessment_title">Evaluación y Pruebas</div>
@@ -259,7 +286,7 @@ let currentLang = 'es';
 
 const i18n = {
     es: {
-        settings_btn: "⚙️ Configuración IA",
+        settings_btn: "⚙️ Configuración",
         hero_title: "Laboratorio Psicométrico e Investigación",
         hero_sub: "Centro de navegación unificado de la plataforma Research OS",
         sec_prep: "🛠️ 1. Preparación de la Investigación",
@@ -267,8 +294,14 @@ const i18n = {
         sec_processing: "📈 3. Procesamiento y Análisis de Datos",
         tool_cabinet_title: "Gabinete del Investigador",
         tool_cabinet_desc: "Espacio de administración, control de autoría y gestión de bancos de preguntas.",
-        tool_ctor_title: "Constructor de Cuestionarios",
-        tool_ctor_desc: "Creación y configuración flexible de estructuras y escalas de encuestas.",
+        tool_ctor_title: "Constructor de Preguntas",
+        tool_ctor_desc: "Definiciones independientes de preguntas, escalas e identidad versionada.",
+        tool_survey_ctor_title: "Constructor de Cuestionarios",
+        tool_survey_ctor_desc: "Composición con preguntas de cualquier banco, orden y transiciones según respuestas.",
+        tool_parameter_ctor_title: "Constructor de Parámetros",
+        tool_parameter_ctor_desc: "Definición científica, marcadores, dependencias, tiempo, medición y cálculo.",
+        tool_parameter_registry_title: "Registro de Parámetros",
+        tool_parameter_registry_desc: "Versiones registradas con identidad, procedencia y especificación completa.",
         tool_analyzer_title: "Analizador Semántico de Escalas",
         tool_analyzer_desc: "Validación pregunta por pregunta, identificación de metodologías y estandarización.",
         tool_validator_title: "Validador de Estructura",
@@ -287,7 +320,7 @@ const i18n = {
         footer_text: "✨ Designed and built in collaboration with <strong>Gemini AI</strong> and <strong>Ray AI</strong> | <strong>Research OS Pilot</strong>"
     },
     en: {
-        settings_btn: "⚙️ AI Settings",
+        settings_btn: "⚙️ Settings",
         hero_title: "Psychometric Lab & Research OS",
         hero_sub: "Unified navigation hub of the Research OS platform",
         sec_prep: "🛠️ 1. Research Preparation",
@@ -295,8 +328,14 @@ const i18n = {
         sec_processing: "📈 3. Data Processing & Analysis",
         tool_cabinet_title: "Researcher's Cabinet",
         tool_cabinet_desc: "Administration space, authorship control, and question bank management.",
-        tool_ctor_title: "Survey Constructor",
-        tool_ctor_desc: "Creation and flexible configuration of survey structures and rating scales.",
+        tool_ctor_title: "Question Constructor",
+        tool_ctor_desc: "Independent question definitions, scales, and versioned identity.",
+        tool_survey_ctor_title: "Questionnaire Constructor",
+        tool_survey_ctor_desc: "Composition from any question bank, ordering, and response-dependent transitions.",
+        tool_parameter_ctor_title: "Parameter Constructor",
+        tool_parameter_ctor_desc: "Scientific definition, markers, dependencies, time, measurement, and computation.",
+        tool_parameter_registry_title: "Parameter Registry",
+        tool_parameter_registry_desc: "Registered versions with identity, provenance, and complete specification.",
         tool_analyzer_title: "Scale Semantic Analyzer",
         tool_analyzer_desc: "Item-level validation, methodology identification, and standardization check.",
         tool_validator_title: "Structure Validator",
@@ -315,7 +354,7 @@ const i18n = {
         footer_text: "✨ Designed and built in collaboration with <strong>Gemini AI</strong> and <strong>Ray AI</strong> | <strong>Research OS Pilot</strong>"
     },
     ru: {
-        settings_btn: "⚙️ Настройки ИИ",
+        settings_btn: "⚙️ Настройки",
         hero_title: "Психометрическая Лаборатория & Исследования",
         hero_sub: "Единый навигационный хаб исследовательской платформы Research OS",
         sec_prep: "🛠️ 1. Подготовка к исследованию",
@@ -323,8 +362,14 @@ const i18n = {
         sec_processing: "📈 3. Обработка данных и анализ",
         tool_cabinet_title: "Кабинет Исследователя",
         tool_cabinet_desc: "Административное пространство, контроль авторства и управление банками вопросов.",
-        tool_ctor_title: "Конструктор Опросников",
-        tool_ctor_desc: "Создание и гибкая настройка структуры опросных листов и шкал.",
+        tool_ctor_title: "Конструктор Вопросов",
+        tool_ctor_desc: "Независимые определения вопросов, шкалы и версионируемая идентичность.",
+        tool_survey_ctor_title: "Конструктор Анкеты",
+        tool_survey_ctor_desc: "Состав из вопросов любых банков, порядок и переходы в зависимости от ответа.",
+        tool_parameter_ctor_title: "Конструктор Параметров",
+        tool_parameter_ctor_desc: "Научное определение, маркеры, зависимости, время, измерение и расчет.",
+        tool_parameter_registry_title: "Реестр Параметров",
+        tool_parameter_registry_desc: "Зарегистрированные версии с идентичностью, происхождением и полной спецификацией.",
         tool_analyzer_title: "Смысловой Анализатор Шкал",
         tool_analyzer_desc: "Повопросная валидация, определение методик и стандартизированности.",
         tool_validator_title: "Валидатор Структуры",

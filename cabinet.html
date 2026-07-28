@@ -79,7 +79,7 @@
                                 <strong style="color: #f8fafc; display: block; margin-bottom: 4px;" data-i18n="survey_name">Психометрический скрининг шкал</strong>
                                 <span style="font-size: 12px; color: #94a3b8;" data-i18n="survey_status">Статус: Готов к прохождению (~10 мин)</span>
                             </div>
-                            <a href="survey.html" class="btn" data-i18n="btn_take">Пройти →</a>
+                            <a href="assessment.html" class="btn" data-i18n="btn_take">Пройти →</a>
                         </div>
                     </div>
 
@@ -113,6 +113,7 @@
       ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
     </div>
 
+<script src="auth.js"></script>
 <script>
 const i18n = {
     ru: {
@@ -204,49 +205,27 @@ function setLang(lang, e) {
         if (dict[key]) elem.placeholder = dict[key];
     });
 
-    const session = localStorage.getItem('ros_participant_session');
-    if (session) {
-        const data = JSON.parse(session);
+    const session = ResearchAuth.readSession();
+    if (session && session.role === 'respondent') {
         const titlePrefix = lang === 'es' ? "Panel personal de la sesión: " : (lang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
-        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${data.token}`;
+        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${session.user_identifier}`;
     }
 }
 
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
     const savedLang = localStorage.getItem('app_language') || 'ru';
     setLang(savedLang);
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-
-    if (token) {
-        localStorage.setItem('ros_participant_session', JSON.stringify({ token, time: new Date().toISOString() }));
-        window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    const session = localStorage.getItem('ros_participant_session');
-    
+    const session = await ResearchAuth.requireRole('respondent', 'cabinet.html');
     if (!session) {
-        const dict = i18n[currentLang] || i18n.ru;
-        document.body.innerHTML = `
-            <div style="font-family: system-ui; background: #0f172a; color: #fff; height: 100vh; display: flex; justify-content: center; align-items: center; text-align: center; padding: 20px;">
-                <div style="background: #1e293b; padding: 32px; border-radius: 12px; border: 1px solid #334155; max-width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-                    <h3 style="color: #38bdf8; margin-top: 0;">${dict.no_token_title}</h3>
-                    <p style="color: #94a3b8; font-size: 14px; line-height: 1.5;">${dict.no_token_desc}</p>
-                </div>
-            </div>
-        `;
-    } else {
-        const data = JSON.parse(session);
-        const dict = i18n[currentLang] || i18n.ru;
-        const titlePrefix = currentLang === 'es' ? "Panel personal de la sesión: " : (currentLang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
-        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${data.token}`;
+        return;
     }
+    const titlePrefix = currentLang === 'es' ? "Panel personal de la sesión: " : (currentLang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
+    document.getElementById('welcomeTitle').innerText = `${titlePrefix}${session.user_identifier}`;
 });
 
 function handleLogout() {
-    localStorage.removeItem('ros_participant_session');
-    location.reload();
+    ResearchAuth.logout({ returnTo: 'index.html' });
 }
 
 function sendMsg() {

@@ -1,7 +1,13 @@
 {
   "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/index.js" },
     { "source": "/pilot/(.*)", "destination": "/api/index.js" },
     { "source": "/consent/(.*)", "destination": "/api/index.js" },
-    { "source": "/question-banks/(.*)", "destination": "/api/index.js" }
+    { "source": "/question-banks", "destination": "/api/index.js" },
+    { "source": "/question-banks/(.*)", "destination": "/api/index.js" },
+    { "source": "/parameters", "destination": "/api/index.js" },
+    { "source": "/parameters/(.*)", "destination": "/api/index.js" },
+    { "source": "/questionnaires", "destination": "/api/index.js" },
+    { "source": "/questionnaires/(.*)", "destination": "/api/index.js" }
   ]
 }

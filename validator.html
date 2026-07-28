@@ -681,7 +681,7 @@
     let rawRows = getField('rows') || [];
 
     return {
-      question_id: getField('question_id') || generateUUID(),
+      question_id: getField('question_id') || null,
       code: getField('code') || String(code),
       version: Number(getField('version')) || 1,
       block: getField('block') || 'general',
@@ -729,33 +729,35 @@
   }
 
   function convertToCanonicalSchema(parsedInput) {
-    const result = {};
-    Object.keys(parsedInput).forEach(function(key) {
-      const item = parsedInput[key];
-      if (!item || typeof item !== 'object') return;
-      const code = item.code || key;
-      let options = [];
-      if (Array.isArray(item.options)) {
-        options = item.options.map(function(opt, idx) {
-          if (typeof opt === 'object' && opt !== null) {
-            return { value: opt.value !== undefined ? opt.value : idx, text: String(opt.text || opt.label || '') };
-          }
-          return { value: idx, text: String(opt) };
-        });
+    if (parsedInput && parsedInput.schema === 'research_os.question_bank') {
+      if (!parsedInput.questions || typeof parsedInput.questions !== 'object' || Array.isArray(parsedInput.questions)) {
+        throw new Error('Пакет research_os.question_bank не содержит корректный объект questions.');
       }
-      let merged = Object.assign({}, item);
-      merged.question_id = item.question_id || generateUUID();
-      merged.code = code;
-      merged.version = item.version !== undefined ? item.version : 1;
-      merged.block = item.block || "general";
-      merged.response_type = item.response_type || item.type || "single_select";
-      merged.prompt = item.prompt || "";
-      merged.options = options;
-      merged.active = item.active !== undefined ? item.active : true;
-      delete merged.type;
-      result[code] = merged;
-    });
-    return result;
+      /*
+       * Validation is read-only. In particular, it must never manufacture a
+       * UUID, version, type, scale, status, option value, or question order.
+       */
+      return parsedInput;
+    }
+
+    const sourceQuestions = parsedInput && parsedInput.questions &&
+      typeof parsedInput.questions === 'object' && !Array.isArray(parsedInput.questions)
+        ? parsedInput.questions
+        : parsedInput;
+    const result = sourceQuestions && typeof sourceQuestions === 'object' && !Array.isArray(sourceQuestions)
+      ? sourceQuestions
+      : {};
+    return {
+      schema: null,
+      schema_version: null,
+      bank_id: null,
+      code: null,
+      title: null,
+      version: null,
+      status: null,
+      question_order: Object.keys(result),
+      questions: result
+    };
   }
 
   async function handleFileSelect(event) {
@@ -810,15 +812,16 @@
       return;
     }
 
-    let data;
+    let packageData;
     try {
-      data = convertToCanonicalSchema(rawParsed);
+      packageData = convertToCanonicalSchema(rawParsed);
     } catch (e) {
       reportBox.innerHTML = '<div class="status-badge invalid">ОШИБКА СХЕМЫ</div>' +
         '<div class="error-item">❌ Ошибка нормализации: ' + e.message + '</div>';
       return;
     }
 
+    const data = packageData && packageData.questions;
     if (typeof data !== 'object' || data === null || Array.isArray(data)) {
       reportBox.innerHTML = '<div class="status-badge invalid">ОШИБКА СТРУКТУРЫ</div>' +
         '<div class="error-item">❌ Корневой элемент должен быть объектом (словарем вопросов).</div>';
@@ -831,7 +834,38 @@
     let blocksSet = new Set();
     let typesSet = new Set();
 
-    const requiredFields = ['question_id', 'code', 'prompt', 'response_type'];
+    const packageRequiredFields = ['schema', 'schema_version', 'bank_id', 'code', 'title', 'version', 'status', 'global_time_reference', 'question_order'];
+    packageRequiredFields.forEach(function(field) {
+      if (packageData[field] === undefined || packageData[field] === null || packageData[field] === '') {
+        errors.push('❌ Банк вопросов: отсутствует обязательное поле \'' + field + '\'.');
+      }
+    });
+    if (packageData.schema !== 'research_os.question_bank') {
+      errors.push("❌ Банк вопросов: schema должен быть 'research_os.question_bank'.");
+    }
+    if (Number(packageData.schema_version) !== 2) {
+      errors.push('❌ Банк вопросов: требуется schema_version 2.');
+    }
+    if (!Array.isArray(packageData.question_order)) {
+      errors.push('❌ Банк вопросов: question_order должен быть массивом кодов.');
+    } else {
+      const ordered = packageData.question_order;
+      if (new Set(ordered).size !== ordered.length) {
+        errors.push('❌ Банк вопросов: question_order содержит дубликаты.');
+      }
+      const dataKeys = Object.keys(data);
+      if (ordered.length !== dataKeys.length ||
+          ordered.some(function(code) { return !Object.prototype.hasOwnProperty.call(data, code); })) {
+        errors.push('❌ Банк вопросов: question_order и questions должны содержать один и тот же набор вопросов.');
+      }
+    }
+
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!uuidV4.test(packageData.bank_id || '')) {
+      errors.push('❌ Банк вопросов: bank_id должен быть UUID v4.');
+    }
+
+    const requiredFields = ['question_id', 'code', 'version', 'prompt', 'type', 'scale', 'status'];
 
     Object.keys(data).forEach(function(key) {
       const q = data[key];
@@ -852,14 +886,27 @@
       });
 
       if (q.block) blocksSet.add(q.block);
-      if (q.response_type) typesSet.add(q.response_type);
+      if (!uuidV4.test(q.question_id || '')) {
+        errors.push('❌ Вопрос [' + key + ']: question_id должен быть UUID v4; валидатор не создаёт идентичность автоматически.');
+      }
+      if (q.type) typesSet.add(q.type);
+      if (Object.prototype.hasOwnProperty.call(q, 'routing')) {
+        errors.push('❌ Вопрос [' + key + ']: routing не принадлежит независимому определению вопроса; переходы должны находиться в research_os.questionnaire.');
+      }
+      if (Array.isArray(q.options) && q.options.some(function(option) {
+        return option && typeof option === 'object' &&
+          (Object.prototype.hasOwnProperty.call(option, 'next') ||
+           Object.prototype.hasOwnProperty.call(option, 'target'));
+      })) {
+        errors.push('❌ Вопрос [' + key + ']: переход внутри option не допускается; маршрутизация принадлежит конкретной анкете.');
+      }
 
       const needOptions = ['single_select', 'multi_select', 'dropdown'];
-      if (needOptions.indexOf(q.response_type) !== -1) {
+      if (needOptions.indexOf(q.type) !== -1) {
         if (!q.options || q.options.length === 0) {
           warnings.push('⚠️ Вопрос [' + key + ']: Массив \'options\' пуст.');
         }
-      } else if (q.response_type === 'matrix') {
+      } else if (q.type === 'matrix') {
         if (!q.rows || (Array.isArray(q.rows) && q.rows.length === 0)) {
           warnings.push('⚠️ Вопрос [' + key + ']: Массив \'rows\' для матрицы пуст.');
         }

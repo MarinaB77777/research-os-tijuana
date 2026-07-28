@@ -50,41 +50,28 @@
 <div class="container">
     <h1 data-i18n="settings_h1">⚙️ Панель управления и доступов</h1>
 
-    <!-- 1. Коды доступа и роли -->
-    <div class="section">
-        <h2 data-i18n="sec3_title">1. Коды доступа и роли</h2>
-        <div class="grid">
-            <div class="form-group">
-                <label data-i18n="label_researcher_code">🔑 Секретный код исследователя:</label>
-                <input type="password" id="access_researcher" placeholder="Например: admin_tijuana_2026">
-                <span style="font-size: 11px; color: #64748b;" data-i18n="hint_researcher">Дает полный доступ к панели управления.</span>
-            </div>
-            <div class="form-group">
-                <label data-i18n="label_participant_prefix">🏷️ Префикс для участников:</label>
-                <input type="text" id="access_participant_prefix" placeholder="Например: resp_">
-                <span style="font-size: 11px; color: #64748b;" data-i18n="hint_participant">Используется для генерации персональных ссылок.</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- 2. Генераторы доступов (Две колонки: Исследователь слева, Респондент справа) -->
+    <!-- 1. Персональные учётные записи -->
     <div class="section" style="border-color: #38bdf8;">
-        <h2 style="color: #38bdf8;" data-i18n="sec_generator">🔗 Генераторы ссылок и QR-кодов</h2>
+        <h2 style="color: #38bdf8;" data-i18n="sec_generator">🔐 Персональные учётные записи</h2>
+        <p id="accountManagerStatus" style="color:#94a3b8;font-size:12px;"></p>
         <div class="grid">
             
             <!-- Левая колонка: Исследователь -->
             <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <h3 style="color: #38bdf8; margin-top: 0; font-size: 15px;" data-i18n="col_researcher_title">👨‍💻 Кабинет исследователя</h3>
-                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_researcher_desc">Генерация ссылки для входа в панель управления:</p>
+                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_researcher_desc">Создать отдельный логин и пароль исследователя:</p>
                     <div class="form-group" style="margin-bottom: 12px;">
-                        <input type="text" id="researcherId" placeholder="admin_tijuana_2026">
+                        <input type="text" id="researcherId" placeholder="ID / имя исследователя">
+                        <input type="text" id="researcherUsername" placeholder="Логин" autocomplete="off">
+                        <input type="password" id="researcherPassword" placeholder="Пароль (не менее 10 символов)" autocomplete="new-password">
+                        <input type="password" id="bootstrapSecret" placeholder="Bootstrap-секрет — только для первого исследователя" autocomplete="off">
                     </div>
-                    <button class="btn btn-blue" style="width: 100%; margin-bottom: 12px;" onclick="generateResearcherAccess()" data-i18n="btn_generate_res">Сгенерировать вход</button>
+                    <button class="btn btn-blue" style="width: 100%; margin-bottom: 12px;" onclick="createResearcherAccount()" data-i18n="btn_generate_res">Создать исследователя</button>
                 </div>
 
                 <div id="researcherResult" style="display: none; flex-direction: column; align-items: center; gap: 10px; border-top: 1px solid #334155; padding-top: 12px;">
-                    <div id="resTextLink" style="word-break: break-all; font-family: monospace; font-size: 11px; color: #38bdf8; width: 100%;"></div>
+                    <div id="resTextLink" style="word-break: break-word; font-family: monospace; font-size: 11px; color: #38bdf8; width: 100%;"></div>
                     <div style="background: #fff; padding: 8px; border-radius: 6px; display: inline-block;" id="qrcodeRes"></div>
                     <button class="btn btn-dark" onclick="downloadResQR()" data-i18n="btn_download_qr">📥 Скачать QR (PNG)</button>
                 </div>
@@ -94,15 +81,17 @@
             <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; display: flex; flex-direction: column; justify-content: space-between;">
                 <div>
                     <h3 style="color: #10b981; margin-top: 0; font-size: 15px;" data-i18n="col_respondent_title">📋 Кабинет респондента</h3>
-                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Генерация персональной ссылки для прохождения опросников:</p>
+                    <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Создать отдельный логин и пароль респондента:</p>
                     <div class="form-group" style="margin-bottom: 12px;">
-                        <input type="text" id="respondentId" placeholder="resp_tijuana_01">
+                        <input type="text" id="respondentId" placeholder="ID / имя респондента">
+                        <input type="text" id="respondentUsername" placeholder="Логин" autocomplete="off">
+                        <input type="password" id="respondentPassword" placeholder="Пароль (не менее 10 символов)" autocomplete="new-password">
                     </div>
-                    <button class="btn" style="width: 100%; margin-bottom: 12px;" onclick="generateRespondentAccess()" data-i18n="btn_generate_resp">Сгенерировать ссылку</button>
+                    <button class="btn" style="width: 100%; margin-bottom: 12px;" onclick="createRespondentAccount()" data-i18n="btn_generate_resp">Создать респондента</button>
                 </div>
 
                 <div id="respondentResult" style="display: none; flex-direction: column; align-items: center; gap: 10px; border-top: 1px solid #334155; padding-top: 12px;">
-                    <div id="respTextLink" style="word-break: break-all; font-family: monospace; font-size: 11px; color: #34d399; width: 100%;"></div>
+                    <div id="respTextLink" style="word-break: break-word; font-family: monospace; font-size: 11px; color: #34d399; width: 100%;"></div>
                     <div style="background: #fff; padding: 8px; border-radius: 6px; display: inline-block;" id="qrcodeResp"></div>
                     <button class="btn btn-dark" onclick="downloadRespQR()" data-i18n="btn_download_qr">📥 Скачать QR (PNG)</button>
                 </div>
@@ -149,6 +138,7 @@
     <div id="toast" class="toast" data-i18n="toast_saved">✅ Настройки успешно сохранены!</div>
 </div>
 
+<script src="auth.js"></script>
 <script>
 const i18n = {
     ru: {
@@ -159,13 +149,15 @@ const i18n = {
         hint_researcher: "Дает полный доступ к панели управления.",
         label_participant_prefix: "🏷️ Префикс для участников:",
         hint_participant: "Используется для генерации персональных ссылок.",
-        sec_generator: "🔗 Генераторы ссылок и QR-кодов",
+        sec_generator: "🔐 Персональные учётные записи",
         col_researcher_title: "👨‍💻 Кабинет исследователя",
-        col_researcher_desc: "Генерация ссылки для входа в панель управления:",
-        btn_generate_res: "Сгенерировать вход",
+        col_researcher_desc: "Создать отдельный логин и пароль исследователя:",
+        btn_generate_res: "Создать исследователя",
         col_respondent_title: "📋 Кабинет респондента",
-        col_respondent_desc: "Генерация персональной ссылки для прохождения опросников:",
-        btn_generate_resp: "Сгенерировать ссылку",
+        col_respondent_desc: "Создать отдельный логин и пароль респондента:",
+        btn_generate_resp: "Создать респондента",
+        account_signed_in: "Вход исследователя подтверждён. Можно создавать учётные записи исследователей и респондентов.",
+        account_public: "Открытый просмотр настроек. Для создания учётных записей войдите как исследователь; bootstrap-секрет используется один раз для первого исследователя.",
         btn_download_qr: "📥 Скачать QR (PNG)",
         sec1_title: "3. Ваши API-ключи ИИ",
         sec2_title: "4. Какой ИИ отвечает за задачи?",
@@ -182,13 +174,15 @@ const i18n = {
         hint_researcher: "Brinda acceso completo al panel de control.",
         label_participant_prefix: "🏷️ Prefijo para participantes:",
         hint_participant: "Se utiliza para generar enlaces personales.",
-        sec_generator: "🔗 Generadores de enlaces y códigos QR",
+        sec_generator: "🔐 Cuentas personales",
         col_researcher_title: "👨‍💻 Panel del Investigador",
-        col_researcher_desc: "Generar enlace de acceso al panel de control:",
-        btn_generate_res: "Generar acceso",
+        col_researcher_desc: "Crear un usuario y contraseña independientes para el investigador:",
+        btn_generate_res: "Crear investigador",
         col_respondent_title: "📋 Panel del Participante",
-        col_respondent_desc: "Generar enlace personal para completar cuestionarios:",
-        btn_generate_resp: "Generar enlace",
+        col_respondent_desc: "Crear un usuario y contraseña independientes para el participante:",
+        btn_generate_resp: "Crear participante",
+        account_signed_in: "Acceso de investigador confirmado. Puede crear cuentas de investigadores y participantes.",
+        account_public: "Vista pública de configuración. Inicie sesión como investigador para crear cuentas; el secreto bootstrap se usa una sola vez para el primer investigador.",
         btn_download_qr: "📥 Descargar QR (PNG)",
         sec1_title: "3. Sus Claves API de IA",
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
@@ -205,13 +199,15 @@ const i18n = {
         hint_researcher: "Grants full control panel access.",
         label_participant_prefix: "🏷️ Participant Token Prefix:",
         hint_participant: "Used for personal link generation.",
-        sec_generator: "🔗 Link & QR Code Generators",
+        sec_generator: "🔐 Personal accounts",
         col_researcher_title: "👨‍💻 Researcher Dashboard",
-        col_researcher_desc: "Generate access link to the control panel:",
-        btn_generate_res: "Generate Access",
+        col_researcher_desc: "Create an individual researcher username and password:",
+        btn_generate_res: "Create researcher",
         col_respondent_title: "📋 Participant Hub",
-        col_respondent_desc: "Generate personal link to complete questionnaires:",
-        btn_generate_resp: "Generate Link",
+        col_respondent_desc: "Create an individual respondent username and password:",
+        btn_generate_resp: "Create respondent",
+        account_signed_in: "Researcher access confirmed. You may create researcher and respondent accounts.",
+        account_public: "Public settings view. Sign in as a researcher to create accounts; the bootstrap secret is used once for the first researcher.",
         btn_download_qr: "📥 Download QR (PNG)",
         sec1_title: "3. Your AI API Keys",
         sec2_title: "4. Assign AI models to tasks",
@@ -221,6 +217,8 @@ const i18n = {
         toast_saved: "✅ Configuration saved successfully!"
     }
 };
+
+let accountManagerSession = null;
 
 function setLang(lang, e) {
     localStorage.setItem('app_language', lang);
@@ -232,37 +230,38 @@ function setLang(lang, e) {
         const key = elem.getAttribute('data-i18n');
         if (dict[key]) elem.innerText = dict[key];
     });
+    const accountStatus = document.getElementById('accountManagerStatus');
+    if (accountStatus) {
+        accountStatus.textContent = accountManagerSession ? dict.account_signed_in : dict.account_public;
+    }
 }
 
-    async function generateResearcherAccess() {
+    async function createResearcherAccount() {
         const id = document.getElementById('researcherId').value.trim();
+        const username = document.getElementById('researcherUsername').value.trim();
+        const password = document.getElementById('researcherPassword').value;
+        const bootstrapSecret = document.getElementById('bootstrapSecret').value;
         const resultBox = document.getElementById('researcherResult');
         const textLinkBox = document.getElementById('resTextLink');
         const qrContainer = document.getElementById('qrcodeRes');
-        
-        if(!id) {
-            alert('Введите код или ID исследователя');
+
+        if(!id || !username || password.length < 10) {
+            alert('Введите ID, логин и пароль исследователя не короче 10 символов');
             return;
         }
-        
-        try {
-            // Отправляем запрос на наш бэкенд для сохранения в Supabase
-            const response = await fetch('/api/tokens/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'researcher', customId: id })
-            });
-            
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Ошибка генерации');
 
+        try {
+            const result = await ResearchAuth.createAccount({
+                role: 'researcher',
+                user_identifier: id,
+                username,
+                password
+            }, bootstrapSecret);
             const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-            // В ссылку зашивается уникальный токен безопасности, выданный бэкендом
-            const generatedLink = `${currentUrl}index.html?token=${encodeURIComponent(result.token)}`;
-            
+            const generatedLink = `${currentUrl}login.html?role=researcher&return=survey.html`;
+
             resultBox.style.display = 'flex';
-            textLinkBox.innerHTML = `<strong>ID: ${result.userIdentifier}</strong><br><span style="font-size:10px;">${generatedLink}</span>`;
-            
+            textLinkBox.textContent = `ID: ${result.user_identifier} | Login: ${result.username} | ${generatedLink}`;
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
                 text: generatedLink,
@@ -272,39 +271,38 @@ function setLang(lang, e) {
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.H
             });
+            document.getElementById('researcherPassword').value = '';
+            document.getElementById('bootstrapSecret').value = '';
         } catch (err) {
-            alert('Не удалось сгенерировать доступ: ' + err.message);
+            alert('Не удалось создать исследователя: ' + err.message);
         }
     }
 
-    async function generateRespondentAccess() {
+    async function createRespondentAccount() {
         const id = document.getElementById('respondentId').value.trim();
+        const username = document.getElementById('respondentUsername').value.trim();
+        const password = document.getElementById('respondentPassword').value;
         const resultBox = document.getElementById('respondentResult');
         const textLinkBox = document.getElementById('respTextLink');
         const qrContainer = document.getElementById('qrcodeResp');
-        
-        if(!id) {
-            alert('Введите ID или имя респондента');
+
+        if(!id || !username || password.length < 10) {
+            alert('Введите ID, логин и пароль респондента не короче 10 символов');
             return;
         }
-        
-        try {
-            // Отправляем запрос на бэкенд для создания респондента в базе
-            const response = await fetch('/api/tokens/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'respondent', customId: id })
-            });
-            
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Ошибка генерации');
 
+        try {
+            const result = await ResearchAuth.createAccount({
+                role: 'respondent',
+                user_identifier: id,
+                username,
+                password
+            });
             const currentUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
-            const generatedLink = `${currentUrl}cabinet.html?token=${encodeURIComponent(result.token)}`;
-            
+            const generatedLink = `${currentUrl}login.html?role=respondent&return=cabinet.html`;
+
             resultBox.style.display = 'flex';
-            textLinkBox.innerHTML = `<strong>ID: ${result.userIdentifier}</strong><br><span style="font-size:10px;">${generatedLink}</span>`;
-            
+            textLinkBox.textContent = `ID: ${result.user_identifier} | Login: ${result.username} | ${generatedLink}`;
             qrContainer.innerHTML = '';
             new QRCode(qrContainer, {
                 text: generatedLink,
@@ -314,8 +312,9 @@ function setLang(lang, e) {
                 colorLight: "#ffffff",
                 correctLevel: QRCode.CorrectLevel.H
             });
+            document.getElementById('respondentPassword').value = '';
         } catch (err) {
-            alert('Не удалось сгенерировать доступ: ' + err.message);
+            alert('Не удалось создать респондента: ' + err.message);
         }
     }
 
@@ -346,12 +345,6 @@ function downloadRespQR() {
 }
 
 function saveAllSettings() {
-    const accessConfig = {
-        researcherCode: document.getElementById('access_researcher').value.trim(),
-        participantPrefix: document.getElementById('access_participant_prefix').value.trim()
-    };
-    localStorage.setItem('ros_access_config', JSON.stringify(accessConfig));
-
     const keys = {
         groq: document.getElementById('key_groq').value.trim(),
         gemini: document.getElementById('key_gemini').value.trim()
@@ -370,13 +363,6 @@ function saveAllSettings() {
 }
 
 function loadSettings() {
-    const accessConfig = JSON.parse(localStorage.getItem('ros_access_config') || '{}');
-    if (accessConfig.researcherCode) document.getElementById('access_researcher').value = accessConfig.researcherCode;
-    if (accessConfig.participantPrefix) {
-        document.getElementById('access_participant_prefix').value = accessConfig.participantPrefix;
-        document.getElementById('respondentId').value = accessConfig.participantPrefix;
-    }
-
     const keys = JSON.parse(localStorage.getItem('ai_api_keys') || '{}');
     if (keys.groq) document.getElementById('key_groq').value = keys.groq;
     if (keys.gemini) document.getElementById('key_gemini').value = keys.gemini;
@@ -386,8 +372,9 @@ function loadSettings() {
     if (config.translator) document.getElementById('task_translator').value = JSON.stringify(config.translator);
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     loadSettings();
+    accountManagerSession = await ResearchAuth.verify('researcher');
     const savedLang = localStorage.getItem('app_language') || 'ru';
     const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
     if (btn) btn.click();
@@ -411,4 +398,3 @@ document.addEventListener('DOMContentLoaded', () => {
 </div>
 </body>
 </html>
-

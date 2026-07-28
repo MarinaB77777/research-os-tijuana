@@ -16,11 +16,11 @@
         --primary-hover: #0891b2;
         --primary-light: rgba(6, 182, 212, 0.15);
         --danger: #f87171;
+        --success: #34d399;
         --input-bg: #050e12;
       }
       * { box-sizing: border-box; }
 
-      /* Стилизация скроллбаров для видимости во всех браузерах */
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -239,6 +239,8 @@
       .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; }
       .btn-secondary { background: var(--input-bg); border: 1px solid var(--border); color: var(--text); box-shadow: none; }
       .btn-secondary:hover { background: #0f2229; border-color: var(--text-muted); color: white; }
+      .btn-success { background: var(--success); color: #030a0c; }
+      .btn-success:hover:not(:disabled) { background: #059669; color: white; }
       .btn-danger { background: transparent; color: var(--danger); border: 1px solid rgba(248, 113, 113, 0.4); padding: 8px 12px; border-radius: 6px; cursor: pointer; }
       .btn-danger:hover { background: rgba(248, 113, 113, 0.15); }
       
@@ -260,6 +262,13 @@
         align-items: center;
         gap: 12px;
       }
+      .storage-panel {
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 16px;
+        margin-top: 20px;
+      }
     </style>
   </head>
   <body>
@@ -276,24 +285,22 @@
           <button class="mode-btn active" id="btnModeStatic" onclick="switchMode('static')">📌 Estático (T0)</button>
           <button class="mode-btn" id="btnModeDynamic" onclick="switchMode('dynamic')">⚡ Longitudinal</button>
         </div>
-        <button class="btn" id="exportBtn" onclick="saveProtocol()" data-i18n="exportBtn">Exportar JSON</button>
       </div>
     </header>
 
     <div class="workspace">
       <!-- ASIDE -->
       <aside>
-        <div style="font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 1px; padding: 4px;" id="sidebarTitle">Lista de Parámetros</div>
+        <div style="font-size: 10px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; letter-spacing: 1px; padding: 4px;" id="sidebarTitle">Lista de Preguntas</div>
         <div id="navList" style="display: flex; flex-direction: column; gap: 6px; flex: 1;"></div>
-        <button class="btn btn-secondary" onclick="addVariable()" id="addVarBtn">＋ Agregar Parámetro</button>
-        <div style="font-size: 9px; color: var(--text-muted); text-align: center; padding: 10px 4px; border-top: 1px solid var(--border); margin-top: auto; line-height: 1.3;"></div>
+        <button class="btn btn-secondary" onclick="addVariable()" id="addVarBtn">＋ Agregar Pregunta</button>
       </aside>
 
       <!-- EDITOR PANE -->
       <div class="editor-pane">
         <div class="card">
           <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-            <button class="btn-danger" onclick="deleteCurrentVariable()" id="delVarBtn">🗑 Eliminar Parámetro</button>
+            <button class="btn-danger" onclick="deleteCurrentVariable()" id="delVarBtn">🗑 Eliminar Pregunta</button>
           </div>
           <div class="grid-2">
             <div class="field">
@@ -317,8 +324,12 @@
               <select id="scaleSelect" onchange="onScaleChange(this.value)"></select>
             </div>
             <div class="field">
-              <label data-i18n="statusLabel">Estado / Modo</label>
-              <input type="text" id="statusField" disabled style="color: var(--primary); background: var(--input-bg);" />
+              <label data-i18n="statusLabel">Estado de la pregunta</label>
+              <select id="questionStatusSelect" onchange="onQuestionStatusChange(this.value)">
+                <option value="draft">Draft</option>
+                <option value="trial">Trial</option>
+                <option value="active">Active</option>
+              </select>
             </div>
           </div>
 
@@ -350,18 +361,6 @@
             <label data-i18n="promptLabel">Pregunta</label>
             <textarea id="promptInput" oninput="onPromptChange(this.value)"></textarea>
             <div id="promptError" class="inline-error" style="display:none;"></div>
-          </div>
-
-          <!-- TRANSITION & BRANCHING CONFIG -->
-          <div id="transitionConfigCard" class="field" style="margin-top: 20px; background: var(--input-bg); border: 1px solid var(--border); padding: 16px; border-radius: 10px;">
-            <label style="color: var(--primary); margin-bottom: 12px;" data-i18n="transitionConfigTitle">🔀 Lógica de Enrutamiento y Saltos</label>
-            <div class="field">
-              <label data-i18n="defaultNextLabel">Siguiente pregunta por defecto</label>
-              <select id="defaultNextSelect" onchange="onDefaultNextChange(this.value)">
-                <option value="next" data-i18n="targetNextInSequence">➡️ Siguiente en la secuencia</option>
-                <option value="end" data-i18n="targetEndSurvey">🏁 Finalizar encuesta</option>
-              </select>
-            </div>
           </div>
 
           <!-- REGULATORS FOR INTERVAL / RATIO -->
@@ -423,6 +422,7 @@
             <div id="optionsContainer" class="options-stack"></div>
             <button id="addOptBtn" class="btn btn-secondary" style="margin-top: 10px;" onclick="addOption()" data-i18n="addGradingBtn">＋ Agregar Opción</button>
           </div>
+
         </div>
       </div>
 
@@ -434,6 +434,45 @@
           <div id="previewPromptText" style="font-size: 15px; font-weight: 600; margin-bottom: 16px; line-height: 1.4;">Cargando...</div>
           <div id="previewBody"></div>
         </div>
+
+        <!-- STORAGE: shown below the preview; file loading belongs to another tab. -->
+        <div class="storage-panel">
+          <label style="color: var(--primary); margin-bottom: 12px; font-size: 12px;" data-i18n="storagePanelTitle">💾 Guardar banco de preguntas</label>
+          <div class="field">
+            <label data-i18n="bankTitleLabel">Nombre del banco</label>
+            <input type="text" id="bankTitleInput" oninput="onBankTitleChange(this.value)" />
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label data-i18n="bankCodeLabel">Código del banco</label>
+              <input type="text" id="bankCodeInput" oninput="onBankCodeChange(this.value)" />
+            </div>
+            <div class="field">
+              <label data-i18n="bankStatusLabel">Estado del banco</label>
+              <select id="bankStatusSelect" onchange="onBankStatusChange(this.value)">
+                <option value="draft">Draft</option>
+                <option value="trial">Trial</option>
+                <option value="active">Active</option>
+              </select>
+            </div>
+          </div>
+          <div id="bankIdentity" style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;"></div>
+          <div class="field">
+            <label data-i18n="exportFormatLabel">Formato del archivo</label>
+            <select id="exportFormatSelect">
+              <option value="json">JSON (.json)</option>
+              <option value="py">Python (.py)</option>
+              <option value="txt">Texto (.txt)</option>
+              <option value="csv">CSV (.csv)</option>
+              <option value="xls">Excel XML (.xml)</option>
+            </select>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button class="btn" id="exportMultiBtn" onclick="exportProtocolFormatted()" data-i18n="exportMultiBtn">💾 Elegir ubicación y guardar</button>
+            <button class="btn btn-success" id="saveDbBtn" onclick="saveQuestionBankToDatabase()" data-i18n="syncDbBtn">☁️ Guardar en la base de datos</button>
+          </div>
+          <div id="syncStatus" role="status" aria-live="polite" style="margin-top: 12px; font-size: 11px; color: var(--text-muted);"></div>
+        </div>
       </div>
     </div>
 
@@ -441,16 +480,16 @@
       const i18n = {
         "es-MX": {
           title: "Research OS · Strict Cyan Protocol Engine",
-          sidebarTitle: "Lista de Parámetros",
-          addVarBtn: "＋ Agregar Parámetro",
-          delVarBtn: "🗑 Eliminar Parámetro",
+          sidebarTitle: "Lista de Preguntas",
+          addVarBtn: "＋ Agregar Pregunta",
+          delVarBtn: "🗑 Eliminar Pregunta",
           varIdLabel: "ID de Variable",
           dataTypeLabel: "Tipo de Datos (Psychometric Level)",
           scaleLabel: "Escala",
-          statusLabel: "Estado / Modo",
+          statusLabel: "Estado de la pregunta",
           promptLabel: "Pregunta de Investigación",
-          nominalGradingLabel: "Categorías, Códigos y Enrutamiento",
-          ordinalGradingLabel: "Graduaciones, Monotonicidad y Enrutamiento",
+          nominalGradingLabel: "Categorías y Códigos",
+          ordinalGradingLabel: "Graduaciones y Monotonicidad",
           addGradingBtn: "＋ Agregar Opción",
           temporalLabel: "⏱ Parámetros de Olas y Lags",
           waveLabel: "Ola (Wave)",
@@ -495,6 +534,13 @@
           placeholderUnit: "ej., años, MXN, pza, %",
           placeholderText: "Ingrese texto de respuesta...",
           placeholderCategory: "Etiqueta de categoría...",
+          storagePanelTitle: "💾 Guardar banco de preguntas",
+          bankTitleLabel: "Nombre del banco",
+          bankCodeLabel: "Código del banco",
+          bankStatusLabel: "Estado del banco",
+          exportFormatLabel: "Formato del archivo",
+          exportMultiBtn: "💾 Elegir ubicación y guardar",
+          syncDbBtn: "☁️ Guardar en la base de datos",
           alertSingleVar: "No se puede eliminar el único parámetro del protocolo.",
           alertExportError: "¡Corrija todos los errores resaltados antes de exportar el protocolo!",
           confirmTypeChange: "Cambiar el tipo de datos restablecerá las opciones actuales al valor predeterminado. ¿Continuar?",
@@ -506,20 +552,23 @@
           errDuplicateId: "⚠️ ¡Conflicto de ID! Este identificador ya está en uso.",
           errEmptyPrompt: "⚠️ La pregunta es obligatoria para la encuesta",
           errMonotonicity: "⚠️ Violación de monotonicidad: el peso debe ser mayor que el anterior",
-          errNominalConflict: "⚠️ Conflicto de códigos: el valor de ID está duplicado"
+          errNominalConflict: "⚠️ Conflicto de códigos: el valor de ID está duplicado",
+          syncSuccess: "Banco de preguntas guardado en la base de datos",
+          syncFailure: "No se pudo guardar en la base de datos",
+          alertDownloadFallback: "Este navegador no permite elegir una carpeta directamente. Se usará la descarga estándar del navegador."
         },
         "en-US": {
           title: "Research OS · Strict Cyan Protocol Engine",
-          sidebarTitle: "Parameters List",
-          addVarBtn: "＋ Add Parameter",
-          delVarBtn: "🗑 Delete Parameter",
+          sidebarTitle: "Questions List",
+          addVarBtn: "＋ Add Question",
+          delVarBtn: "🗑 Delete Question",
           varIdLabel: "Variable ID",
           dataTypeLabel: "Data Type (Psychometric Level)",
           scaleLabel: "Scale",
-          statusLabel: "Status / Mode",
+          statusLabel: "Question status",
           promptLabel: "Question Prompt",
-          nominalGradingLabel: "Categories, Independent Nominal Codes & Routing",
-          ordinalGradingLabel: "Grades, Strict Monotonicity & Routing",
+          nominalGradingLabel: "Categories and Independent Nominal Codes",
+          ordinalGradingLabel: "Grades and Strict Monotonicity",
           addGradingBtn: "＋ Add Grade",
           temporalLabel: "⏱ Wave & Lag Parameters",
           waveLabel: "Wave",
@@ -564,6 +613,13 @@
           placeholderUnit: "e.g., years, USD, pcs, %",
           placeholderText: "Enter response text...",
           placeholderCategory: "Category label...",
+          storagePanelTitle: "💾 Save question bank",
+          bankTitleLabel: "Bank name",
+          bankCodeLabel: "Bank code",
+          bankStatusLabel: "Bank status",
+          exportFormatLabel: "File format",
+          exportMultiBtn: "💾 Choose location and save",
+          syncDbBtn: "☁️ Save to database",
           alertSingleVar: "Cannot delete the only parameter in the protocol.",
           alertExportError: "Fix all highlighted errors before exporting the protocol!",
           confirmTypeChange: "Changing data type will reset current grades to default preset. Continue?",
@@ -575,20 +631,23 @@
           errDuplicateId: "⚠️ ID conflict! This identifier is already used in another parameter.",
           errEmptyPrompt: "⚠️ Question prompt is required for survey execution",
           errMonotonicity: "⚠️ Monotonicity violation: weight must be greater than previous",
-          errNominalConflict: "⚠️ Code conflict: ID value is duplicated"
+          errNominalConflict: "⚠️ Code conflict: ID value is duplicated",
+          syncSuccess: "Question bank saved to the database",
+          syncFailure: "The question bank could not be saved to the database",
+          alertDownloadFallback: "This browser cannot choose a folder directly. The standard browser download will be used."
         },
         ru: {
           title: "Research OS · Strict Cyan Protocol Engine",
-          sidebarTitle: "Перечень параметров",
-          addVarBtn: "＋ Добавить параметр",
-          delVarBtn: "🗑 Удалить параметр",
+          sidebarTitle: "Перечень вопросов",
+          addVarBtn: "＋ Добавить вопрос",
+          delVarBtn: "🗑 Удалить вопрос",
           varIdLabel: "Идентификатор (Variable ID)",
           dataTypeLabel: "Тип данных (Psychometric Level)",
           scaleLabel: "Шкала",
-          statusLabel: "Статус / Режим",
+          statusLabel: "Статус вопроса",
           promptLabel: "Формулировка вопроса",
-          nominalGradingLabel: "Категории, независимые коды и переходы",
-          ordinalGradingLabel: "Градации, веса с жесткой монотонностью и переходы",
+          nominalGradingLabel: "Категории и независимые коды",
+          ordinalGradingLabel: "Градации и строгая монотонность весов",
           addGradingBtn: "＋ Добавить градацию",
           temporalLabel: "⏱ Параметры волн и лагов",
           waveLabel: "Волна (Wave)",
@@ -633,6 +692,13 @@
           placeholderUnit: "например, лет, руб, шт, %",
           placeholderText: "Введите текст ответа...",
           placeholderCategory: "Метка категории...",
+          storagePanelTitle: "💾 Сохранить банк вопросов",
+          bankTitleLabel: "Название банка",
+          bankCodeLabel: "Код банка",
+          bankStatusLabel: "Статус банка",
+          exportFormatLabel: "Формат файла",
+          exportMultiBtn: "💾 Выбрать место и сохранить",
+          syncDbBtn: "☁️ Сохранить в базе данных",
           alertSingleVar: "Невозможно удалить единственный параметр протокола.",
           alertExportError: "Исправьте все подсвеченные красным ошибки перед экспортом протокола!",
           confirmTypeChange: "Смена типа данных приведет к сбросу текущих градаций шкалы на пресет по умолчанию. Продолжить?",
@@ -644,7 +710,10 @@
           errDuplicateId: "⚠️ Дубликат ID! Идентификатор уже используется в другом параметре.",
           errEmptyPrompt: "⚠️ Формулировка вопроса обязательна для проведения опроса",
           errMonotonicity: "⚠️ Нарушена монотонность: вес должен быть больше предыдущего",
-          errNominalConflict: "⚠️ Конфликт кодов: значение ID дублируется"
+          errNominalConflict: "⚠️ Конфликт кодов: значение ID дублируется",
+          syncSuccess: "Банк вопросов сохранён в базе данных",
+          syncFailure: "Не удалось сохранить банк вопросов в базе данных",
+          alertDownloadFallback: "Этот браузер не позволяет выбрать папку напрямую. Будет использована стандартная загрузка браузера."
         }
       };
 
@@ -652,28 +721,28 @@
         "es-MX": {
           nominal: {
             scales: [
-              { id: "single_choice", name: "Selección Única (Categorías)", editable: true, preset: [{l: "Masculino", s: 1, target: "next"}, {l: "Femenino", s: 2, target: "next"}, {l: "Otro / Prefiero no decir", s: 3, target: "next"}] },
-              { id: "multiple_choice", name: "Selección Múltiple", editable: true, preset: [{l: "Opción A", s: 1, target: "next"}, {l: "Opción B", s: 2, target: "next"}] },
-              { id: "dichotomous", name: "Dicotómica (Sí/No)", editable: true, preset: [{l: "Sí", s: 1, target: "next"}, {l: "No", s: 0, target: "next"}] }
+              { id: "single_choice", name: "Selección Única (Categorías)", editable: true, preset: [{l: "Masculino", s: 1}, {l: "Femenino", s: 2}, {l: "Otro / Prefiero no decir", s: 3}] },
+              { id: "multiple_choice", name: "Selección Múltiple", editable: true, preset: [{l: "Opción A", s: 1}, {l: "Opción B", s: 2}] },
+              { id: "dichotomous", name: "Dicotómica (Sí/No)", editable: true, preset: [{l: "Sí", s: 1}, {l: "No", s: 0}] }
             ]
           },
           ordinal: {
             scales: [
               { id: "likert_7", name: "Escala Likert (7 puntos, rango estricto)", editable: true, preset: [
-                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Ligeramente en desacuerdo", s: 3, target: "next"},
-                {l: "Neutral", s: 4, target: "next"}, {l: "Ligeramente de acuerdo", s: 5, target: "next"}, {l: "De acuerdo", s: 6, target: "next"}, {l: "Totalmente de acuerdo", s: 7, target: "next"}
+                {l: "Totalmente en desacuerdo", s: 1}, {l: "En desacuerdo", s: 2}, {l: "Ligeramente en desacuerdo", s: 3},
+                {l: "Neutral", s: 4}, {l: "Ligeramente de acuerdo", s: 5}, {l: "De acuerdo", s: 6}, {l: "Totalmente de acuerdo", s: 7}
               ]},
               { id: "likert_5", name: "Escala Likert (5 puntos)", editable: true, preset: [
-                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Neutral", s: 3, target: "next"},
-                {l: "De acuerdo", s: 4, target: "next"}, {l: "Totalmente de acuerdo", s: 5, target: "next"}
+                {l: "Totalmente en desacuerdo", s: 1}, {l: "En desacuerdo", s: 2}, {l: "Neutral", s: 3},
+                {l: "De acuerdo", s: 4}, {l: "Totalmente de acuerdo", s: 5}
               ]},
               { id: "frequency_scale", name: "Escala de Frecuencia (Nunca — Siempre)", editable: true, preset: [
-                {l: "Nunca", s: 1, target: "next"}, {l: "Rara vez", s: 2, target: "next"}, {l: "A veces", s: 3, target: "next"}, {l: "Frecuentemente", s: 4, target: "next"}, {l: "Siempre", s: 5, target: "next"}
+                {l: "Nunca", s: 1}, {l: "Rara vez", s: 2}, {l: "A veces", s: 3}, {l: "Frecuentemente", s: 4}, {l: "Siempre", s: 5}
               ]},
               { id: "nps_scale", name: "Escala NPS (0–10, Lealtad)", editable: true, preset: [
-                {l: "0 — Detractor", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
-                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Neutral", s: 7, target: "next"},
-                {l: "8", s: 8, target: "next"}, {l: "9 — Promotor", s: 9, target: "next"}, {l: "10 — Promotor", s: 10, target: "next"}
+                {l: "0 — Detractor", s: 0}, {l: "1", s: 1}, {l: "2", s: 2}, {l: "3", s: 3},
+                {l: "4", s: 4}, {l: "5", s: 5}, {l: "6", s: 6}, {l: "7 — Neutral", s: 7},
+                {l: "8", s: 8}, {l: "9 — Promotor", s: 9}, {l: "10 — Promotor", s: 10}
               ]}
             ]
           },
@@ -695,28 +764,28 @@
         "en-US": {
           nominal: {
             scales: [
-              { id: "single_choice", name: "Single Choice (Categories)", editable: true, preset: [{l: "Male", s: 1, target: "next"}, {l: "Female", s: 2, target: "next"}, {l: "Other / Prefer not to say", s: 3, target: "next"}] },
-              { id: "multiple_choice", name: "Multiple Choice", editable: true, preset: [{l: "Option A", s: 1, target: "next"}, {l: "Option B", s: 2, target: "next"}] },
-              { id: "dichotomous", name: "Dichotomous (Yes/No)", editable: true, preset: [{l: "Yes", s: 1, target: "next"}, {l: "No", s: 0, target: "next"}] }
+              { id: "single_choice", name: "Single Choice (Categories)", editable: true, preset: [{l: "Male", s: 1}, {l: "Female", s: 2}, {l: "Other / Prefer not to say", s: 3}] },
+              { id: "multiple_choice", name: "Multiple Choice", editable: true, preset: [{l: "Option A", s: 1}, {l: "Option B", s: 2}] },
+              { id: "dichotomous", name: "Dichotomous (Yes/No)", editable: true, preset: [{l: "Yes", s: 1}, {l: "No", s: 0}] }
             ]
           },
           ordinal: {
             scales: [
               { id: "likert_7", name: "Likert Scale (7-point, strict rank)", editable: true, preset: [
-                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Slightly Disagree", s: 3, target: "next"},
-                {l: "Neutral", s: 4, target: "next"}, {l: "Slightly Agree", s: 5, target: "next"}, {l: "Agree", s: 6, target: "next"}, {l: "Strongly Agree", s: 7, target: "next"}
+                {l: "Strongly Disagree", s: 1}, {l: "Disagree", s: 2}, {l: "Slightly Disagree", s: 3},
+                {l: "Neutral", s: 4}, {l: "Slightly Agree", s: 5}, {l: "Agree", s: 6}, {l: "Strongly Agree", s: 7}
               ]},
               { id: "likert_5", name: "Likert Scale (5-point)", editable: true, preset: [
-                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Neutral", s: 3, target: "next"},
-                {l: "Agree", s: 4, target: "next"}, {l: "Strongly Agree", s: 5, target: "next"}
+                {l: "Strongly Disagree", s: 1}, {l: "Disagree", s: 2}, {l: "Neutral", s: 3},
+                {l: "Agree", s: 4}, {l: "Strongly Agree", s: 5}
               ]},
               { id: "frequency_scale", name: "Frequency Scale (Never — Always)", editable: true, preset: [
-                {l: "Never", s: 1, target: "next"}, {l: "Rarely", s: 2, target: "next"}, {l: "Sometimes", s: 3, target: "next"}, {l: "Often", s: 4, target: "next"}, {l: "Always", s: 5, target: "next"}
+                {l: "Never", s: 1}, {l: "Rarely", s: 2}, {l: "Sometimes", s: 3}, {l: "Often", s: 4}, {l: "Always", s: 5}
               ]},
               { id: "nps_scale", name: "NPS Scale (0–10, Loyalty)", editable: true, preset: [
-                {l: "0 — Detractor", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
-                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Neutral", s: 7, target: "next"},
-                {l: "8", s: 8, target: "next"}, {l: "9 — Promoter", s: 9, target: "next"}, {l: "10 — Promoter", s: 10, target: "next"}
+                {l: "0 — Detractor", s: 0}, {l: "1", s: 1}, {l: "2", s: 2}, {l: "3", s: 3},
+                {l: "4", s: 4}, {l: "5", s: 5}, {l: "6", s: 6}, {l: "7 — Neutral", s: 7},
+                {l: "8", s: 8}, {l: "9 — Promoter", s: 9}, {l: "10 — Promoter", s: 10}
               ]}
             ]
           },
@@ -738,28 +807,28 @@
         ru: {
           nominal: {
             scales: [
-              { id: "single_choice", name: "Одиночный выбор (Категории)", editable: true, preset: [{l: "Мужской", s: 1, target: "next"}, {l: "Женский", s: 2, target: "next"}, {l: "Другой / Предпочитаю не указывать", s: 3, target: "next"}] },
-              { id: "multiple_choice", name: "Множественный выбор", editable: true, preset: [{l: "Вариант А", s: 1, target: "next"}, {l: "Вариант Б", s: 2, target: "next"}] },
-              { id: "dichotomous", name: "Дихотомическая (Да/Нет)", editable: true, preset: [{l: "Да", s: 1, target: "next"}, {l: "Нет", s: 0, target: "next"}] }
+              { id: "single_choice", name: "Одиночный выбор (Категории)", editable: true, preset: [{l: "Мужской", s: 1}, {l: "Женский", s: 2}, {l: "Другой / Предпочитаю не указывать", s: 3}] },
+              { id: "multiple_choice", name: "Множественный выбор", editable: true, preset: [{l: "Вариант А", s: 1}, {l: "Вариант Б", s: 2}] },
+              { id: "dichotomous", name: "Дихотомическая (Да/Нет)", editable: true, preset: [{l: "Да", s: 1}, {l: "Нет", s: 0}] }
             ]
           },
           ordinal: {
             scales: [
               { id: "likert_7", name: "Шкала Лайкерта (7-балльная, строгий ранг)", editable: true, preset: [
-                {l: "Полностью не согласен", s: 1, target: "next"}, {l: "В основном не согласен", s: 2, target: "next"}, {l: "Скорее не согласен", s: 3, target: "next"},
-                {l: "Нейтрально", s: 4, target: "next"}, {l: "Скорее согласен", s: 5, target: "next"}, {l: "В основном согласен", s: 6, target: "next"}, {l: "Полностью согласен", s: 7, target: "next"}
+                {l: "Полностью не согласен", s: 1}, {l: "В основном не согласен", s: 2}, {l: "Скорее не согласен", s: 3},
+                {l: "Нейтрально", s: 4}, {l: "Скорее согласен", s: 5}, {l: "В основном согласен", s: 6}, {l: "Полностью согласен", s: 7}
               ]},
               { id: "likert_5", name: "Шкала Лайкерта (5-балльная)", editable: true, preset: [
-                {l: "Совсем не согласен", s: 1, target: "next"}, {l: "Скорее не согласен", s: 2, target: "next"}, {l: "Нейтрально", s: 3, target: "next"},
-                {l: "Скорее согласен", s: 4, target: "next"}, {l: "Полностью согласен", s: 5, target: "next"}
+                {l: "Совсем не согласен", s: 1}, {l: "Скорее не согласен", s: 2}, {l: "Нейтрально", s: 3},
+                {l: "Скорее согласен", s: 4}, {l: "Полностью согласен", s: 5}
               ]},
               { id: "frequency_scale", name: "Частотная шкала (Никогда — Всегда)", editable: true, preset: [
-                {l: "Никогда", s: 1, target: "next"}, {l: "Редко", s: 2, target: "next"}, {l: "Иногда", s: 3, target: "next"}, {l: "Часто", s: 4, target: "next"}, {l: "Всегда", s: 5, target: "next"}
+                {l: "Никогда", s: 1}, {l: "Редко", s: 2}, {l: "Иногда", s: 3}, {l: "Часто", s: 4}, {l: "Всегда", s: 5}
               ]},
               { id: "nps_scale", name: "Индекс NPS (0–10, Лояльность)", editable: true, preset: [
-                {l: "0 — Абсолютный детрактор", s: 0, target: "next"}, {l: "1", s: 1, target: "next"}, {l: "2", s: 2, target: "next"}, {l: "3", s: 3, target: "next"},
-                {l: "4", s: 4, target: "next"}, {l: "5", s: 5, target: "next"}, {l: "6", s: 6, target: "next"}, {l: "7 — Нейтральный", s: 7, target: "next"},
-                {l: "8", s: 8, target: "next"}, {l: "9 — Промоутер", s: 9, target: "next"}, {l: "10 — Абсолютный промоутер", s: 10, target: "next"}
+                {l: "0 — Абсолютный детрактор", s: 0}, {l: "1", s: 1}, {l: "2", s: 2}, {l: "3", s: 3},
+                {l: "4", s: 4}, {l: "5", s: 5}, {l: "6", s: 6}, {l: "7 — Нейтральный", s: 7},
+                {l: "8", s: 8}, {l: "9 — Промоутер", s: 9}, {l: "10 — Абсолютный промоутер", s: 10}
               ]}
             ]
           },
@@ -795,11 +864,10 @@
               prompt: "Indicate your gender:",
               wave: "baseline",
               lag: "immediate",
-              default_next: "next",
               options: [
-                {l: "Male", s: 1, target: "next"},
-                {l: "Female", s: 2, target: "next"},
-                {l: "Other / Prefer not to say", s: 3, target: "next"}
+                {l: "Male", s: 1},
+                {l: "Female", s: 2},
+                {l: "Other / Prefer not to say", s: 3}
               ],
               config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Enter response text..." }
             },
@@ -811,10 +879,9 @@
               prompt: "Rate your current academic stress level:",
               wave: "wave_1",
               lag: "days_7",
-              default_next: "next",
               options: [
-                {l: "Strongly Disagree", s: 1, target: "next"}, {l: "Disagree", s: 2, target: "next"}, {l: "Slightly Disagree", s: 3, target: "next"},
-                {l: "Neutral", s: 4, target: "next"}, {l: "Slightly Agree", s: 5, target: "next"}, {l: "Agree", s: 6, target: "next"}, {l: "Strongly Agree", s: 7, target: "next"}
+                {l: "Strongly Disagree", s: 1}, {l: "Disagree", s: 2}, {l: "Slightly Disagree", s: 3},
+                {l: "Neutral", s: 4}, {l: "Slightly Agree", s: 5}, {l: "Agree", s: 6}, {l: "Strongly Agree", s: 7}
               ],
               config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Enter response text..." }
             }
@@ -829,11 +896,10 @@
               prompt: "Укажите ваш пол:",
               wave: "baseline",
               lag: "immediate",
-              default_next: "next",
               options: [
-                {l: "Мужской", s: 1, target: "next"},
-                {l: "Женский", s: 2, target: "next"},
-                {l: "Другой / Предпочитаю не указывать", s: 3, target: "next"}
+                {l: "Мужской", s: 1},
+                {l: "Женский", s: 2},
+                {l: "Другой / Предпочитаю не указывать", s: 3}
               ],
               config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Введите текст ответа..." }
             },
@@ -845,10 +911,9 @@
               prompt: "Оцените ваш уровень академического стресса:",
               wave: "wave_1",
               lag: "days_7",
-              default_next: "next",
               options: [
-                {l: "Полностью не согласен", s: 1, target: "next"}, {l: "В основном не согласен", s: 2, target: "next"}, {l: "Скорее не согласен", s: 3, target: "next"},
-                {l: "Нейтрально", s: 4, target: "next"}, {l: "Скорее согласен", s: 5, target: "next"}, {l: "В основном согласен", s: 6, target: "next"}, {l: "Полностью согласен", s: 7, target: "next"}
+                {l: "Полностью не согласен", s: 1}, {l: "В основном не согласен", s: 2}, {l: "Скорее не согласен", s: 3},
+                {l: "Нейтрально", s: 4}, {l: "Скорее согласен", s: 5}, {l: "В основном согласен", s: 6}, {l: "Полностью согласен", s: 7}
               ],
               config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Введите текст ответа..." }
             }
@@ -863,11 +928,10 @@
               prompt: "Indique su género biológico o identidad:",
               wave: "baseline",
               lag: "immediate",
-              default_next: "next",
               options: [
-                {l: "Masculino", s: 1, target: "next"},
-                {l: "Femenino", s: 2, target: "next"},
-                {l: "Otro / Prefiero no decir", s: 3, target: "next"}
+                {l: "Masculino", s: 1},
+                {l: "Femenino", s: 2},
+                {l: "Otro / Prefiero no decir", s: 3}
               ],
               config: { min: 0, max: 100, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Ingrese texto de respuesta..." }
             },
@@ -879,10 +943,9 @@
               prompt: "Evalúe su nivel actual de estrés académico en las últimas semanas:",
               wave: "wave_1",
               lag: "days_7",
-              default_next: "next",
               options: [
-                {l: "Totalmente en desacuerdo", s: 1, target: "next"}, {l: "En desacuerdo", s: 2, target: "next"}, {l: "Ligeramente en desacuerdo", s: 3, target: "next"},
-                {l: "Neutral", s: 4, target: "next"}, {l: "Ligeramente de acuerdo", s: 5, target: "next"}, {l: "De acuerdo", s: 6, target: "next"}, {l: "Totalmente de acuerdo", s: 7, target: "next"}
+                {l: "Totalmente en desacuerdo", s: 1}, {l: "En desacuerdo", s: 2}, {l: "Ligeramente en desacuerdo", s: 3},
+                {l: "Neutral", s: 4}, {l: "Ligeramente de acuerdo", s: 5}, {l: "De acuerdo", s: 6}, {l: "Totalmente de acuerdo", s: 7}
               ],
               config: { min: 1, max: 7, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: "Ingrese texto de respuesta..." }
             }
@@ -901,20 +964,24 @@
           const config = (v.config && typeof v.config === 'object') ? v.config : {};
 
           return {
+            question_id: isUuid(v.question_id) ? v.question_id : createUuid(),
+            version: Number.isInteger(v.version) && v.version > 0 ? v.version : 1,
+            status: ['draft', 'trial', 'active'].includes(v.status) ? v.status : 'draft',
             id: typeof v.id === 'string' && v.id.trim() ? v.id.trim() : `variable_${idx + 1}`,
+            family: typeof v.family === 'string' && v.family.trim() ? v.family.trim() : null,
+            domain: typeof v.domain === 'string' && v.domain.trim() ? v.domain.trim() : null,
+            parameter: v.parameter ?? null,
             type: type,
             scale: typeof v.scale === 'string' ? v.scale : 'single_choice',
             tracking_mode: tracking_mode,
             prompt: typeof v.prompt === 'string' ? v.prompt : '',
             wave: typeof v.wave === 'string' ? v.wave : 'wave_1',
             lag: typeof v.lag === 'string' ? v.lag : 'immediate',
-            default_next: typeof v.default_next === 'string' ? v.default_next : 'next',
             options: Array.isArray(v.options) ? v.options.map(o => {
               const numVal = parseFloat(o?.s);
               return {
                 l: typeof o?.l === 'string' ? o.l : '',
-                s: !isNaN(numVal) ? numVal : 0,
-                target: typeof o?.target === 'string' ? o.target : 'next'
+                s: !isNaN(numVal) ? numVal : null,
               };
             }) : [],
             config: {
@@ -933,12 +1000,12 @@
       function loadBank(lang) {
         try {
           const raw = localStorage.getItem('ros_strict_cyan_bank_v3');
-          if (!raw) return getDefaultBank(lang);
+          if (!raw) return sanitizeBankData(getDefaultBank(lang), lang);
           const parsed = JSON.parse(raw);
           return sanitizeBankData(parsed, lang);
         } catch (e) {
           console.error("Storage read error, falling back:", e);
-          return getDefaultBank(lang);
+          return sanitizeBankData(getDefaultBank(lang), lang);
         }
       }
 
@@ -948,6 +1015,84 @@
       let hasGlobalErrors = false;
 
       let bank = loadBank(currentLang);
+      let bankMetadata = loadBankMetadata();
+
+      function isUuid(value) {
+        return typeof value === 'string' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+      }
+
+      function createUuid() {
+        if (crypto.randomUUID) return crypto.randomUUID();
+        const bytes = crypto.getRandomValues(new Uint8Array(16));
+        bytes[6] = (bytes[6] & 0x0f) | 0x40;
+        bytes[8] = (bytes[8] & 0x3f) | 0x80;
+        const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+      }
+
+      function normalizeBankCode(value) {
+        return String(value || '')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Za-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .toUpperCase();
+      }
+
+      function loadBankMetadata() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem('ros_question_bank_identity_v1') || '{}');
+          return {
+            bank_id: isUuid(parsed.bank_id) ? parsed.bank_id : createUuid(),
+            title: typeof parsed.title === 'string' ? parsed.title : '',
+            code: normalizeBankCode(parsed.code),
+            version: Number.isInteger(parsed.version) && parsed.version > 0 ? parsed.version : 1,
+            status: ['draft', 'trial', 'active'].includes(parsed.status) ? parsed.status : 'draft'
+          };
+        } catch (error) {
+          console.error('Question-bank identity read error:', error);
+          return { bank_id: createUuid(), title: '', code: '', version: 1, status: 'draft' };
+        }
+      }
+
+      function saveBankMetadata() {
+        try {
+          localStorage.setItem('ros_question_bank_identity_v1', JSON.stringify(bankMetadata));
+        } catch (error) {
+          console.error('Question-bank identity save error:', error);
+        }
+      }
+
+      function renderBankMetadata() {
+        document.getElementById('bankTitleInput').value = bankMetadata.title;
+        document.getElementById('bankCodeInput').value = bankMetadata.code;
+        document.getElementById('bankStatusSelect').value = bankMetadata.status;
+        document.getElementById('bankIdentity').textContent =
+          `UUID: ${bankMetadata.bank_id} · v${bankMetadata.version}`;
+      }
+
+      function onBankTitleChange(value) {
+        const previousAutoCode = normalizeBankCode(bankMetadata.title);
+        bankMetadata.title = value.trimStart();
+        if (!bankMetadata.code || bankMetadata.code === previousAutoCode) {
+          bankMetadata.code = normalizeBankCode(value);
+        }
+        saveBankMetadata();
+        renderBankMetadata();
+      }
+
+      function onBankCodeChange(value) {
+        bankMetadata.code = normalizeBankCode(value);
+        saveBankMetadata();
+        document.getElementById('bankCodeInput').value = bankMetadata.code;
+      }
+
+      function onBankStatusChange(value) {
+        if (!['draft', 'trial', 'active'].includes(value)) return;
+        bankMetadata.status = value;
+        saveBankMetadata();
+      }
 
       function saveBank() {
         try {
@@ -959,6 +1104,8 @@
 
       function changeLanguage(lang) {
         currentLang = lang;
+        localStorage.setItem('app_language', lang === 'ru' ? 'ru' : (lang === 'en-US' ? 'en' : 'es'));
+        document.documentElement.lang = lang;
         document.getElementById('langSelect').value = lang;
         const dict = i18n[lang] || i18n['es-MX'];
         
@@ -1016,33 +1163,12 @@
         });
       }
 
-      function populateTargetDropdowns() {
-        const dict = i18n[currentLang] || i18n['es-MX'];
-        const defaultNextSelect = document.getElementById('defaultNextSelect');
-        const currentVar = bank[currentIndex];
-        
-        if (!defaultNextSelect || !currentVar) return;
-
-        const currentVal = currentVar.default_next || 'next';
-        defaultNextSelect.innerHTML = `
-          <option value="next">${dict.targetNextInSequence}</option>
-          <option value="end">${dict.targetEndSurvey}</option>
-        `;
-
-        bank.forEach((v, idx) => {
-          if (v.id && v.id.trim() !== currentVar.id.trim()) {
-            const opt = document.createElement('option');
-            opt.value = v.id;
-            opt.textContent = `➔ Al indicador: ${v.id}`;
-            defaultNextSelect.appendChild(opt);
-          }
-        });
-        defaultNextSelect.value = currentVal;
-      }
-
       function addVariable() {
         const dict = i18n[currentLang] || i18n['es-MX'];
         const newVar = {
+          question_id: createUuid(),
+          version: 1,
+          status: "draft",
           id: `variable_${bank.length + 1}`,
           type: "ordinal",
           scale: "likert_5",
@@ -1050,13 +1176,12 @@
           prompt: currentLang === 'es-MX' ? "¿Nueva pregunta de investigación?" : (currentLang === 'ru' ? "Новый вопрос исследования?" : "New research question?"),
           wave: "wave_1",
           lag: "immediate",
-          default_next: "next",
           options: [
-            {l: currentLang === 'es-MX' ? "Totalmente en desacuerdo" : (currentLang === 'ru' ? "Совсем не согласен" : "Strongly Disagree"), s: 1, target: "next"},
-            {l: currentLang === 'es-MX' ? "En desacuerdo" : (currentLang === 'ru' ? "Скорее не согласен" : "Disagree"), s: 2, target: "next"},
-            {l: "Neutral", s: 3, target: "next"},
-            {l: currentLang === 'es-MX' ? "De acuerdo" : (currentLang === 'ru' ? "Скорее согласен" : "Agree"), s: 4, target: "next"},
-            {l: currentLang === 'es-MX' ? "Totalmente de acuerdo" : (currentLang === 'ru' ? "Полностью согласен" : "Strongly Agree"), s: 5, target: "next"}
+            {l: currentLang === 'es-MX' ? "Totalmente en desacuerdo" : (currentLang === 'ru' ? "Совсем не согласен" : "Strongly Disagree"), s: 1},
+            {l: currentLang === 'es-MX' ? "En desacuerdo" : (currentLang === 'ru' ? "Скорее не согласен" : "Disagree"), s: 2},
+            {l: "Neutral", s: 3},
+            {l: currentLang === 'es-MX' ? "De acuerdo" : (currentLang === 'ru' ? "Скорее согласен" : "Agree"), s: 4},
+            {l: currentLang === 'es-MX' ? "Totalmente de acuerdo" : (currentLang === 'ru' ? "Полностью согласен" : "Strongly Agree"), s: 5}
           ],
           config: { min: 1, max: 5, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: dict.placeholderText }
         };
@@ -1150,31 +1275,23 @@
           textErrEl.style.display = 'none';
         }
 
-        if (v.type === 'ordinal' && v.options && v.options.length > 1) {
-          for (let i = 1; i < v.options.length; i++) {
-            const prevVal = Number(v.options[i - 1].s);
-            const currVal = Number(v.options[i].s);
-            if (!isNaN(prevVal) && !isNaN(currVal) && currVal <= prevVal) {
-              errorsFound = true;
-              break;
-            }
+        const allQuestionErrors = bank.some((question, index) => {
+          if (!question || !isUuid(question.question_id) ||
+              !Number.isInteger(question.version) || question.version < 1 ||
+              !question.id?.trim() || !question.prompt?.trim()) return true;
+          const normalizedCode = normalizeQuestionCode(question.id, index);
+          if (bank.some((other, otherIndex) =>
+              otherIndex !== index && normalizeQuestionCode(other.id, otherIndex) === normalizedCode)) return true;
+          if (question.type === 'nominal' || question.type === 'ordinal') {
+            if (!Array.isArray(question.options) || question.options.length === 0) return true;
+            const values = question.options.map(option => option.s);
+            if (values.some(value => !Number.isFinite(value)) ||
+                new Set(values.map(String)).size !== values.length ||
+                question.options.some(option => !option.l?.trim())) return true;
           }
-        }
-
-        if (v.type === 'nominal' && v.options && v.options.length > 0) {
-          const codeCounts = {};
-          for (const opt of v.options) {
-            const code = String(opt.s).trim();
-            codeCounts[code] = (codeCounts[code] || 0) + 1;
-            if (codeCounts[code] > 1) {
-              errorsFound = true;
-              break;
-            }
-          }
-        }
-
-        hasGlobalErrors = errorsFound;
-        document.getElementById('exportBtn').disabled = errorsFound;
+          return false;
+        });
+        hasGlobalErrors = errorsFound || allQuestionErrors;
       }
 
       function fixMetricRange(fixedMax) {
@@ -1222,13 +1339,11 @@
           scaleSelect.appendChild(opt);
         });
 
-        document.getElementById('statusField').value = (v.tracking_mode === 'time_variant') ? dict.statusDynamicAuto : dict.statusStaticAuto;
+        document.getElementById('questionStatusSelect').value = v.status || 'draft';
         document.getElementById('promptInput').value = v.prompt || '';
 
         document.getElementById('waveSelect').value = v.wave || 'wave_1';
         document.getElementById('lagSelect').value = v.lag || 'immediate';
-
-        populateTargetDropdowns();
 
         const metricCard = document.getElementById('metricConfigCard');
         const textCard = document.getElementById('textConfigCard');
@@ -1276,14 +1391,6 @@
         const dict = i18n[currentLang] || i18n['es-MX'];
         if (!v || !v.options) return;
 
-        const usedCodes = {};
-        if (v.type === 'nominal') {
-          v.options.forEach(opt => {
-            const code = String(opt.s).trim();
-            usedCodes[code] = (usedCodes[code] || 0) + 1;
-          });
-        }
-
         v.options.forEach((opt, optIdx) => {
           const wrapper = document.createElement('div');
           wrapper.className = 'option-row-wrapper';
@@ -1292,84 +1399,14 @@
           line.className = 'option-line';
           const codeLabel = (v.type === 'nominal') ? 'ID código' : 'Peso s';
           
-          let targetOptionsHtml = `<option value="next">➔ ${dict.targetNextInSequence.replace('➡️ ', '')}</option><option value="end">🏁 ${dict.targetEndSurvey.replace('🏁 ', '')}</option>`;
-          bank.forEach(item => {
-            if (item.id && item.id.trim() !== v.id.trim()) {
-              const selectedAttr = (opt.target === item.id) ? 'selected' : '';
-              targetOptionsHtml += `<option value="${item.id}" ${selectedAttr}>➔ ${item.id}</option>`;
-            }
-          });
-          if (opt.target === 'end') {
-            targetOptionsHtml = targetOptionsHtml.replace('value="end"', 'value="end" selected');
-          } else if (opt.target === 'next' || !opt.target) {
-            targetOptionsHtml = targetOptionsHtml.replace('value="next"', 'value="next" selected');
-          }
-
           line.innerHTML = `
             <input type="text" value="${opt.l}" placeholder="${dict.placeholderCategory}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
             <input type="number" id="weight_input_${optIdx}" value="${opt.s}" placeholder="${codeLabel}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
-            <select onchange="updateOptionTarget(${optIdx}, this.value)" style="flex: 1.2; font-size: 11px;" title="Enrutamiento al seleccionar esta opción">
-              ${targetOptionsHtml}
-            </select>
             <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;">✕</button>
           `;
           wrapper.appendChild(line);
-
-          if (v.type === 'ordinal' && optIdx > 0) {
-            const prevVal = Number(v.options[optIdx - 1].s);
-            const currVal = Number(opt.s);
-            if (!isNaN(prevVal) && !isNaN(currVal) && currVal <= prevVal) {
-              const suggestedVal = prevVal + 1;
-              const errDiv = document.createElement('div');
-              errDiv.className = 'inline-error';
-              errDiv.innerHTML = `
-                <span>${dict.errMonotonicity} (&gt; ${prevVal})</span>
-                <button onclick="autoFixWeight(${optIdx}, ${suggestedVal})">Fix = ${suggestedVal}</button>
-              `;
-              wrapper.appendChild(errDiv);
-              setTimeout(() => {
-                const inp = document.getElementById(`weight_input_${optIdx}`);
-                if (inp) inp.style.borderColor = 'var(--danger)';
-              }, 0);
-            }
-          }
-
-          if (v.type === 'nominal') {
-            const codeStr = String(opt.s).trim();
-            if (usedCodes[codeStr] > 1) {
-              const nextFreeCode = getNextFreeNominalCode(v.options);
-              const errDiv = document.createElement('div');
-              errDiv.className = 'inline-error';
-              errDiv.innerHTML = `
-                <span>${dict.errNominalConflict}</span>
-                <button onclick="autoFixWeight(${optIdx}, ${nextFreeCode})">Fix ID = ${nextFreeCode}</button>
-              `;
-              wrapper.appendChild(errDiv);
-              setTimeout(() => {
-                const inp = document.getElementById(`weight_input_${optIdx}`);
-                if (inp) inp.style.borderColor = 'var(--danger)';
-              }, 0);
-            }
-          }
-
           container.appendChild(wrapper);
         });
-      }
-
-      function getNextFreeNominalCode(options) {
-        const codes = options.map(o => Number(o.s)).filter(n => !isNaN(n));
-        const max = codes.length > 0 ? Math.max(...codes) : 0;
-        return max + 1;
-      }
-
-      function autoFixWeight(optIdx, fixedVal) {
-        const v = bank[currentIndex];
-        if (!v || !v.options[optIdx]) return;
-        v.options[optIdx].s = fixedVal;
-        saveBank();
-        renderOptions();
-        validateAllInvariants();
-        renderPreview();
       }
 
       function addOption() {
@@ -1379,7 +1416,7 @@
         const lastOpt = v.options[v.options.length - 1];
         const nextVal = lastOpt && !isNaN(Number(lastOpt.s)) ? Number(lastOpt.s) + 1 : 1;
         const defaultLabel = currentLang === 'es-MX' ? `Opción ${v.options.length + 1}` : (currentLang === 'ru' ? `Вариант ${v.options.length + 1}` : `Option ${v.options.length + 1}`);
-        v.options.push({ l: defaultLabel, s: nextVal, target: "next" });
+        v.options.push({ l: defaultLabel, s: nextVal });
         saveBank();
         updateUI();
       }
@@ -1409,26 +1446,16 @@
         const v = bank[currentIndex];
         if (!v || !v.options[optIdx]) return;
         const parsed = parseFloat(val);
-        v.options[optIdx].s = (val === '' || isNaN(parsed)) ? 0 : parsed;
+        v.options[optIdx].s = (val === '' || isNaN(parsed)) ? null : parsed;
         saveBank();
-        renderOptions();
+        renderPreview();
+      }
+
+      function onQuestionStatusChange(value) {
+        if (!['draft', 'trial', 'active'].includes(value)) return;
+        bank[currentIndex].status = value;
+        saveBank();
         validateAllInvariants();
-        renderPreview();
-      }
-
-      function updateOptionTarget(optIdx, targetVal) {
-        const v = bank[currentIndex];
-        if (!v || !v.options[optIdx]) return;
-        v.options[optIdx].target = targetVal;
-        saveBank();
-        renderPreview();
-      }
-
-      function onDefaultNextChange(val) {
-        const v = bank[currentIndex];
-        if (!v) return;
-        v.default_next = val;
-        saveBank();
       }
 
       function onIdChange(val) {
@@ -1581,65 +1608,344 @@
         }
       }
 
-      function saveProtocol() {
+      // STABLE QUESTION-BANK CONTRACT & MULTI-FORMAT SAVING
+      function normalizeQuestionCode(value, index) {
+        const normalized = String(value || '')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^A-Za-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .toUpperCase();
+        return normalized || `QUESTION_${index + 1}`;
+      }
+
+      function questionTypeFor(variable) {
+        if (variable.type === 'textual') return 'text_input';
+        if (variable.type === 'interval_ratio') return 'numeric_input';
+        if (variable.scale === 'multiple_choice') return 'multiple_select';
+        return 'single_select';
+      }
+
+      function semanticToken(value) {
+        return String(value || 'value')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '') || 'value';
+      }
+
+      function buildQuestionBankPackage() {
+        const title = bankMetadata.title.trim();
+        const bankCode = normalizeBankCode(bankMetadata.code);
+        if (!title) throw new Error('Question-bank title is required');
+        if (!bankCode) throw new Error('Question-bank code is required');
+        if (!isUuid(bankMetadata.bank_id)) throw new Error('Question-bank UUID is invalid');
+        if (bankMetadata.status === 'active' && bank.some(question => question.status !== 'active')) {
+          throw new Error('An active bank may contain only active question versions');
+        }
+        if (bankMetadata.status === 'trial' && bank.some(question => question.status === 'draft')) {
+          throw new Error('A trial bank may not contain draft question versions');
+        }
+
+        const questions = {};
+        bank.forEach((variable, index) => {
+          if (!isUuid(variable.question_id)) variable.question_id = createUuid();
+          const code = normalizeQuestionCode(variable.id, index);
+          if (questions[code]) throw new Error(`Duplicate normalized question code: ${code}`);
+
+          const blockMatch = code.match(/^[A-Z]+/);
+          const ordered = variable.type === 'ordinal' || variable.type === 'interval_ratio';
+          const direction = variable.config?.direction === 'inverse' ? 'less' : 'more';
+          const options = (variable.type === 'nominal' || variable.type === 'ordinal')
+            ? (variable.options || []).map(option => ({
+                value: option.s,
+                text: option.l
+              }))
+            : [];
+
+          questions[code] = {
+            question_id: variable.question_id,
+            code,
+            version: variable.version || 1,
+            block: blockMatch ? blockMatch[0] : code,
+            family: variable.family || null,
+            domain: variable.domain || null,
+            parameter: variable.parameter ?? null,
+            type: questionTypeFor(variable),
+            prompt: variable.prompt,
+            options,
+            scale: {
+              id: variable.scale,
+              psychometric_level: variable.type,
+              min: variable.config?.min ?? null,
+              max: variable.config?.max ?? null,
+              step: variable.config?.step ?? null,
+              unit: variable.config?.unit || null,
+              direction: variable.config?.direction || null
+            },
+            score_direction: ordered
+              ? `higher_is_${direction}_${semanticToken(variable.id)}`
+              : null,
+            time: {
+              tracking_mode: variable.tracking_mode,
+              wave: variable.wave,
+              lag: variable.lag
+            },
+            status: variable.status || 'draft'
+          };
+        });
+        saveBank();
+        bankMetadata.code = bankCode;
+        saveBankMetadata();
+        const generatedAt = new Date().toISOString();
+        return {
+          schema: 'research_os.question_bank',
+          schema_version: 2,
+          bank_id: bankMetadata.bank_id,
+          code: bankCode,
+          title,
+          version: bankMetadata.version,
+          status: bankMetadata.status,
+          primary_language: 'es-MX',
+          interface_language: currentLang,
+          global_mode: currentMode,
+          global_time_reference: generatedAt,
+          generated_at: generatedAt,
+          question_order: Object.keys(questions),
+          questions
+        };
+      }
+
+      function toPythonLiteral(value, indent = 0) {
+        const pad = ' '.repeat(indent);
+        const childPad = ' '.repeat(indent + 4);
+        if (value === null) return 'None';
+        if (value === true) return 'True';
+        if (value === false) return 'False';
+        if (typeof value === 'number') return String(value);
+        if (typeof value === 'string') return JSON.stringify(value);
+        if (Array.isArray(value)) {
+          if (!value.length) return '[]';
+          return `[\n${value.map(item => `${childPad}${toPythonLiteral(item, indent + 4)}`).join(',\n')}\n${pad}]`;
+        }
+        const entries = Object.entries(value);
+        if (!entries.length) return '{}';
+        return `{\n${entries.map(([key, item]) => `${childPad}${JSON.stringify(key)}: ${toPythonLiteral(item, indent + 4)}`).join(',\n')}\n${pad}}`;
+      }
+
+      function buildTabularRows(packageData) {
+        const headers = [
+          'bank_id', 'bank_code', 'bank_title', 'bank_version', 'bank_status',
+          'question_id', 'code', 'version', 'block', 'family', 'domain', 'parameter', 'type',
+          'prompt', 'option_value', 'option_text', 'scale_id',
+          'psychometric_level', 'scale_min', 'scale_max', 'scale_step', 'scale_unit',
+          'scale_direction', 'score_direction', 'tracking_mode',
+          'wave', 'lag', 'status', 'global_time_reference'
+        ];
+        const rows = [headers];
+        Object.values(packageData.questions).forEach(question => {
+          const options = question.options.length ? question.options : [null];
+          options.forEach(option => rows.push([
+            packageData.bank_id, packageData.code, packageData.title,
+            packageData.version, packageData.status,
+            question.question_id, question.code, question.version, question.block,
+            question.family, question.domain,
+            typeof question.parameter === 'object'
+              ? JSON.stringify(question.parameter)
+              : question.parameter,
+            question.type, question.prompt,
+            option?.value ?? null, option?.text ?? null,
+            question.scale.id, question.scale.psychometric_level, question.scale.min,
+            question.scale.max, question.scale.step, question.scale.unit,
+            question.scale.direction, question.score_direction,
+            question.time.tracking_mode,
+            question.time.wave, question.time.lag, question.status,
+            packageData.global_time_reference
+          ]));
+        });
+        return rows;
+      }
+
+      function csvCell(value) {
+        return `"${String(value ?? '').replace(/"/g, '""')}"`;
+      }
+
+      function xmlCell(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&apos;');
+      }
+
+      function buildExcelXml(rows) {
+        const xmlRows = rows.map(row => {
+          const cells = row.map(value => {
+            const numeric = typeof value === 'number' && Number.isFinite(value);
+            return `<Cell><Data ss:Type="${numeric ? 'Number' : 'String'}">${xmlCell(value)}</Data></Cell>`;
+          }).join('');
+          return `<Row>${cells}</Row>`;
+        }).join('');
+        return `<?xml version="1.0" encoding="UTF-8"?>\n` +
+          `<?mso-application progid="Excel.Sheet"?>\n` +
+          `<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" ` +
+          `xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">` +
+          `<Worksheet ss:Name="Questions"><Table>${xmlRows}</Table></Worksheet></Workbook>`;
+      }
+
+      function buildFile(packageData, format) {
+        if (format === 'json') {
+          return { content: JSON.stringify(packageData, null, 2), mime: 'application/json', extension: 'json' };
+        }
+        if (format === 'py') {
+          return {
+            content: `# -*- coding: utf-8 -*-\n# Research OS question-bank contract\nQUESTION_BANK = ${toPythonLiteral(packageData)}\n`,
+            mime: 'text/x-python',
+            extension: 'py'
+          };
+        }
+        if (format === 'txt') {
+          return { content: JSON.stringify(packageData, null, 2), mime: 'text/plain', extension: 'txt' };
+        }
+        const rows = buildTabularRows(packageData);
+        if (format === 'csv') {
+          return {
+            content: '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\n'),
+            mime: 'text/csv',
+            extension: 'csv'
+          };
+        }
+        return {
+          content: buildExcelXml(rows),
+          mime: 'application/vnd.ms-excel',
+          extension: 'xml'
+        };
+      }
+
+      async function saveBlobToChosenLocation(blob, suggestedName, mime, extension) {
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({
+            suggestedName,
+            types: [{
+              description: `Research OS ${extension.toUpperCase()}`,
+              accept: { [mime]: [`.${extension}`] }
+            }]
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        }
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        alert(dict.alertDownloadFallback);
+        const objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = suggestedName;
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+      }
+
+      async function exportProtocolFormatted() {
         const dict = i18n[currentLang] || i18n['es-MX'];
         if (hasGlobalErrors) {
           alert(dict.alertExportError);
           return;
         }
+        try {
+          const packageData = buildQuestionBankPackage();
+          const format = document.getElementById('exportFormatSelect').value;
+          const file = buildFile(packageData, format);
+          const date = new Date().toISOString().slice(0, 10);
+          const blob = new Blob([file.content], { type: `${file.mime};charset=utf-8` });
+          await saveBlobToChosenLocation(
+            blob,
+            `${packageData.code.toLowerCase()}_v${packageData.version}_${date}.${file.extension}`,
+            file.mime,
+            file.extension
+          );
+        } catch (error) {
+          if (error?.name === 'AbortError') return;
+          console.error('File save error:', error);
+          alert(error.message);
+        }
+      }
 
-        const scientificProtocolPackage = {
-          engine: "Research OS Strict Cyan Protocol Engine",
-          version: "2.6.0",
-          timestamp: new Date().toISOString(),
-          language: currentLang,
-          global_mode: currentMode,
-          psychometric_integrity: "validated_strict",
-          variables: bank.map(v => ({
-            variable_id: v.id,
-            routing: {
-              default_next: v.default_next || "next"
-            },
-            psychometric_properties: {
-              measurement_level: v.type,
-              scale_subtype: v.scale,
-              tracking_mode: v.tracking_mode,
-              wave: v.wave,
-              time_lag: v.lag,
-              direction: v.config?.direction || "direct",
-              inversion_metadata: {
-                is_inverted: (v.config?.direction === "inverse"),
-                applied_transform: v.config?.direction === "inverse" ? "x_rev = max - x + min" : "identity"
-              },
-              bounds: v.type === 'interval_ratio' ? { min: v.config.min, max: v.config.max, step: v.config.step, unit: v.config.unit } : null,
-              text_constraints: v.type === 'textual' ? { max_length: v.config.maxLength, placeholder: v.config.placeholder } : null,
-              coding_schema: (v.type === 'nominal' || v.type === 'ordinal') ? v.options.map(o => ({ label: o.l, code_or_weight: o.s, target_transition: o.target || "next" })) : null
-            },
-            question_prompt: v.prompt
-          }))
-        };
+      function setDatabaseStatus(message, success) {
+        const status = document.getElementById('syncStatus');
+        status.textContent = message;
+        status.style.color = success ? 'var(--success)' : 'var(--danger)';
+      }
 
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(scientificProtocolPackage, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", `research_os_cyan_protocol_${currentMode}_${Date.now()}.json`);
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
+      async function saveQuestionBankToDatabase() {
+        const dict = i18n[currentLang] || i18n['es-MX'];
+        if (hasGlobalErrors) {
+          alert(dict.alertExportError);
+          return;
+        }
+        const button = document.getElementById('saveDbBtn');
+        let researcherToken = '';
+        try {
+          const auth = JSON.parse(sessionStorage.getItem('research_os.auth.v1') || 'null');
+          researcherToken = auth?.role === 'researcher' ? auth.token : '';
+        } catch (_) {}
+        if (!researcherToken) {
+          setDatabaseStatus('Researcher login is required only for database saving. The public constructor remains available.', false);
+          return;
+        }
+        button.disabled = true;
+        setDatabaseStatus('…', true);
+        try {
+          const response = await fetch('/question-banks/save', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${researcherToken}`
+            },
+            body: JSON.stringify(buildQuestionBankPackage())
+          });
+          const contentType = response.headers.get('content-type') || '';
+          const result = contentType.includes('application/json') ? await response.json() : null;
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              sessionStorage.removeItem('research_os.auth.v1');
+            }
+            throw new Error(result?.error || `HTTP ${response.status}`);
+          }
+          setDatabaseStatus(dict.syncSuccess, true);
+        } catch (error) {
+          console.error('Database save error:', error);
+          setDatabaseStatus(`${dict.syncFailure}: ${error.message}`, false);
+        } finally {
+          button.disabled = false;
+        }
       }
 
       window.addEventListener('DOMContentLoaded', () => {
-        changeLanguage('es-MX');
+        const requestedReturn = new URLSearchParams(window.location.search).get('return');
+        if (requestedReturn && /^[a-z0-9_-]+\.html$/i.test(requestedReturn)) {
+          document.getElementById('homeBtn').href = requestedReturn;
+        }
+        const storedLanguage = localStorage.getItem('app_language') || 'es';
+        const interfaceLanguage = storedLanguage === 'ru'
+          ? 'ru'
+          : (storedLanguage.startsWith('en') ? 'en-US' : 'es-MX');
+        changeLanguage(interfaceLanguage);
+        renderBankMetadata();
       });
     </script>
     <style>
       .research-footer {
         text-align: center;
-        padding: 30px 20px;
+        padding: 20px;
         font-size: 0.85rem;
         color: #6e6e73;
-        border-top: 1px solid #eaeaea;
-        margin-top: 60px;
+        border-top: 1px solid var(--border);
+        background: #050e12;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       }
     </style>

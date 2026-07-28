@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research OS | Acceso</title>
+  <style>
+    :root{--bg:#0b0f19;--card:#162032;--line:#334155;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--danger:#fca5a5}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}
+    .card{width:min(460px,100%);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;box-shadow:0 16px 40px rgba(0,0,0,.35)}
+    h1{font-size:22px;color:var(--accent);margin:0 0 8px}
+    p{color:var(--muted);font-size:14px;line-height:1.5}
+    label{display:block;font-size:13px;font-weight:700;margin:22px 0 8px}
+    input{width:100%;background:#0f172a;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:12px}
+    button,.link{display:inline-flex;justify-content:center;align-items:center;border-radius:8px;padding:10px 15px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
+    button{width:100%;border:0;background:var(--accent);color:#082f49;margin-top:14px}
+    button:disabled{opacity:.55;cursor:wait}
+    .link{color:var(--muted);border:1px solid var(--line);margin-top:12px;width:100%}
+    .status{min-height:22px;margin-top:14px;color:var(--danger);font-size:13px}
+    .lang{display:flex;gap:6px;justify-content:flex-end;margin-bottom:18px}
+    .lang button{width:auto;margin:0;padding:5px 9px;background:transparent;color:var(--muted);border:1px solid var(--line)}
+    footer{text-align:center;color:#64748b;font-size:12px;margin-top:24px}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="lang">
+      <button type="button" onclick="setLang('es')">ES</button>
+      <button type="button" onclick="setLang('en')">EN</button>
+      <button type="button" onclick="setLang('ru')">RU</button>
+    </div>
+    <h1 id="title">Acceso al espacio personal</h1>
+    <p id="description">Las páginas públicas permanecen abiertas. Inicie sesión solo para entrar a su gabinete o trabajar con datos protegidos.</p>
+    <form id="loginForm">
+      <label for="usernameInput" id="usernameLabel">Usuario</label>
+      <input id="usernameInput" type="text" autocomplete="username" required>
+      <label for="passwordInput" id="passwordLabel">Contraseña</label>
+      <input id="passwordInput" type="password" autocomplete="current-password" required>
+      <button id="submitButton" type="submit">Entrar</button>
+    </form>
+    <div id="status" class="status" role="alert"></div>
+    <a class="link" href="index.html" id="publicLink">← Continuar explorando la plataforma</a>
+    <footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
+  </main>
+  <script src="auth.js"></script>
+  <script>
+    const copy={
+      es:{title:'Acceso al espacio personal',description:'Las páginas públicas permanecen abiertas. Inicie sesión solo para entrar a su gabinete o trabajar con datos protegidos.',username:'Usuario',password:'Contraseña',submit:'Entrar',public:'← Continuar explorando la plataforma',checking:'Verificando acceso…'},
+      en:{title:'Personal workspace access',description:'Public pages remain open. Sign in only for your cabinet or a protected-data action.',username:'Username',password:'Password',submit:'Sign in',public:'← Continue exploring the platform',checking:'Verifying access…'},
+      ru:{title:'Вход в личное пространство',description:'Публичные страницы остаются открытыми. Вход нужен только для кабинета и действий с защищёнными данными.',username:'Логин',password:'Пароль',submit:'Войти',public:'← Продолжить смотреть систему',checking:'Проверяем доступ…'}
+    };
+    const params=new URLSearchParams(location.search);
+    const expectedRole=['researcher','respondent'].includes(params.get('role'))?params.get('role'):null;
+    const fallback=expectedRole==='respondent'?'cabinet.html':'survey.html';
+    const returnTarget=ResearchAuth.safeReturnTarget(params.get('return'),fallback);
+    let lang=localStorage.getItem('app_language')||'es';
+    if(!copy[lang])lang='es';
+    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;submitButton.textContent=t.submit;publicLink.textContent=t.public}
+    async function submitCredentials(){status.textContent=copy[lang].checking;submitButton.disabled=true;try{await ResearchAuth.login(usernameInput.value.trim(),passwordInput.value,expectedRole);history.replaceState({},document.title,'login.html');location.replace(returnTarget)}catch(error){status.textContent=error.message;submitButton.disabled=false}}
+    loginForm.addEventListener('submit',event=>{event.preventDefault();submitCredentials()});
+    document.addEventListener('DOMContentLoaded',async()=>{
+      setLang(lang);
+      const session=await ResearchAuth.verify(expectedRole);
+      if(session)location.replace(returnTarget)
+    });
+  </script>
+</body>
+</html>
