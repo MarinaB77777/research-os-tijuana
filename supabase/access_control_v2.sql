@@ -10,7 +10,7 @@ create table if not exists public.research_os_accounts (
     account_id uuid primary key default gen_random_uuid(),
     username text not null check (
         length(username) between 3 and 128
-        and username ~ '^[[:alnum:]_.@+-]+$'
+        and username ~ '^[A-Za-z0-9_.@+-]+$'
     ),
     password_hash text not null,
     role text not null check (role in ('researcher', 'respondent')),
@@ -98,14 +98,18 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = extensions, public, pg_temp
 as $$
 declare
     v_creator_role text;
     v_account public.research_os_accounts%rowtype;
 begin
-    if p_role not in ('researcher', 'respondent')
-       or length(btrim(p_username)) < 3
+    if p_role is null
+       or p_role not in ('researcher', 'respondent')
+       or p_username is null
+       or length(btrim(p_username)) not between 3 and 128
+       or btrim(p_username) !~ '^[A-Za-z0-9_.@+-]+$'
+       or p_password is null
        or length(p_password) < 10
        or nullif(btrim(p_user_identifier), '') is null then
         raise exception 'Valid username, password, role and user identifier are required';
@@ -160,7 +164,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = extensions, public, pg_temp
 as $$
 declare
     v_account public.research_os_accounts%rowtype;
