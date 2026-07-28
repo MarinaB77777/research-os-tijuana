@@ -1,250 +1,144 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>Research OS | Кабинет участника</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
-        .container { max-width: 900px; margin: 0 auto; padding: 32px 24px; flex: 1; width: 100%; box-sizing: border-box; }
-        
-        .header { display: flex; justify-content: space-between; align-items: center; background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 24px; }
-        .logo { font-weight: 700; color: #38bdf8; font-size: 16px; display: flex; align-items: center; gap: 8px; }
-        .header-right { display: flex; align-items: center; gap: 16px; }
-        
-        .lang-picker { display: flex; gap: 6px; }
-        .lang-btn { background: transparent; border: none; color: #94a3b8; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; }
-        .lang-btn.active { background: #38bdf8; color: #0f172a; }
-
-        .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
-        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
-
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
-        h1 { font-size: 22px; color: #38bdf8; margin-top: 0; }
-        h3 { font-size: 16px; color: #f8fafc; margin-top: 0; }
-        p { color: #94a3b8; font-size: 14px; line-height: 1.5; }
-        
-        .btn { background: #2563eb; color: #fff; border: none; padding: 10px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; font-size: 14px; }
-        .btn:hover { background: #1d4ed8; }
-        .btn-logout { background: #b91c1c; padding: 6px 12px; font-size: 13px; }
-        .btn-logout:hover { background: #991b1b; }
-
-        .status-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: #065f46; color: #34d399; margin-bottom: 12px; }
-        
-        .chat-box { background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 12px; height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; font-size: 13px; }
-        .chat-msg { padding: 8px 12px; border-radius: 6px; max-width: 85%; line-height: 1.4; }
-        .chat-msg.ai { background: #1e293b; color: #cbd5e1; align-self: flex-start; border: 1px solid #334155; }
-        .chat-input-area { display: flex; gap: 8px; }
-        .chat-input { flex: 1; background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 8px 12px; color: #fff; font-size: 13px; outline: none; }
-        .chat-input:focus { border-color: #38bdf8; }
-
-        .research-footer {
-            text-align: center;
-            padding: 30px 20px;
-            font-size: 0.85rem;
-            color: #6e6e73;
-            border-top: 1px solid #334155;
-            margin-top: auto;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research OS | Кабинет участника</title>
+  <style>
+    :root{--bg:#0f172a;--panel:#1e293b;--inner:#111c30;--line:#334155;--accent:#38bdf8;--text:#f8fafc;--muted:#94a3b8;--ok:#34d399;--danger:#f87171}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column}
+    header{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel);border-bottom:1px solid var(--line);padding:12px 24px}.logo{font-weight:800;color:var(--accent)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.container{max-width:980px;width:100%;margin:0 auto;padding:28px 22px;flex:1}
+    button{border:0;border-radius:8px;padding:10px 15px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}button:hover{background:#1d4ed8}button:disabled{opacity:.5;cursor:not-allowed}
+    .secondary{background:transparent;border:1px solid var(--line);color:var(--text)}.danger{background:#991b1b}.lang{background:transparent;color:var(--muted);padding:5px 8px}.lang.active{background:var(--accent);color:var(--bg)}
+    h1{font-size:22px;color:var(--accent);margin:0 0 8px}h2{font-size:17px;margin:0 0 14px}h3{font-size:15px;margin:0 0 7px}.muted{color:var(--muted);line-height:1.5}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px}.item{background:var(--inner);border:1px solid var(--line);border-radius:9px;padding:15px;margin-top:10px}.meta{font-size:12px;color:var(--muted);margin:5px 0 12px}.badge{display:inline-block;border-radius:999px;padding:3px 8px;background:#064e3b;color:var(--ok);font-size:11px;font-weight:800}.empty{color:var(--muted);padding:14px 0}
+    dialog{width:min(760px,calc(100vw - 28px));max-height:88vh;background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:0}dialog::backdrop{background:rgba(2,6,23,.82)}.dialog-head{padding:20px;border-bottom:1px solid var(--line)}.dialog-body{padding:20px;overflow:auto;max-height:55vh;white-space:pre-wrap;line-height:1.65}.dialog-actions{padding:18px 20px;border-top:1px solid var(--line)}.accept{display:flex;gap:10px;align-items:flex-start;margin-bottom:14px;color:var(--text)}.accept input{margin-top:3px;accent-color:var(--accent)}
+    .signed-text{white-space:pre-wrap;line-height:1.6;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:14px}.error{color:var(--danger)}footer{text-align:center;color:#64748b;border-top:1px solid var(--line);padding:20px;font-size:12px}
+    @media(max-width:760px){.grid{grid-template-columns:1fr}.container{padding:20px 14px}header{padding:11px 14px}}
+  </style>
 </head>
 <body>
+<header>
+  <div class="logo" data-i18n="logo">🔬 Research OS — Кабинет участника</div>
+  <div class="row">
+    <button class="lang" data-lang="ru" onclick="setLanguage('ru')">RU</button>
+    <button class="lang" data-lang="es" onclick="setLanguage('es')">ES</button>
+    <button class="lang" data-lang="en" onclick="setLanguage('en')">EN</button>
+    <button class="danger" onclick="logout()" data-i18n="logout">Выйти</button>
+  </div>
+</header>
+<main class="container">
+  <h1 id="welcome">Личный кабинет</h1>
+  <p class="muted" data-i18n="description">Здесь находятся доступные анкеты, подписанные согласия и история прохождений.</p>
+  <div id="pageStatus" class="muted"></div>
+  <div class="grid">
+    <section class="card">
+      <h2 data-i18n="available">📋 Доступные анкеты</h2>
+      <div id="questionnaireList" class="empty" data-i18n="loading">Загрузка…</div>
+    </section>
+    <section class="card">
+      <h2 data-i18n="history">📊 История и результаты</h2>
+      <div id="sessionList" class="empty" data-i18n="loading">Загрузка…</div>
+    </section>
+  </div>
+</main>
 
-    <div class="header">
-        <div class="logo" data-i18n="logo">🔬 Research OS — Кабинет Участника</div>
-        <div class="header-right">
-            <div class="lang-picker">
-                <button class="lang-btn" onclick="setLang('ru', event)">🇷🇺 RU</button>
-                <button class="lang-btn" onclick="setLang('es', event)">🇲🇽 ES</button>
-                <button class="lang-btn" onclick="setLang('en', event)">🇬🇧 EN</button>
-            </div>
-            <button class="btn btn-logout" onclick="handleLogout()" data-i18n="logout">Выйти</button>
-        </div>
+<dialog id="consentDialog">
+  <div class="dialog-head">
+    <h2 id="consentTitle"></h2>
+    <div id="consentMeta" class="meta"></div>
+  </div>
+  <div id="consentText" class="dialog-body"></div>
+  <div class="dialog-actions">
+    <label class="accept">
+      <input id="acceptCheckbox" type="checkbox" onchange="updateStartButton()">
+      <span data-i18n="acceptText">Я прочитал(а) документ и добровольно соглашаюсь участвовать.</span>
+    </label>
+    <div class="row">
+      <button id="signStartButton" disabled onclick="acceptAndStart()" data-i18n="signStart">Подписать и начать</button>
+      <button class="secondary" onclick="closeConsent()" data-i18n="cancel">Отмена</button>
     </div>
+  </div>
+</dialog>
 
-    <div class="container">
-        <div id="cabinetContent">
-            <div class="status-badge" data-i18n="status_active">● Сессия активна</div>
-            <h1 id="welcomeTitle">Личный кабинет сессии</h1>
-            <p data-i18n="cabinet_desc">Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.</p>
-            
-            <div class="grid">
-                <!-- Левая колонка: Опросники и прогресс -->
-                <div>
-                    <div class="card">
-                        <h3 data-i18n="sec_surveys">📋 Активные опросники</h3>
-                        <p data-i18n="surveys_desc">Доступные для заполнения методики в рамках вашего текущего этапа:</p>
-                        <div style="background: #0f172a; padding: 16px; border-radius: 8px; border: 1px solid #334155; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-                            <div>
-                                <strong style="color: #f8fafc; display: block; margin-bottom: 4px;" data-i18n="survey_name">Психометрический скрининг шкал</strong>
-                                <span style="font-size: 12px; color: #94a3b8;" data-i18n="survey_status">Статус: Готов к прохождению (~10 мин)</span>
-                            </div>
-                            <a href="assessment.html" class="btn" data-i18n="btn_take">Пройти →</a>
-                        </div>
-                    </div>
+<dialog id="signedDialog">
+  <div class="dialog-head">
+    <h2 id="signedTitle"></h2>
+    <div id="signedMeta" class="meta"></div>
+  </div>
+  <div class="dialog-body"><div id="signedText" class="signed-text"></div></div>
+  <div class="dialog-actions"><button class="secondary" onclick="document.getElementById('signedDialog').close()" data-i18n="close">Закрыть</button></div>
+</dialog>
 
-                    <div class="card">
-                        <h3 data-i18n="sec_history">📊 История и результаты</h3>
-                        <p style="color: #64748b; font-size: 13px; margin: 0;" data-i18n="history_empty">У вас пока нет завершенных сессий. История появится после отправки ответов.</p>
-                    </div>
-                </div>
-
-                <!-- Правая колонка: ИИ-ассистент -->
-                <div>
-                    <div class="card" style="height: 100%; display: flex; flex-direction: column; box-sizing: border-box;">
-                        <h3 data-i18n="sec_ai">🤖 ИИ-Ассистент</h3>
-                        <p style="font-size: 12px; margin-bottom: 12px;" data-i18n="ai_desc">Задайте вопрос по процедуре прохождения опросников.</p>
-                        
-                        <div class="chat-box" id="chatContainer">
-                            <div class="chat-msg ai" data-i18n="ai_welcome">Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?</div>
-                        </div>
-                        
-                        <div class="chat-input-area">
-                            <input type="text" id="chatInput" class="chat-input" data-i18n-placeholder="chat_placeholder" placeholder="Введите вопрос..." onkeydown="if(event.key==='Enter') sendMsg()">
-                            <button class="btn" style="padding: 8px 12px;" onclick="sendMsg()">➤</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="research-footer">
-      ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
-    </div>
-
+<footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
 <script src="auth.js"></script>
 <script>
-const i18n = {
-    ru: {
-        logo: "🔬 Research OS — Кабинет Участника",
-        logout: "Выйти",
-        status_active: "● Сессия активна",
-        cabinet_title: "Личный кабинет сессии",
-        cabinet_desc: "Здесь вы можете проходить назначенные психометрические опросники и общаться с виртуальным ассистентом исследования.",
-        sec_surveys: "📋 Активные опросники",
-        surveys_desc: "Доступные для заполнения методики в рамках вашего текущего этапа:",
-        survey_name: "Психометрический скрининг шкал",
-        survey_status: "Статус: Готов к прохождению (~10 мин)",
-        btn_take: "Пройти →",
-        sec_history: "📊 История и результаты",
-        history_empty: "У вас пока нет завершенных сессий. История появится после отправки ответов.",
-        sec_ai: "🤖 ИИ-Ассистент",
-        ai_desc: "Задайте вопрос по процедуре прохождения опросников.",
-        chat_placeholder: "Введите вопрос...",
-        ai_welcome: "Здравствуйте! Я ваш цифровой помощник в Research OS. Чем могу помочь по текущему исследованию?",
-        ai_reply: "Спасибо за вопрос! Ваши данные фиксируются в системе Research OS автоматически. Если возникнут технические трудности при прохождении шкал, обратитесь к исследователю.",
-        no_token_title: "🔒 Требуется персональная ссылка.",
-        no_token_desc: "Для доступа к личному кабинету перейдите по уникальной ссылке, предоставленной исследователем."
-    },
-    es: {
-        logo: "🔬 Research OS — Panel de Participante",
-        logout: "Salir",
-        status_active: "● Sesión activa",
-        cabinet_title: "Panel personal de la sesión",
-        cabinet_desc: "Aquí puede completar los cuestionarios psicométricos asignados y comunicarse con el asistente virtual de la investigación.",
-        sec_surveys: "📋 Cuestionarios activos",
-        surveys_desc: "Metodologías disponibles para completar en su etapa actual:",
-        survey_name: "Tamizaje psicométrico de escalas",
-        survey_status: "Estado: Listo para completar (~10 min)",
-        btn_take: "Completar →",
-        sec_history: "📊 Historial y resultados",
-        history_empty: "Aún no tiene sesiones completadas. El historial aparecerá después de enviar sus respuestas.",
-        sec_ai: "🤖 Asistente de IA",
-        ai_desc: "Haga una pregunta sobre el procedimiento para completar los cuestionarios.",
-        chat_placeholder: "Escriba una pregunta...",
-        ai_welcome: "¡Hola! Soy su asistente digital en Research OS. ¿En qué puedo ayudarle con la investigación actual?",
-        ai_reply: "¡Gracias por su pregunta! Sus datos se registran automáticamente en el sistema Research OS. Si tiene dificultades técnicas al completar las escalas, comuníquese con el investigador.",
-        no_token_title: "🔒 Se requiere un enlace personal.",
-        no_token_desc: "Para acceder a su cuenta personal, siga el enlace único proporcionado por el investigador."
-    },
-    en: {
-        logo: "🔬 Research OS — Participant Hub",
-        logout: "Log Out",
-        status_active: "● Session Active",
-        cabinet_title: "Session Personal Hub",
-        cabinet_desc: "Here you can complete assigned psychometric questionnaires and chat with the virtual research assistant.",
-        sec_surveys: "📋 Active Questionnaires",
-        surveys_desc: "Available methods to complete for your current stage:",
-        survey_name: "Psychometric Scale Screening",
-        survey_status: "Status: Ready to complete (~10 min)",
-        btn_take: "Start →",
-        sec_history: "📊 History & Results",
-        history_empty: "You have no completed sessions yet. History will appear after submitting responses.",
-        sec_ai: "🤖 AI Assistant",
-        ai_desc: "Ask a question regarding the questionnaire completion procedure.",
-        chat_placeholder: "Type a question...",
-        ai_welcome: "Hello! I am your digital assistant in Research OS. How can I help you with the current study?",
-        ai_reply: "Thank you for your question! Your data is recorded automatically in the Research OS system. If you encounter technical difficulties while completing the scales, please contact the researcher.",
-        no_token_title: "🔒 Personal Link Required.",
-        no_token_desc: "To access your personal account, please follow the unique link provided by the researcher."
-    }
+'use strict';
+const T={
+ ru:{logo:'🔬 Research OS — Кабинет участника',logout:'Выйти',welcome:'Личный кабинет',description:'Здесь находятся доступные анкеты, подписанные согласия и история прохождений.',available:'📋 Доступные анкеты',history:'📊 История и результаты',loading:'Загрузка…',emptyAvailable:'Сейчас нет доступных активных анкет.',emptyHistory:'У вас пока нет начатых или завершённых прохождений.',readStart:'Прочитать согласие и начать',version:'Версия',ready:'Готова к прохождению',acceptText:'Я прочитал(а) документ и добровольно соглашаюсь участвовать.',signStart:'Подписать и начать',cancel:'Отмена',close:'Закрыть',accepted:'Согласие принято',started:'Начато',completed:'Завершено',active:'Сессия начата',discarded:'Прервано',revoked:'Отозвано',signedCopy:'Открыть подписанное согласие',noResult:'Результат ещё не сформирован.',loadError:'Не удалось загрузить кабинет.',startError:'Не удалось начать прохождение.'},
+ es:{logo:'🔬 Research OS — Panel del participante',logout:'Salir',welcome:'Panel personal',description:'Aquí se encuentran los cuestionarios disponibles, los consentimientos firmados y el historial.',available:'📋 Cuestionarios disponibles',history:'📊 Historial y resultados',loading:'Cargando…',emptyAvailable:'No hay cuestionarios activos disponibles.',emptyHistory:'Aún no tiene sesiones iniciadas o completadas.',readStart:'Leer el consentimiento y comenzar',version:'Versión',ready:'Listo para completar',acceptText:'He leído el documento y acepto participar voluntariamente.',signStart:'Firmar y comenzar',cancel:'Cancelar',close:'Cerrar',accepted:'Consentimiento aceptado',started:'Iniciado',completed:'Completado',active:'Sesión iniciada',discarded:'Interrumpido',revoked:'Revocado',signedCopy:'Abrir consentimiento firmado',noResult:'El resultado aún no se ha generado.',loadError:'No se pudo cargar el panel.',startError:'No se pudo iniciar el cuestionario.'},
+ en:{logo:'🔬 Research OS — Participant Hub',logout:'Log out',welcome:'Personal hub',description:'Available questionnaires, signed consents, and completion history are kept here.',available:'📋 Available questionnaires',history:'📊 History and results',loading:'Loading…',emptyAvailable:'No active questionnaires are currently available.',emptyHistory:'You have no started or completed sessions yet.',readStart:'Read consent and start',version:'Version',ready:'Ready to complete',acceptText:'I have read the document and voluntarily agree to participate.',signStart:'Sign and start',cancel:'Cancel',close:'Close',accepted:'Consent accepted',started:'Started',completed:'Completed',active:'Session started',discarded:'Interrupted',revoked:'Revoked',signedCopy:'Open signed consent',noResult:'A result has not been generated yet.',loadError:'The participant hub could not be loaded.',startError:'The questionnaire could not be started.'}
 };
-
-let currentLang = 'ru';
-
-function setLang(lang, e) {
-    currentLang = lang;
-    localStorage.setItem('app_language', lang);
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-    if (e && e.target) {
-        e.target.classList.add('active');
-    } else {
-        const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(lang));
-        if (btn) btn.classList.add('active');
-    }
-
-    const dict = i18n[lang] || i18n.ru;
-    document.querySelectorAll('[data-i18n]').forEach(elem => {
-        const key = elem.getAttribute('data-i18n');
-        if (dict[key]) elem.innerText = dict[key];
-    });
-
-    document.querySelectorAll('[data-i18n-placeholder]').forEach(elem => {
-        const key = elem.getAttribute('data-i18n-placeholder');
-        if (dict[key]) elem.placeholder = dict[key];
-    });
-
-    const session = ResearchAuth.readSession();
-    if (session && session.role === 'respondent') {
-        const titlePrefix = lang === 'es' ? "Panel personal de la sesión: " : (lang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
-        document.getElementById('welcomeTitle').innerText = `${titlePrefix}${session.user_identifier}`;
-    }
+let lang='ru',principal=null,questionnaires=[],sessions=[],selectedQuestionnaire=null,selectedConsent=null;
+function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function formatDate(value){if(!value)return '—';try{return new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));}catch(_){return value;}}
+function setLanguage(value){
+ lang=T[value]?value:'ru';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;
+ document.querySelectorAll('[data-i18n]').forEach(el=>{const value=T[lang][el.dataset.i18n];if(value)el.textContent=value;});
+ document.querySelectorAll('[data-lang]').forEach(el=>el.classList.toggle('active',el.dataset.lang===lang));
+ document.getElementById('welcome').textContent=principal?`${T[lang].welcome}: ${principal.user_identifier}`:T[lang].welcome;
+ renderQuestionnaires();renderSessions();
 }
-
-window.addEventListener('DOMContentLoaded', async () => {
-    const savedLang = localStorage.getItem('app_language') || 'ru';
-    setLang(savedLang);
-
-    const session = await ResearchAuth.requireRole('respondent', 'cabinet.html');
-    if (!session) {
-        return;
-    }
-    const titlePrefix = currentLang === 'es' ? "Panel personal de la sesión: " : (currentLang === 'en' ? "Session Personal Hub: " : "Личный кабинет сессии: ");
-    document.getElementById('welcomeTitle').innerText = `${titlePrefix}${session.user_identifier}`;
-});
-
-function handleLogout() {
-    ResearchAuth.logout({ returnTo: 'index.html' });
+async function request(url,options){
+ const response=await fetch(url,options);const data=await response.json();if(!response.ok)throw new Error(data.error||`${response.status}`);return data;
 }
-
-function sendMsg() {
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
-    if(!text) return;
-
-    const chat = document.getElementById('chatContainer');
-    chat.innerHTML += `<div class="chat-msg" style="background: #2563eb; color: #fff; align-self: flex-end;">${text}</div>`;
-    input.value = '';
-    chat.scrollTop = chat.scrollHeight;
-
-    setTimeout(() => {
-        const dict = i18n[currentLang] || i18n.ru;
-        chat.innerHTML += `<div class="chat-msg ai">${dict.ai_reply}</div>`;
-        chat.scrollTop = chat.scrollHeight;
-    }, 800);
+async function loadCabinet(){
+ document.getElementById('pageStatus').textContent='';
+ try{
+  const [qData,sData]=await Promise.all([
+   request('/respondent/questionnaires',{headers:headers()}),
+   request('/respondent/sessions',{headers:headers()})
+  ]);
+  questionnaires=qData.questionnaires||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
+ }catch(error){document.getElementById('pageStatus').textContent=`${T[lang].loadError} ${error.message}`;document.getElementById('pageStatus').className='error';}
 }
+function renderQuestionnaires(){
+ const box=document.getElementById('questionnaireList');if(!box)return;
+ if(!questionnaires.length){box.className='empty';box.textContent=T[lang].emptyAvailable;return;}
+ box.className='';box.innerHTML=questionnaires.map((q,index)=>`<article class="item"><h3>${escapeHtml(q.title)}</h3><div class="meta">${escapeHtml(q.description||'')}<br>${T[lang].version}: ${q.version} · ${T[lang].ready}</div><button onclick="openConsent(${index})">${T[lang].readStart}</button></article>`).join('');
+}
+function renderSessions(){
+ const box=document.getElementById('sessionList');if(!box)return;
+ if(!sessions.length){box.className='empty';box.textContent=T[lang].emptyHistory;return;}
+ box.className='';box.innerHTML=sessions.map((s,index)=>{
+  const status=T[lang][s.status]||s.status;
+  return `<article class="item"><span class="badge">${escapeHtml(status)}</span><h3 style="margin-top:9px">${escapeHtml(s.questionnaire_title)}</h3><div class="meta">${T[lang].started}: ${escapeHtml(formatDate(s.started_at))}<br>${T[lang].accepted}: ${escapeHtml(formatDate(s.accepted_at))}${s.completed_at?`<br>${T[lang].completed}: ${escapeHtml(formatDate(s.completed_at))}`:''}</div><div class="row"><button class="secondary" onclick="openSignedConsent(${index})">${T[lang].signedCopy}</button></div>${s.status==='completed'?`<div class="meta">${T[lang].noResult}</div>`:''}</article>`;
+ }).join('');
+}
+async function openConsent(index){
+ selectedQuestionnaire=questionnaires[index];selectedConsent=null;document.getElementById('acceptCheckbox').checked=false;updateStartButton();
+ try{
+  const data=await request(`/respondent/questionnaires/${encodeURIComponent(selectedQuestionnaire.questionnaire_id)}/consent?version=${selectedQuestionnaire.version}&lang=${encodeURIComponent(lang)}`,{headers:headers()});
+  selectedConsent=data.consent;document.getElementById('consentTitle').textContent=selectedConsent.consent_title;document.getElementById('consentMeta').textContent=`${selectedConsent.questionnaire_title} · v${selectedConsent.questionnaire_version} · ${selectedConsent.language} · SHA-256 ${selectedConsent.text_sha256}`;document.getElementById('consentText').textContent=selectedConsent.text;document.getElementById('consentDialog').showModal();
+ }catch(error){document.getElementById('pageStatus').textContent=error.message;document.getElementById('pageStatus').className='error';}
+}
+function closeConsent(){document.getElementById('consentDialog').close();selectedQuestionnaire=null;selectedConsent=null;}
+function updateStartButton(){document.getElementById('signStartButton').disabled=!selectedConsent||!document.getElementById('acceptCheckbox').checked;}
+async function acceptAndStart(){
+ if(!selectedQuestionnaire||!selectedConsent||!document.getElementById('acceptCheckbox').checked)return;
+ const button=document.getElementById('signStartButton');button.disabled=true;
+ try{
+  const data=await request(`/respondent/questionnaires/${encodeURIComponent(selectedQuestionnaire.questionnaire_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({questionnaire_version:selectedQuestionnaire.version,language:lang,explicit_acceptance:true})});
+  location.href=`assessment.html?session_id=${encodeURIComponent(data.session_id)}`;
+ }catch(error){button.disabled=false;document.getElementById('pageStatus').textContent=`${T[lang].startError} ${error.message}`;document.getElementById('pageStatus').className='error';closeConsent();}
+}
+function openSignedConsent(index){
+ const s=sessions[index];document.getElementById('signedTitle').textContent=s.consent_title;document.getElementById('signedMeta').textContent=`${s.questionnaire_title} · ${T[lang].accepted}: ${formatDate(s.accepted_at)} · v${s.consent_version} · ${s.consent_language} · SHA-256 ${s.consent_text_sha256}`;document.getElementById('signedText').textContent=s.consent_text;document.getElementById('signedDialog').showModal();
+}
+function logout(){ResearchAuth.logout({returnTo:'index.html'});}
+document.addEventListener('DOMContentLoaded',async()=>{principal=await ResearchAuth.requireRole('respondent','cabinet.html');if(!principal)return;lang=localStorage.getItem('app_language')||'ru';if(!T[lang])lang='ru';setLanguage(lang);await loadCabinet();});
 </script>
-
 </body>
 </html>
