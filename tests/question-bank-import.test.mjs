@@ -95,6 +95,111 @@ test('Python import rejects executable expressions', () => {
   );
 });
 
+test('structured source formats never fall back to question-mark line scraping', () => {
+  assert.equal(importer.mayFallbackToPlainText('py'), false);
+  assert.equal(importer.mayFallbackToPlainText('json'), false);
+  assert.equal(importer.mayFallbackToPlainText('yaml'), false);
+  assert.equal(importer.mayFallbackToPlainText('js'), false);
+  assert.equal(importer.mayFallbackToPlainText('txt'), true);
+  assert.equal(importer.mayFallbackToPlainText('text'), true);
+});
+
+test('legacy question_prompt, answer_options, and scale id are normalized without becoming literal prose', () => {
+  const imported = importer.canonicalOrConverted({
+    title: 'Legacy bank',
+    questions: {
+      Q_1: {
+        question_prompt: 'Actual research question?',
+        response_type: 'single_select',
+        answer_options: ['No', 'Yes'],
+        scale: 'binary',
+        status: 'draft'
+      }
+    }
+  });
+  assert.equal(imported.questions.Q_1.prompt, 'Actual research question?');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(imported.questions.Q_1.options)),
+    [{ value: 0, text: 'No' }, { value: 1, text: 'Yes' }]
+  );
+  assert.equal(imported.questions.Q_1.scale.id, 'binary');
+  assert.equal(importer.summarize(imported, 'py').can_use, true);
+});
+
+test('synthetic Strict Cyan Protocol fixture preserves all variables, scales, routing, and unfinished prompts', async () => {
+  const text = await fs.readFile(
+    new URL('./fixtures/synthetic_strict_cyan_protocol.json', import.meta.url),
+    'utf8'
+  );
+  const parsed = importer.parseStructuredText(text);
+  const imported = importer.canonicalOrConverted(parsed);
+  const result = importer.summarize(imported, 'json');
+
+  assert.equal(result.counts.questions, 4);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(imported.question_order)),
+    [
+      'SYNTHETIC_CONTEXT_GROUP',
+      'SYNTHETIC_LOAD_T1',
+      'SYNTHETIC_METRIC',
+      'SYNTHETIC_UNFINISHED_SCALE'
+    ]
+  );
+  assert.equal(imported.title, 'Research OS Strict Cyan Protocol Engine');
+  assert.equal(imported.version, 1);
+  assert.equal(imported.source_contract.version, '2.6.0');
+  assert.equal(imported.source_contract.psychometric_integrity, 'validated_strict');
+  assert.equal(imported.primary_language, 'en-US');
+  assert.equal(imported.global_mode, 'static');
+  assert.equal(imported.global_time_reference, '2026-01-15T12:00:00.000Z');
+
+  const contextGroup = imported.questions.SYNTHETIC_CONTEXT_GROUP;
+  assert.equal(
+    contextGroup.prompt,
+    'Select a synthetic context group for this importer test:'
+  );
+  assert.equal(contextGroup.source_variable_id, 'synthetic_context_group');
+  assert.equal(contextGroup.parameter, null);
+  assert.equal(contextGroup.type, 'single_select');
+  assert.equal(contextGroup.scale.id, 'single_choice');
+  assert.equal(contextGroup.scale.psychometric_level, 'nominal');
+  assert.equal(contextGroup.options.length, 3);
+  assert.equal(contextGroup.options[0].value, 'alpha');
+  assert.equal(contextGroup.options[0].target_transition, 'next');
+  assert.equal(contextGroup.routing.default_next, 'next');
+
+  const load = imported.questions.SYNTHETIC_LOAD_T1;
+  assert.equal(load.scale.id, 'likert_7');
+  assert.equal(load.time.tracking_mode, 'time_variant');
+  assert.equal(load.time.wave, 'wave_1');
+  assert.equal(load.time.lag, 'days_7');
+
+  const numeric = imported.questions.SYNTHETIC_METRIC;
+  assert.equal(numeric.type, 'number');
+  assert.equal(numeric.scale.id, 'currency_metric');
+  assert.equal(numeric.scale.min, 1);
+  assert.equal(numeric.scale.max, 5);
+  assert.equal(numeric.scale.step, 1);
+
+  assert.equal(result.can_use, false);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(
+      result.diagnostics
+        .filter(item => item.code === 'PLACEHOLDER_PROMPT')
+        .map(item => item.question_code)
+    )),
+    ['SYNTHETIC_METRIC', 'SYNTHETIC_UNFINISHED_SCALE']
+  );
+  assert.equal(
+    result.diagnostics.filter(item => item.code === 'UNRESOLVED_TYPE').length,
+    0
+  );
+  assert.equal(
+    result.diagnostics.filter(item => item.code === 'UNRESOLVED_SCALE').length,
+    0
+  );
+});
+
 test('tabular export rows are grouped back into one question with ordered options', () => {
   const rows = [
     {
