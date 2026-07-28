@@ -63,7 +63,7 @@
                     <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_researcher_desc">Создать отдельный логин и пароль исследователя:</p>
                     <div class="form-group" style="margin-bottom: 12px;">
                         <input type="text" id="researcherId" placeholder="ID / имя исследователя">
-                        <input type="text" id="researcherUsername" placeholder="Логин" autocomplete="off">
+                        <input type="text" id="researcherUsername" placeholder="Логин" autocomplete="off" minlength="3" maxlength="128" pattern="[A-Za-z0-9_.@+-]+">
                         <input type="password" id="researcherPassword" placeholder="Пароль (не менее 10 символов)" autocomplete="new-password">
                         <input type="password" id="bootstrapSecret" placeholder="Bootstrap-секрет — только для первого исследователя" autocomplete="off">
                     </div>
@@ -84,7 +84,7 @@
                     <p style="color: #94a3b8; font-size: 12px;" data-i18n="col_respondent_desc">Создать отдельный логин и пароль респондента:</p>
                     <div class="form-group" style="margin-bottom: 12px;">
                         <input type="text" id="respondentId" placeholder="ID / имя респондента">
-                        <input type="text" id="respondentUsername" placeholder="Логин" autocomplete="off">
+                        <input type="text" id="respondentUsername" placeholder="Логин" autocomplete="off" minlength="3" maxlength="128" pattern="[A-Za-z0-9_.@+-]+">
                         <input type="password" id="respondentPassword" placeholder="Пароль (не менее 10 символов)" autocomplete="new-password">
                     </div>
                     <button class="btn" style="width: 100%; margin-bottom: 12px;" onclick="createRespondentAccount()" data-i18n="btn_generate_resp">Создать респондента</button>
@@ -158,6 +158,11 @@ const i18n = {
         btn_generate_resp: "Создать респондента",
         account_signed_in: "Вход исследователя подтверждён. Можно создавать учётные записи исследователей и респондентов.",
         account_public: "Открытый просмотр настроек. Для создания учётных записей войдите как исследователь; bootstrap-секрет используется один раз для первого исследователя.",
+        researcher_required: "Введите ID, логин и пароль исследователя не короче 10 символов.",
+        respondent_required: "Введите ID, логин и пароль респондента не короче 10 символов.",
+        username_invalid: "Логин должен содержать от 3 до 128 символов: только латинские буквы, цифры и . _ @ + - без пробелов.",
+        researcher_create_failed: "Не удалось создать исследователя: ",
+        respondent_create_failed: "Не удалось создать респондента: ",
         btn_download_qr: "📥 Скачать QR (PNG)",
         sec1_title: "3. Ваши API-ключи ИИ",
         sec2_title: "4. Какой ИИ отвечает за задачи?",
@@ -183,6 +188,11 @@ const i18n = {
         btn_generate_resp: "Crear participante",
         account_signed_in: "Acceso de investigador confirmado. Puede crear cuentas de investigadores y participantes.",
         account_public: "Vista pública de configuración. Inicie sesión como investigador para crear cuentas; el secreto bootstrap se usa una sola vez para el primer investigador.",
+        researcher_required: "Introduzca el ID, el usuario y una contraseña de investigador de al menos 10 caracteres.",
+        respondent_required: "Introduzca el ID, el usuario y una contraseña de participante de al menos 10 caracteres.",
+        username_invalid: "El usuario debe tener entre 3 y 128 caracteres: solo letras latinas, números y . _ @ + -, sin espacios.",
+        researcher_create_failed: "No se pudo crear el investigador: ",
+        respondent_create_failed: "No se pudo crear el participante: ",
         btn_download_qr: "📥 Descargar QR (PNG)",
         sec1_title: "3. Sus Claves API de IA",
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
@@ -208,6 +218,11 @@ const i18n = {
         btn_generate_resp: "Create respondent",
         account_signed_in: "Researcher access confirmed. You may create researcher and respondent accounts.",
         account_public: "Public settings view. Sign in as a researcher to create accounts; the bootstrap secret is used once for the first researcher.",
+        researcher_required: "Enter the researcher ID, username and a password of at least 10 characters.",
+        respondent_required: "Enter the respondent ID, username and a password of at least 10 characters.",
+        username_invalid: "The username must be 3 to 128 characters: Latin letters, numbers and . _ @ + - only, with no spaces.",
+        researcher_create_failed: "Could not create the researcher: ",
+        respondent_create_failed: "Could not create the respondent: ",
         btn_download_qr: "📥 Download QR (PNG)",
         sec1_title: "3. Your AI API Keys",
         sec2_title: "4. Assign AI models to tasks",
@@ -219,6 +234,12 @@ const i18n = {
 };
 
 let accountManagerSession = null;
+const USERNAME_PATTERN = /^[A-Za-z0-9_.@+-]{3,128}$/;
+
+function translatedText(key) {
+    const lang = localStorage.getItem('app_language') || 'es';
+    return (i18n[lang] || i18n.es)[key] || i18n.es[key] || key;
+}
 
 function setLang(lang, e) {
     localStorage.setItem('app_language', lang);
@@ -246,7 +267,11 @@ function setLang(lang, e) {
         const qrContainer = document.getElementById('qrcodeRes');
 
         if(!id || !username || password.length < 10) {
-            alert('Введите ID, логин и пароль исследователя не короче 10 символов');
+            alert(translatedText('researcher_required'));
+            return;
+        }
+        if(!USERNAME_PATTERN.test(username)) {
+            alert(translatedText('username_invalid'));
             return;
         }
 
@@ -274,7 +299,7 @@ function setLang(lang, e) {
             document.getElementById('researcherPassword').value = '';
             document.getElementById('bootstrapSecret').value = '';
         } catch (err) {
-            alert('Не удалось создать исследователя: ' + err.message);
+            alert(translatedText('researcher_create_failed') + err.message);
         }
     }
 
@@ -287,7 +312,11 @@ function setLang(lang, e) {
         const qrContainer = document.getElementById('qrcodeResp');
 
         if(!id || !username || password.length < 10) {
-            alert('Введите ID, логин и пароль респондента не короче 10 символов');
+            alert(translatedText('respondent_required'));
+            return;
+        }
+        if(!USERNAME_PATTERN.test(username)) {
+            alert(translatedText('username_invalid'));
             return;
         }
 
@@ -314,7 +343,7 @@ function setLang(lang, e) {
             });
             document.getElementById('respondentPassword').value = '';
         } catch (err) {
-            alert('Не удалось создать респондента: ' + err.message);
+            alert(translatedText('respondent_create_failed') + err.message);
         }
     }
 
