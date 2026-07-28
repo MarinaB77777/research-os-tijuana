@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Research OS | Registro</title>
+  <style>
+    :root{--bg:#0b0f19;--card:#162032;--line:#334155;--text:#f8fafc;--muted:#94a3b8;--accent:#34d399;--danger:#fca5a5}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;display:grid;place-items:center;padding:24px}
+    .card{width:min(460px,100%);background:var(--card);border:1px solid var(--line);border-radius:14px;padding:28px;box-shadow:0 16px 40px rgba(0,0,0,.35)}
+    h1{font-size:22px;color:var(--accent);margin:0 0 8px}
+    p{color:var(--muted);font-size:14px;line-height:1.5}
+    label{display:block;font-size:13px;font-weight:700;margin:20px 0 8px}
+    input{width:100%;background:#0f172a;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:12px}
+    button,.link{display:inline-flex;justify-content:center;align-items:center;border-radius:8px;padding:10px 15px;font-weight:700;font-size:14px;text-decoration:none;cursor:pointer}
+    button{width:100%;border:0;background:var(--accent);color:#052e2b;margin-top:14px}
+    button:disabled{opacity:.55;cursor:wait}
+    .link{color:var(--muted);border:1px solid var(--line);margin-top:12px;width:100%}
+    .status{min-height:22px;margin-top:14px;color:var(--danger);font-size:13px}
+    .lang{display:flex;gap:6px;justify-content:flex-end;margin-bottom:18px}
+    .lang button{width:auto;margin:0;padding:5px 9px;background:transparent;color:var(--muted);border:1px solid var(--line)}
+    footer{text-align:center;color:#64748b;font-size:12px;margin-top:24px}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="lang">
+      <button type="button" onclick="setLang('es')">ES</button>
+      <button type="button" onclick="setLang('en')">EN</button>
+      <button type="button" onclick="setLang('ru')">RU</button>
+    </div>
+    <h1 id="title">Registro de participante</h1>
+    <p id="description">Cree su propia cuenta. No necesita que un investigador lo registre previamente.</p>
+    <form id="registerForm">
+      <label for="usernameInput" id="usernameLabel">Usuario</label>
+      <input id="usernameInput" type="text" autocomplete="username" minlength="3" maxlength="128" pattern="[A-Za-z0-9_.@+\-]+" required>
+      <label for="passwordInput" id="passwordLabel">Contraseña</label>
+      <input id="passwordInput" type="password" autocomplete="new-password" minlength="10" required>
+      <label for="confirmInput" id="confirmLabel">Repita la contraseña</label>
+      <input id="confirmInput" type="password" autocomplete="new-password" minlength="10" required>
+      <button id="submitButton" type="submit">Registrarse</button>
+    </form>
+    <div id="status" class="status" role="alert"></div>
+    <a class="link" href="login.html?role=respondent&return=cabinet.html" id="loginLink">Ya tengo una cuenta</a>
+    <footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
+  </main>
+  <script src="auth.js"></script>
+  <script>
+    const copy={
+      es:{title:'Registro de participante',description:'Cree su propia cuenta. No necesita que un investigador lo registre previamente.',username:'Usuario',password:'Contraseña (mínimo 10 caracteres)',confirm:'Repita la contraseña',submit:'Registrarse',login:'Ya tengo una cuenta',checking:'Creando la cuenta…',mismatch:'Las contraseñas no coinciden.',timeout:'El servidor no respondió a tiempo. Inténtelo de nuevo.'},
+      en:{title:'Participant registration',description:'Create your own account. A researcher does not need to register you first.',username:'Username',password:'Password (at least 10 characters)',confirm:'Repeat password',submit:'Register',login:'I already have an account',checking:'Creating account…',mismatch:'The passwords do not match.',timeout:'The server did not respond in time. Try again.'},
+      ru:{title:'Регистрация респондента',description:'Создайте свою учётную запись самостоятельно. Предварительная регистрация исследователем не нужна.',username:'Логин',password:'Пароль (не менее 10 символов)',confirm:'Повторите пароль',submit:'Зарегистрироваться',login:'У меня уже есть учётная запись',checking:'Создаём учётную запись…',mismatch:'Пароли не совпадают.',timeout:'Сервер не ответил вовремя. Попробуйте ещё раз.'}
+    };
+    let lang=localStorage.getItem('app_language')||'es';
+    if(!copy[lang])lang='es';
+    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;confirmLabel.textContent=t.confirm;submitButton.textContent=t.submit;loginLink.textContent=t.login}
+    async function submitRegistration(){
+      status.textContent='';
+      if(passwordInput.value!==confirmInput.value){status.textContent=copy[lang].mismatch;return}
+      status.textContent=copy[lang].checking;submitButton.disabled=true;
+      try{
+        await ResearchAuth.registerRespondent(usernameInput.value.trim(),passwordInput.value);
+        history.replaceState({},document.title,'register.html');
+        location.replace('cabinet.html');
+      }catch(error){
+        status.textContent=error.code==='AUTH_REQUEST_TIMEOUT'?copy[lang].timeout:error.message;
+      }finally{
+        submitButton.disabled=false;
+      }
+    }
+    registerForm.addEventListener('submit',event=>{event.preventDefault();submitRegistration()});
+    document.addEventListener('DOMContentLoaded',async()=>{
+      setLang(lang);
+      const session=await ResearchAuth.verify('respondent');
+      if(session)location.replace('cabinet.html');
+    });
+  </script>
+</body>
+</html>

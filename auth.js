@@ -21,6 +21,17 @@
     global.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   }
 
+  function sessionFromPayload(payload) {
+    return {
+      token: payload.session_token,
+      account_id: payload.account_id,
+      role: payload.role,
+      user_identifier: payload.user_identifier,
+      expires_at: payload.expires_at || null,
+      verified_at: new Date().toISOString()
+    };
+  }
+
   function clearSession() {
     global.sessionStorage.removeItem(STORAGE_KEY);
     global.sessionStorage.removeItem('research_os_researcher_token');
@@ -84,14 +95,20 @@
       })
     });
     const payload = await parseResponse(response);
-    const session = {
-      token: payload.session_token,
-      account_id: payload.account_id,
-      role: payload.role,
-      user_identifier: payload.user_identifier,
-      expires_at: payload.expires_at || null,
-      verified_at: new Date().toISOString()
-    };
+    const session = sessionFromPayload(payload);
+    storeSession(session);
+    return session;
+  }
+
+  async function registerRespondent(username, password) {
+    if (!username || !password) throw new Error('Username and password are required');
+    const response = await fetchWithTimeout('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const payload = await parseResponse(response);
+    const session = sessionFromPayload(payload);
     storeSession(session);
     return session;
   }
@@ -175,6 +192,7 @@
     clearSession,
     safeReturnTarget,
     login,
+    registerRespondent,
     verify,
     requireRole,
     loginUrl,
