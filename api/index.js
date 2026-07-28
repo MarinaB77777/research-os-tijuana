@@ -213,11 +213,18 @@ export default async function handler(req, res) {
             return res.status(503).json({ ok: false, error: 'Server-side account storage is not configured' });
         }
         const { username, password, role, user_identifier: userIdentifier } = req.body || {};
-        if (!['researcher', 'respondent'].includes(role) || !username || !password || !userIdentifier) {
+        const normalizedUsername = String(username || '').trim();
+        if (!['researcher', 'respondent'].includes(role) || !normalizedUsername || !password || !userIdentifier) {
             return res.status(400).json({ ok: false, error: 'Username, password, role and user identifier are required' });
         }
-        if (String(username).length < 3 || String(password).length < 10) {
-            return res.status(400).json({ ok: false, error: 'Username must contain at least 3 characters and password at least 10 characters' });
+        if (!/^[A-Za-z0-9_.@+-]{3,128}$/.test(normalizedUsername)) {
+            return res.status(400).json({
+                ok: false,
+                error: "Username must be 3 to 128 characters and contain only letters, numbers, '.', '_', '@', '+' or '-'"
+            });
+        }
+        if (String(password).length < 10) {
+            return res.status(400).json({ ok: false, error: 'Password must contain at least 10 characters' });
         }
         let creatorAccountId = null;
         const presentedToken = bearerToken(req);
@@ -245,7 +252,7 @@ export default async function handler(req, res) {
         }
         try {
             const result = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'create_research_os_account', {
-                p_username: username,
+                p_username: normalizedUsername,
                 p_password: password,
                 p_role: role,
                 p_user_identifier: userIdentifier,
