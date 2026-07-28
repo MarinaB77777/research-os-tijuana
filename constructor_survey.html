@@ -41,8 +41,7 @@
     <h2 data-i18n="sources">1. Bancos y preguntas</h2>
     <div class="actions">
       <button onclick="loadBankCatalog()" data-i18n="loadCatalog">Actualizar bancos</button>
-      <label class="file-label" for="bankFile" data-i18n="importBank">Importar banco JSON</label>
-      <input id="bankFile" class="hidden" type="file" accept=".json,application/json" onchange="importBankFile(this.files[0])">
+      <a class="file-label" href="importer.html?return=constructor_survey.html" data-i18n="importBank">Importar archivo</a>
     </div>
     <div class="field" style="margin-top:10px">
       <label data-i18n="bankSelect">Banco registrado</label>
@@ -121,6 +120,12 @@ const consentTexts={
  ru:{consentMode:'4. Информированное согласие',standardConsent:'Стандартное согласие (автоматически)',specialConsentOption:'Особое согласие',specialConsent:'Особый документ',createConsent:'＋ Создать',standardSummary:'Стандартный документ подключается к этой версии анкеты автоматически.',specialMissing:'Выберите или создайте особое согласие.'}
 };
 Object.keys(consentTexts).forEach(key=>Object.assign(texts[key],consentTexts[key]));
+const importTexts={
+ es:{importBank:'Importar archivo',imported:'Banco importado listo para componer el cuestionario.'},
+ en:{importBank:'Import file',imported:'The imported bank is ready for questionnaire composition.'},
+ ru:{importBank:'Импорт файла',imported:'Импортированный банк готов для составления анкеты.'}
+};
+Object.keys(importTexts).forEach(key=>Object.assign(texts[key],importTexts[key]));
 const STANDARD_CONSENT_ID='00000000-0000-4000-8000-000000000001';
 let lang='es', bankCatalog=[], questionnaireCatalog=[], consentCatalog=[], sourceQuestions=[], state;
 
@@ -226,8 +231,12 @@ function addQuestion(q){
 function addAllQuestions(){sourceQuestions.forEach(addQuestion);}
 function moveItem(index,delta){const next=index+delta;if(next<0||next>=state.items.length)return;[state.items[index],state.items[next]]=[state.items[next],state.items[index]];renderItems();saveDraft();}
 function removeItem(index){const [removed]=state.items.splice(index,1);state.items.forEach(item=>{if(item.default_target===removed.item_id)item.default_target='next';item.rules.forEach(rule=>{if(rule.target===removed.item_id)rule.target='next';});});if(state.start_item_id===removed.item_id)state.start_item_id=state.items[0]?.item_id||null;renderItems();saveDraft();}
-async function importBankFile(file){
- if(!file)return;try{const data=JSON.parse(await file.text());sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${data.title} · ${sourceQuestions.length}`,'ok');}catch(e){setStatus(e.message,'error');}finally{document.getElementById('bankFile').value='';}
+function consumeImportedBank(){
+ const key='research_os.imported_question_bank.v1',raw=sessionStorage.getItem(key);
+ if(!raw)return false;
+ sessionStorage.removeItem(key);
+ try{const data=JSON.parse(raw);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${texts[lang].imported}\n${data.title} · ${sourceQuestions.length}`,'ok');return true;}
+ catch(e){setStatus(e.message,'error');return false;}
 }
 async function loadBankCatalog(){
  try{const data=await RC.requestJson('/question-banks');bankCatalog=data.banks||[];const select=document.getElementById('bankSelect');select.innerHTML='';bankCatalog.forEach(b=>select.add(new Option(`${b.title} · ${b.code} v${b.version}`,`${b.bank_id}:${b.version}`)));setStatus(`${bankCatalog.length} banks / bancos / банков`,'ok');}catch(e){setStatus(e.message,'error');}
@@ -270,7 +279,7 @@ async function syncQuestionnaire(){try{const pkg=buildPackage(),token=RC.researc
 function newQuestionnaire(){state=blankState();RC.writeJson(DRAFT_KEY,state);renderIdentity();renderItems();setStatus(texts[lang].draftOnly,'');}
 function setStatus(message,type){const box=document.getElementById('statusBox');box.textContent=message||'';box.className=`status ${type||''}`;}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-document.addEventListener('DOMContentLoaded',()=>{state=RC.readJson(DRAFT_KEY,null)||blankState();state.consent=state.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};lang=(localStorage.getItem('app_language')||'es').replace('-MX','').replace('-US','');if(!texts[lang])lang='es';setLanguage(lang);renderIdentity();renderItems();Promise.all([loadBankCatalog(),loadQuestionnaireCatalog(),loadConsentCatalog()]);});
+document.addEventListener('DOMContentLoaded',()=>{state=RC.readJson(DRAFT_KEY,null)||blankState();state.consent=state.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};lang=(localStorage.getItem('app_language')||'es').replace('-MX','').replace('-US','');if(!texts[lang])lang='es';setLanguage(lang);renderIdentity();renderItems();consumeImportedBank();Promise.all([loadBankCatalog(),loadQuestionnaireCatalog(),loadConsentCatalog()]);});
 </script>
 </body>
 </html>
