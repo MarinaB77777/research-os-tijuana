@@ -18,6 +18,10 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <!-- JS-YAML para YAML / YML -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <!-- JSZip para inspeccionar paquetes Apple Pages sin ejecutar contenido -->
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="question-bank-import.js"></script>
+  <script src="research-contracts.js"></script>
 
   <style>
     :root {
@@ -295,9 +299,9 @@
   <div class="workspace">
     <div class="panel">
       <div class="panel-header">
-        <label for="input-json" id="ui-input-label">Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):</label>
+        <label for="input-json" id="ui-input-label">Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):</label>
         <div class="file-input-wrapper">
-          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js" onchange="handleFileSelect(event)">
+          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages" onchange="handleFileSelect(event)">
           <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" id="ui-btn-upload">📂 Cargar Archivo</button>
         </div>
       </div>
@@ -313,11 +317,20 @@
   </div>
 
   <div id="status-message" class="status-bar"></div>
+  <div id="import-preview" class="panel" style="display:none">
+    <div class="panel-header">
+      <label id="ui-preview-label">Vista previa del reconocimiento</label>
+    </div>
+    <div id="preview-summary" style="margin-bottom:12px;color:var(--text-muted)"></div>
+    <div id="preview-questions" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto"></div>
+    <div id="preview-diagnostics" style="margin-top:12px"></div>
+  </div>
 
   <div class="controls">
     <button class="btn btn-secondary" onclick="clearAll()" id="ui-btn-clear">Limpiar</button>
     <button class="btn btn-secondary" onclick="copyResult()" id="ui-btn-copy">Copiar Resultado</button>
     <button class="btn" onclick="processConversion()" id="ui-btn-convert">Convertir</button>
+    <button class="btn" onclick="saveAndUseInQuestionnaireConstructor()" id="ui-btn-use" style="display:none">Guardar banco y usarlo en el constructor</button>
   </div>
 
   <div class="app-signature">
@@ -329,43 +342,60 @@
   const i18n = {
     es: {
       title: "Convertidor Universal de Cuestionarios",
-      inputLabel: "Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      inputLabel: "Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Resultado (Canonical Schema + UUID):",
+      previewLabel: "Vista previa del reconocimiento",
       btnUpload: "📂 Cargar Archivo",
       btnClear: "Limpiar",
       btnCopy: "Copiar Resultado",
       btnConvert: "Convertir",
+      btnUse: "Guardar banco y usarlo en el constructor",
       errEmpty: "El campo de entrada está vacío. Cargue un archivo o pegue datos.",
       msgSuccess: "¡Interpretado y convertido con éxito!",
-      msgCopied: "¡Resultado copiado al portapapeles!"
+      msgCopied: "¡Resultado copiado al portapapeles!",
+      needsResolution: "El contenido fue extraído, pero hay campos que deben resolverse antes de usar el banco.",
+      pagesNoText: "Este archivo Pages moderno no contiene una vista PDF con texto. Pages guarda el texto en IWA propietario; expórtelo como DOCX o PDF para una extracción completa, sin OCR ni pérdida silenciosa."
     },
     en: {
       title: "Universal Survey Schema Converter",
-      inputLabel: "Source Survey (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      inputLabel: "Source Survey (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Result (Canonical Schema + UUID):",
+      previewLabel: "Recognition preview",
       btnUpload: "📂 Upload File",
       btnClear: "Clear",
       btnCopy: "Copy Result",
       btnConvert: "Convert",
+      btnUse: "Save bank and use in questionnaire constructor",
       errEmpty: "Input field is empty. Upload a file or paste data.",
       msgSuccess: "Successfully parsed and converted!",
-      msgCopied: "Result copied to clipboard!"
+      msgCopied: "Result copied to clipboard!",
+      needsResolution: "The content was extracted, but some fields must be resolved before the bank can be used.",
+      pagesNoText: "This modern Pages file has no embedded text PDF. Pages stores its text in proprietary IWA data; export it as DOCX or PDF for complete extraction without OCR or silent loss."
     },
     ru: {
       title: "Универсальный конвертер анкет",
-      inputLabel: "Исходная анкета (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY):",
+      inputLabel: "Исходная анкета (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Результат (Canonical Schema + UUID):",
+      previewLabel: "Предварительный просмотр распознавания",
       btnUpload: "📂 Загрузить файл",
       btnClear: "Очистить",
       btnCopy: "Скопировать результат",
       btnConvert: "Сконвертировать",
+      btnUse: "Сохранить банк и использовать в конструкторе",
       errEmpty: "Поле ввода пусто. Загрузите файл или вставьте текст данных.",
       msgSuccess: "Успешно извлечено и сконвертировано!",
-      msgCopied: "Результат скопирован в буфер обмена!"
+      msgCopied: "Результат скопирован в буфер обмена!",
+      needsResolution: "Содержимое извлечено, но перед использованием банка необходимо разрешить неоднозначные поля.",
+      pagesNoText: "Этот современный файл Pages не содержит встроенного PDF с текстом. Pages хранит текст в закрытом формате IWA; экспортируйте файл в DOCX или PDF для полного извлечения без OCR и скрытых потерь."
     }
   };
 
   let currentLang = 'es';
+  let currentSourceFormat = 'text';
+  let currentSourceTitle = '';
+  let currentParsedValue = null;
+  let currentInputKind = 'structured';
+  let currentImportResult = null;
 
   function setLanguage(lang) {
     currentLang = lang;
@@ -376,10 +406,12 @@
     document.getElementById('ui-title').innerText = t.title;
     document.getElementById('ui-input-label').innerText = t.inputLabel;
     document.getElementById('ui-output-label').innerText = t.outputLabel;
+    document.getElementById('ui-preview-label').innerText = t.previewLabel;
     document.getElementById('ui-btn-upload').innerText = t.btnUpload;
     document.getElementById('ui-btn-clear').innerText = t.btnClear;
     document.getElementById('ui-btn-copy').innerText = t.btnCopy;
     document.getElementById('ui-btn-convert').innerText = t.btnConvert;
+    document.getElementById('ui-btn-use').innerText = t.btnUse;
   }
 
   function generateUUID() {
@@ -913,6 +945,10 @@
     showStatus("📂 Leyendo y procesando archivo...", false);
     const ext = file.name.split('.').pop().toLowerCase();
     const inputArea = document.getElementById('input-json');
+    currentSourceFormat = ext;
+    currentSourceTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    currentParsedValue = null;
+    currentInputKind = 'structured';
 
     try {
       let extractedContent = "";
@@ -921,21 +957,32 @@
         const arrayBuffer = await file.arrayBuffer();
         const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
         extractedContent = res.value;
+        currentInputKind = 'plain';
       } else if (ext === 'pdf') {
         const arrayBuffer = await file.arrayBuffer();
         extractedContent = await parsePdfWithLib(arrayBuffer);
+        currentInputKind = 'plain';
       } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const sheetJson = XLSX.utils.sheet_to_json(worksheet);
-        extractedContent = JSON.stringify(sheetJson, null, 2);
+        currentParsedValue = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+        extractedContent = JSON.stringify(currentParsedValue, null, 2);
+      } else if (ext === 'pages') {
+        if (typeof JSZip === 'undefined') throw new Error('JSZip is not available.');
+        const archive = await JSZip.loadAsync(await file.arrayBuffer());
+        const pdfEntry = Object.values(archive.files).find(entry =>
+          !entry.dir && /(?:^|\/)(?:preview|Preview|QuickLook\/Preview)\.pdf$/i.test(entry.name)
+        );
+        if (!pdfEntry) throw new Error(i18n[currentLang].pagesNoText);
+        extractedContent = await parsePdfWithLib(await pdfEntry.async('arraybuffer'));
+        currentInputKind = 'plain';
       } else if (ext === 'yml' || ext === 'yaml') {
         const text = await readFileAsText(file);
         if (typeof jsyaml !== 'undefined') {
-          const doc = jsyaml.load(text);
-          extractedContent = JSON.stringify(doc, null, 2);
+          currentParsedValue = jsyaml.load(text);
+          extractedContent = JSON.stringify(currentParsedValue, null, 2);
         } else {
           extractedContent = text;
         }
@@ -976,13 +1023,109 @@
     }
 
     try {
-      const parsedData = parseInputData(rawText);
-      const canonicalResult = convertToCanonicalSchema(parsedData);
-
+      const metadata = {
+        title: currentSourceTitle || 'Imported question bank',
+        interface_language: currentLang
+      };
+      let canonicalResult;
+      if (currentInputKind === 'plain') {
+        canonicalResult = QuestionBankImport.plainTextToQuestionBank(rawText, metadata);
+      } else {
+        try {
+          const parsedData = currentParsedValue ??
+            QuestionBankImport.parseStructuredText(rawText, value =>
+              typeof jsyaml !== 'undefined' ? jsyaml.load(value) : null
+            );
+          canonicalResult = QuestionBankImport.canonicalOrConverted(parsedData, metadata);
+        } catch (structuredError) {
+          if (currentParsedValue !== null) throw structuredError;
+          canonicalResult = QuestionBankImport.plainTextToQuestionBank(rawText, metadata);
+          currentInputKind = 'plain';
+        }
+      }
+      currentImportResult = QuestionBankImport.summarize(canonicalResult, currentSourceFormat);
       outputArea.value = JSON.stringify(canonicalResult, null, 2);
-      showStatus(i18n[currentLang].msgSuccess, false);
+      renderImportPreview(currentImportResult);
+      showStatus(
+        currentImportResult.can_use ? i18n[currentLang].msgSuccess : i18n[currentLang].needsResolution,
+        !currentImportResult.can_use
+      );
     } catch (e) {
+      currentImportResult = null;
+      renderImportPreview(null);
       showStatus(`Error de conversión: ${e.message}`, true);
+    }
+  }
+
+  function renderImportPreview(result) {
+    const preview = document.getElementById('import-preview');
+    const useButton = document.getElementById('ui-btn-use');
+    if (!result) {
+      preview.style.display = 'none';
+      useButton.style.display = 'none';
+      return;
+    }
+    preview.style.display = 'block';
+    useButton.style.display = result.can_use ? '' : 'none';
+    document.getElementById('preview-summary').textContent =
+      `${result.bank.title || '—'} · ${result.counts.questions} questions · ${result.counts.errors} errors`;
+    const questions = document.getElementById('preview-questions');
+    questions.innerHTML = '';
+    result.bank.question_order.forEach((questionCode, index) => {
+      const question = result.bank.questions[questionCode];
+      const errors = result.diagnostics.filter(item => item.question_code === questionCode);
+      const row = document.createElement('div');
+      row.style.cssText = 'border:1px solid var(--border-color);border-radius:8px;padding:10px;background:var(--bg-color)';
+      const title = document.createElement('div');
+      title.style.fontWeight = '700';
+      title.textContent = `${index + 1}. ${question.code} · ${question.prompt || '—'}`;
+      const meta = document.createElement('div');
+      meta.style.cssText = 'margin-top:5px;color:var(--text-muted);font-size:12px';
+      meta.textContent = `type: ${question.type || 'UNRESOLVED'} · scale: ${question.scale?.id || 'UNRESOLVED'} · options: ${question.options?.length || 0}`;
+      row.append(title, meta);
+      errors.forEach(item => {
+        const error = document.createElement('div');
+        error.style.cssText = 'margin-top:5px;color:var(--error-color);font-size:12px';
+        error.textContent = item.message;
+        row.appendChild(error);
+      });
+      questions.appendChild(row);
+    });
+    const diagnostics = document.getElementById('preview-diagnostics');
+    diagnostics.innerHTML = '';
+    result.diagnostics.filter(item => !item.question_code).forEach(item => {
+      const line = document.createElement('div');
+      line.style.color = item.level === 'error' ? 'var(--error-color)' : 'var(--text-muted)';
+      line.textContent = item.message;
+      diagnostics.appendChild(line);
+    });
+  }
+
+  async function saveAndUseInQuestionnaireConstructor() {
+    if (!currentImportResult?.can_use) return;
+    const button = document.getElementById('ui-btn-use');
+    button.disabled = true;
+    try {
+      const token = ResearchContracts.researcherToken();
+      if (!token) throw new Error('Researcher login is required to register an imported question bank.');
+      await ResearchContracts.requestJson('/question-banks/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(currentImportResult.bank)
+      });
+      sessionStorage.setItem('research_os.imported_question_bank.v1', JSON.stringify(currentImportResult.bank));
+      const params = new URLSearchParams(window.location.search);
+      const destination = params.get('return') || 'constructor_survey.html';
+      const safeDestination = /^[A-Za-z0-9_.-]+(?:\?[A-Za-z0-9_.=&%-]*)?$/.test(destination)
+        ? destination
+        : 'constructor_survey.html';
+      window.location.href = safeDestination;
+    } catch (error) {
+      showStatus(error.message, true);
+      button.disabled = false;
     }
   }
 
@@ -991,6 +1134,12 @@
     document.getElementById('output-json').value = '';
     document.getElementById('file-loader').value = '';
     document.getElementById('status-message').style.display = 'none';
+    currentSourceFormat = 'text';
+    currentSourceTitle = '';
+    currentParsedValue = null;
+    currentInputKind = 'structured';
+    currentImportResult = null;
+    renderImportPreview(null);
   }
 
   function copyResult() {
@@ -1000,6 +1149,11 @@
       showStatus(i18n[currentLang].msgCopied, false);
     }
   }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const saved = (localStorage.getItem('app_language') || 'es').replace('-MX', '').replace('-US', '');
+    setLanguage(i18n[saved] ? saved : 'es');
+  });
 </script>
 
 </body>
