@@ -8,12 +8,6 @@
   <!-- Bibliotecas locales: el importador funciona sin conexión a Internet -->
   <script src="vendor/mammoth.browser.min.js"></script>
   <script src="vendor/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
-    }
-  </script>
-  <script src="vendor/xlsx.full.min.js"></script>
   <script src="vendor/js-yaml.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="question-bank-import.js"></script>
@@ -1092,6 +1086,61 @@
     });
   }
 
+  const localLibraryPromises = {};
+  let pdfWorkerObjectUrl = null;
+
+  async function loadLocalTextParts(paths) {
+    const responses = await Promise.all(paths.map(path => fetch(path)));
+    const failed = responses.find(response => !response.ok);
+    if (failed) throw new Error(`No se pudo cargar la biblioteca local: ${failed.url}`);
+    return (await Promise.all(responses.map(response => response.text()))).join('');
+  }
+
+  function ensureXlsxLibrary() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (!localLibraryPromises.xlsx) {
+      localLibraryPromises.xlsx = loadLocalTextParts([
+        'vendor/xlsx.full.min.js.part-00',
+        'vendor/xlsx.full.min.js.part-01'
+      ]).then(source => new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        const objectUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+        script.src = objectUrl;
+        script.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          typeof XLSX !== 'undefined'
+            ? resolve()
+            : reject(new Error('La biblioteca XLSX local no se inició.'));
+        };
+        script.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo iniciar la biblioteca XLSX local.'));
+        };
+        document.head.appendChild(script);
+      }));
+    }
+    return localLibraryPromises.xlsx;
+  }
+
+  function ensurePdfWorker() {
+    if (typeof pdfjsLib === 'undefined') {
+      return Promise.reject(new Error("La librería PDF.js no está cargada."));
+    }
+    if (pdfWorkerObjectUrl) return Promise.resolve();
+    if (!localLibraryPromises.pdfWorker) {
+      localLibraryPromises.pdfWorker = loadLocalTextParts([
+        'vendor/pdf.worker.min.js.part-00',
+        'vendor/pdf.worker.min.js.part-01'
+      ]).then(source => {
+        pdfWorkerObjectUrl = URL.createObjectURL(
+          new Blob([source], { type: 'text/javascript' })
+        );
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerObjectUrl;
+      });
+    }
+    return localLibraryPromises.pdfWorker;
+  }
+
   async function handleFileSelect(event) {
     const fileInput = event.target;
     const file = fileInput.files[0];
@@ -1114,10 +1163,12 @@
         extractedContent = res.value;
         currentInputKind = 'plain';
       } else if (ext === 'pdf') {
+        await ensurePdfWorker();
         const arrayBuffer = await file.arrayBuffer();
         extractedContent = await parsePdfWithLib(arrayBuffer);
         currentInputKind = 'plain';
       } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        await ensureXlsxLibrary();
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
@@ -1131,6 +1182,7 @@
           !entry.dir && /(?:^|\/)(?:preview|Preview|QuickLook\/Preview)\.pdf$/i.test(entry.name)
         );
         if (!pdfEntry) throw new Error(i18n[currentLang].pagesNoText);
+        await ensurePdfWorker();
         extractedContent = await parsePdfWithLib(await pdfEntry.async('arraybuffer'));
         currentInputKind = 'plain';
       } else if (ext === 'yml' || ext === 'yaml') {
