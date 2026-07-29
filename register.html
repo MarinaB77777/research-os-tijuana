@@ -54,6 +54,9 @@
     };
     let lang=localStorage.getItem('app_language')||'es';
     if(!copy[lang])lang='es';
+    const params=new URLSearchParams(location.search);
+    const returnTarget=ResearchAuth.safeReturnTarget(params.get('return'),'cabinet.html');
+    loginLink.href=ResearchAuth.loginUrl('respondent',returnTarget);
     function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;confirmLabel.textContent=t.confirm;submitButton.textContent=t.submit;loginLink.textContent=t.login}
     async function submitRegistration(){
       status.textContent='';
@@ -62,7 +65,7 @@
       try{
         await ResearchAuth.registerRespondent(usernameInput.value.trim(),passwordInput.value);
         history.replaceState({},document.title,'register.html');
-        location.replace('cabinet.html');
+        location.replace(returnTarget);
       }catch(error){
         status.textContent=error.code==='AUTH_REQUEST_TIMEOUT'?copy[lang].timeout:error.message;
       }finally{
@@ -73,7 +76,7 @@
     document.addEventListener('DOMContentLoaded',async()=>{
       setLang(lang);
       const session=await ResearchAuth.verify('respondent');
-      if(session)location.replace('cabinet.html');
+      if(session)location.replace(returnTarget);
     });
   </script>
 </body>

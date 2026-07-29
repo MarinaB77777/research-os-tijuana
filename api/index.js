@@ -524,9 +524,177 @@ export default async function handler(req, res) {
         }
     }
 
-    // A respondent sees all active questionnaire versions owned by the
-    // researcher who registered that account. No per-respondent consent setup
-    // is required.
+    const publicStudyJoinMatch = path.match(
+        /^\/public\/studies\/join\/([0-9a-f-]+)(?:\/qr\.svg)?$/i
+    );
+    if (publicStudyJoinMatch && method === 'GET') {
+        if (!UUID_V4.test(publicStudyJoinMatch[1])) {
+            return res.status(400).json({ ok: false, error: 'Valid study invitation UUID is required' });
+        }
+        if (path.endsWith('/qr.svg')) {
+            try {
+                const { default: QRCode } = await import('qrcode');
+                const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '').split(',')[0];
+                const protocol = forwardedProtocol === 'http' ? 'http' : 'https';
+                const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0];
+                if (!host) return res.status(400).send('Request host is required');
+                const joinUrl = `${protocol}://${host}/join-study.html?invite=${encodeURIComponent(publicStudyJoinMatch[1])}`;
+                const svg = await QRCode.toString(joinUrl, {
+                    type: 'svg',
+                    errorCorrectionLevel: 'H',
+                    margin: 2,
+                    width: 320
+                });
+                res.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+                res.setHeader('Cache-Control', 'public, max-age=3600');
+                return res.status(200).send(svg);
+            } catch (error) {
+                return res.status(500).send(`QR generation failed: ${error.message}`);
+            }
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'get_public_study_invitation',
+                { p_invitation_id: publicStudyJoinMatch[1] }
+            );
+            const invitation = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!invitation) {
+                return res.status(409).json({
+                    ok: false,
+                    error: 'The study invitation is closed or unavailable'
+                });
+            }
+            return res.status(200).json({ ok: true, invitation });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const respondentStudyJoinMatch = path.match(
+        /^\/respondent\/studies\/join\/([0-9a-f-]+)$/i
+    );
+    if (respondentStudyJoinMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        if (!UUID_V4.test(respondentStudyJoinMatch[1])) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Valid study invitation UUID is required'
+            });
+        }
+        try {
+            const joined = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'join_study_by_invitation',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_invitation_id: respondentStudyJoinMatch[1]
+                }
+            );
+            const result = Array.isArray(joined) ? joined[0] : joined;
+            return res.status(result?.idempotent ? 200 : 201).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/respondent/measurements' && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const measurements = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'list_respondent_measurements',
+                { p_respondent_account_id: access.principal.account_id }
+            );
+            return res.status(200).json({
+                ok: true, measurements: Array.isArray(measurements) ? measurements : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const measurementConsentMatch = path.match(
+        /^\/respondent\/measurements\/([0-9a-f-]+)\/consent$/i
+    );
+    if (measurementConsentMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const language = String(requestUrl.searchParams.get('lang') || 'es').trim();
+        if (!UUID_V4.test(measurementConsentMatch[1]) || !language) {
+            return res.status(400).json({
+                ok: false, error: 'Valid participant measurement UUID and language are required'
+            });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'get_respondent_measurement_consent',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_participant_measurement_id: measurementConsentMatch[1],
+                    p_requested_language: language
+                }
+            );
+            const consent = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!consent) {
+                return res.status(409).json({
+                    ok: false,
+                    error: 'The assigned measurement is not available or lacks active consent'
+                });
+            }
+            return res.status(200).json({ ok: true, consent });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const measurementStartMatch = path.match(
+        /^\/respondent\/measurements\/([0-9a-f-]+)\/start$/i
+    );
+    if (measurementStartMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const language = String(req.body?.language || 'es').trim();
+        if (!UUID_V4.test(measurementStartMatch[1]) ||
+            !language || req.body?.explicit_acceptance !== true) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Participant measurement, language and explicit acceptance are required'
+            });
+        }
+        try {
+            const started = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'accept_consent_and_start_measurement',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_participant_measurement_id: measurementStartMatch[1],
+                    p_requested_language: language,
+                    p_explicit_acceptance: true
+                }
+            );
+            const result = Array.isArray(started) ? started[0] : started;
+            if (!result?.session_id) {
+                return res.status(500).json({
+                    ok: false, error: 'Consent acceptance did not create a study session'
+                });
+            }
+            return res.status(201).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const legacyRespondentQuestionnaireRoute =
+        path === '/respondent/questionnaires' ||
+        /^\/respondent\/questionnaires\/[0-9a-f-]+\/(?:consent|start)$/i.test(path);
+    if (legacyRespondentQuestionnaireRoute) {
+        return res.status(410).json({
+            ok: false,
+            error: 'Direct questionnaire collection is retired. Use an assigned study measurement.'
+        });
+    }
+
+    // Unreachable legacy handlers are retained only so older staged database
+    // migrations remain auditable; the guard above prevents mixed data formats.
     if (path === '/respondent/questionnaires' && method === 'GET') {
         const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
         if (!access.ok) {
@@ -644,7 +812,7 @@ export default async function handler(req, res) {
             const sessions = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'list_respondent_collection_sessions',
+                'list_respondent_study_sessions',
                 { p_respondent_account_id: access.principal.account_id }
             );
             return res.status(200).json({
@@ -811,6 +979,135 @@ export default async function handler(req, res) {
                 }
             }
             return res.status(200).json({ ok: true, parameter });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/studies/save' && method === 'POST') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const study = req.body;
+        const groups = study?.groups;
+        const timepoints = study?.timepoints;
+        const assignments = study?.questionnaire_assignments;
+        if (study?.schema !== 'research_os.study' ||
+            study?.schema_version !== 1 ||
+            !UUID_V4.test(study?.study_id || '') ||
+            !Number.isInteger(study?.version) || study.version < 1 ||
+            !['draft', 'trial', 'active'].includes(study?.status) ||
+            !['fixed_questionnaire_mode', 'adaptive_dialogue_mode'].includes(study?.collection_mode) ||
+            !['none', 'within_study_consent_bound'].includes(study?.longitudinal_linkage) ||
+            !study?.code || !study?.title || !study?.primary_language ||
+            !study?.global_time_reference || !study?.generated_at ||
+            !Array.isArray(groups) || groups.length === 0 ||
+            !Array.isArray(timepoints) || timepoints.length === 0 ||
+            !Array.isArray(assignments)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Complete research_os.study schema version 1 is required'
+            });
+        }
+        if (groups.some((group, index) =>
+            !UUID_V4.test(group?.group_id || '') ||
+            !UUID_V4.test(group?.invitation_id || '') ||
+            !group?.code || !group?.title ||
+            group?.position !== index + 1
+        ) || timepoints.some((timepoint, index) =>
+            !UUID_V4.test(timepoint?.timepoint_id || '') ||
+            !timepoint?.code || !timepoint?.title || timepoint?.ordinal !== index + 1
+        ) || assignments.some(assignment =>
+            !UUID_V4.test(assignment?.assignment_id || '') ||
+            !UUID_V4.test(assignment?.timepoint_id || '') ||
+            !UUID_V4.test(assignment?.questionnaire_id || '') ||
+            !Number.isInteger(assignment?.questionnaire_version) ||
+            assignment.questionnaire_version < 1 ||
+            !Number.isInteger(assignment?.position) || assignment.position < 1
+        )) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Study groups, timepoints or questionnaire assignments are invalid'
+            });
+        }
+        try {
+            const saved = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_owned_study_package',
+                {
+                    study_data: study,
+                    p_researcher_account_id: access.principal.account_id
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/studies' && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const requestedStatus = requestUrl.searchParams.get('status') || 'all';
+        if (!['all', 'draft', 'trial', 'active'].includes(requestedStatus)) {
+            return res.status(400).json({ ok: false, error: 'Study status filter is invalid' });
+        }
+        try {
+            const studies = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_studies_for_account',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    requested_status: requestedStatus
+                }
+            );
+            return res.status(200).json({
+                ok: true,
+                studies: Array.isArray(studies) ? studies : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (/^\/studies\/[0-9a-f-]+\/enrollments$/i.test(path)) {
+        return res.status(410).json({
+            ok: false,
+            error: 'Manual participant enrollment is retired. Respondents join through a study invitation link or QR code.'
+        });
+    }
+
+    const studyLoadMatch = path.match(/^\/studies\/([0-9a-f-]+)$/i);
+    if (studyLoadMatch && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const studyVersion = Number(requestUrl.searchParams.get('version'));
+        if (!UUID_V4.test(studyLoadMatch[1]) ||
+            !Number.isInteger(studyVersion) || studyVersion < 1) {
+            return res.status(400).json({ ok: false, error: 'Valid study UUID and version are required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_study_package_for_account',
+                {
+                    p_study_id: studyLoadMatch[1],
+                    p_study_version: studyVersion,
+                    p_researcher_account_id: access.principal.account_id
+                }
+            );
+            const study = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!study) return res.status(404).json({ ok: false, error: 'Study not found' });
+            return res.status(200).json({ ok: true, study });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
@@ -1102,7 +1399,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ ok: false, error: 'Non-empty response_records array is required' });
         }
         const sessionResponse = await fetch(
-            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference,questionnaire_id,questionnaire_version&limit=1`,
+            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference,questionnaire_id,questionnaire_version,study_id,study_version,enrollment_id,participant_measurement_id,study_questionnaire_assignment_id,timepoint_id,timepoint_code,timepoint_ordinal,group_membership_id,group_id,group_code,subject_link_id&limit=1`,
             {
                 headers: {
                     'apikey': supabaseAdminKey,
@@ -1129,7 +1426,22 @@ export default async function handler(req, res) {
                 error: 'Questionnaire identity does not match the collection session'
             });
         }
+        for (const field of [
+            'study_id', 'study_version', 'enrollment_id', 'participant_measurement_id',
+            'study_questionnaire_assignment_id', 'timepoint_id', 'timepoint_code',
+            'timepoint_ordinal', 'group_membership_id', 'group_id', 'group_code',
+            'subject_link_id'
+        ]) {
+            if ((sourceIdentity[field] ?? null) !== (collectionSession[field] ?? null)) {
+                return res.status(400).json({
+                    ok: false,
+                    error: `Study/session identity mismatch: ${field}`
+                });
+            }
+        }
         for (const record of responseRecords) {
+            const presentedTime = new Date(record?.presented_at).getTime();
+            const answeredTime = new Date(record?.answered_at).getTime();
             if (record?.session_id !== pathSessionId ||
                 !record?.response_id ||
                 !record?.questionnaire_item_id ||
@@ -1139,7 +1451,14 @@ export default async function handler(req, res) {
                 !record?.bank_version ||
                 !record?.code ||
                 record?.value === undefined ||
+                !record?.presented_at ||
                 !record?.answered_at ||
+                !Number.isFinite(presentedTime) ||
+                !Number.isFinite(answeredTime) ||
+                presentedTime > answeredTime ||
+                !Number.isInteger(record?.answered_utc_offset_minutes) ||
+                record.answered_utc_offset_minutes < -840 ||
+                record.answered_utc_offset_minutes > 840 ||
                 !record?.global_time_reference ||
                 record.global_time_reference !== sessionGlobalTimeReference) {
                 return res.status(400).json({ ok: false, error: 'A response record does not satisfy the identity/time contract' });
@@ -1167,28 +1486,6 @@ export default async function handler(req, res) {
                 });
             }
             const saved = await response.json();
-            const completionWrite = await fetch(
-                `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}`,
-                {
-                    method: 'PATCH',
-                    headers: {
-                        'apikey': supabaseAdminKey,
-                        'Authorization': `Bearer ${supabaseAdminKey}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
-                    },
-                    body: JSON.stringify({
-                        status: 'completed',
-                        completed_at: new Date().toISOString()
-                    })
-                }
-            );
-            if (!completionWrite.ok) {
-                return res.status(completionWrite.status).json({
-                    ok: false,
-                    error: `Answers were stored but session completion failed: ${await completionWrite.text()}`
-                });
-            }
             return res.status(200).json({ ok: true, saved_count: responseRecords.length, database_result: saved });
         } catch (error) {
             console.error('Supabase response write error:', error);

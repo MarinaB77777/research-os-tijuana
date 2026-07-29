@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Research OS | Join study</title>
+<style>
+:root{--bg:#0b0f19;--panel:#162032;--line:#334155;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--bad:#fca5a5}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}h1{color:var(--accent);font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:20px 0 8px}.muted{color:var(--muted);line-height:1.55}.meta{color:var(--muted);font-size:12px;line-height:1.5}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.lang{justify-content:flex-end;margin-bottom:18px}button,.link{border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#082f49;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}.error{color:var(--bad);white-space:pre-wrap;margin-top:16px}
+</style>
+</head>
+<body>
+<main class="card">
+<div class="row lang"><button class="secondary" onclick="setLang('es')">ES</button><button class="secondary" onclick="setLang('en')">EN</button><button class="secondary" onclick="setLang('ru')">RU</button></div>
+<h1 id="pageTitle"></h1>
+<div id="status" class="muted"></div>
+<section id="studyInfo" hidden>
+<h2 id="studyTitle"></h2>
+<div id="studyDescription" class="muted"></div>
+<div id="studyMeta" class="meta"></div>
+<div id="authActions" class="row" style="margin-top:20px"></div>
+</section>
+</main>
+<script src="auth.js"></script>
+<script>
+'use strict';
+const COPY={
+es:{title:'Participar en el estudio',loading:'Comprobando el enlace…',group:'Grupo',login:'Iniciar sesión',register:'Crear cuenta de participante',joining:'Añadiendo los cuestionarios disponibles a su panel…',unavailable:'El enlace del estudio está cerrado o no está disponible.',error:'No se pudo acceder al estudio.'},
+en:{title:'Join the study',loading:'Checking the invitation…',group:'Group',login:'Sign in',register:'Create participant account',joining:'Adding the available questionnaires to your hub…',unavailable:'The study invitation is closed or unavailable.',error:'The study could not be joined.'},
+ru:{title:'Присоединиться к исследованию',loading:'Проверяем ссылку…',group:'Группа',login:'Войти',register:'Зарегистрироваться как респондент',joining:'Добавляем доступные анкеты в ваш кабинет…',unavailable:'Ссылка исследования закрыта или недоступна.',error:'Не удалось присоединиться к исследованию.'}
+};
+const invitationId=new URLSearchParams(location.search).get('invite')||'';
+const returnTarget=`join-study.html?invite=${encodeURIComponent(invitationId)}`;
+let lang=localStorage.getItem('app_language')||'es',invitation=null;
+if(!COPY[lang])lang='es';
+function setLang(value){lang=COPY[value]?value:'es';localStorage.setItem('app_language',lang);renderCopy();loadInvitation()}
+function renderCopy(){document.documentElement.lang=lang;pageTitle.textContent=COPY[lang].title}
+async function loadInvitation(){
+ const t=COPY[lang];status.className='muted';status.textContent=t.loading;studyInfo.hidden=true;
+ if(!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(invitationId)){status.className='error';status.textContent=t.unavailable;return}
+ try{
+  const response=await fetch(`/api/public/studies/join/${encodeURIComponent(invitationId)}`,{cache:'no-store'});
+  const data=await response.json();if(!response.ok)throw new Error(data.error||t.unavailable);
+  invitation=data.invitation;studyTitle.textContent=invitation.study_title;studyDescription.textContent=invitation.study_description||'';studyMeta.textContent=`${t.group}: ${invitation.group_title}`;studyInfo.hidden=false;
+  const principal=await ResearchAuth.verify('respondent');
+  if(!principal){status.textContent='';renderAuthLinks();return}
+  await joinStudy();
+ }catch(error){status.className='error';status.textContent=`${t.error} ${error.message||t.unavailable}`}
+}
+function renderAuthLinks(){
+ authActions.innerHTML='';
+ const login=document.createElement('a');login.className='link';login.textContent=COPY[lang].login;login.href=ResearchAuth.loginUrl('respondent',returnTarget);
+ const register=document.createElement('a');register.className='link secondary';register.textContent=COPY[lang].register;register.href=`register.html?return=${encodeURIComponent(returnTarget)}`;
+ authActions.append(login,register);
+}
+async function joinStudy(){
+ status.className='muted';status.textContent=COPY[lang].joining;authActions.innerHTML='';
+ const response=await fetch(`/api/respondent/studies/join/${encodeURIComponent(invitationId)}`,{method:'POST',headers:ResearchAuth.authHeaders('respondent')});
+ const data=await response.json();if(!response.ok)throw new Error(data.error||COPY[lang].error);
+ location.replace('cabinet.html');
+}
+document.addEventListener('DOMContentLoaded',()=>{renderCopy();loadInvitation()});
+</script>
+</body>
+</html>

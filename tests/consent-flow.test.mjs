@@ -109,8 +109,8 @@ test('session start requires an explicit authenticated acceptance', async () => 
     await handler(
       request(
         'POST',
-        '/respondent/questionnaires/24b68c24-acde-49d0-8a16-6cfd95d19328/start',
-        { questionnaire_version: 1, language: 'es', explicit_acceptance: false }
+        '/respondent/measurements/24b68c24-acde-49d0-8a16-6cfd95d19328/start',
+        { language: 'es', explicit_acceptance: false }
       ),
       res
     );
@@ -125,7 +125,7 @@ test('server passes verified respondent identity to the atomic consent RPC', asy
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = respondentAccessFetches(async (url, options) => {
-    assert.match(url, /rpc\/accept_consent_and_start_questionnaire$/);
+    assert.match(url, /rpc\/accept_consent_and_start_measurement$/);
     rpcBody = JSON.parse(options.body);
     return jsonFetch({
       session_id: 'b759835a-acde-4cd3-8bb8-2c74c222667e',
@@ -138,8 +138,8 @@ test('server passes verified respondent identity to the atomic consent RPC', asy
     await handler(
       request(
         'POST',
-        '/respondent/questionnaires/24b68c24-acde-49d0-8a16-6cfd95d19328/start',
-        { questionnaire_version: 3, language: 'ru', explicit_acceptance: true }
+        '/respondent/measurements/24b68c24-acde-49d0-8a16-6cfd95d19328/start',
+        { language: 'ru', explicit_acceptance: true }
       ),
       res
     );
@@ -148,10 +148,52 @@ test('server passes verified respondent identity to the atomic consent RPC', asy
       rpcBody.p_respondent_account_id,
       '23572089-acde-4b51-8566-f770a0be2c3c'
     );
-    assert.equal(rpcBody.p_questionnaire_version, 3);
+    assert.equal(
+      rpcBody.p_participant_measurement_id,
+      '24b68c24-acde-49d0-8a16-6cfd95d19328'
+    );
     assert.equal(rpcBody.p_requested_language, 'ru');
     assert.equal(rpcBody.p_explicit_acceptance, true);
     assert.equal(Object.hasOwn(rpcBody, 'consent_record'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('study invitation join uses the authenticated respondent without starting a session', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = respondentAccessFetches(async (url, options) => {
+    assert.match(url, /rpc\/join_study_by_invitation$/);
+    rpcBody = JSON.parse(options.body);
+    return jsonFetch({
+      enrollment_id: '00edfb1a-acde-4dc1-a448-d50cc1e29f16',
+      created_measurements: 2,
+      idempotent: false
+    });
+  });
+  try {
+    const res = response();
+    await handler(
+      request(
+        'POST',
+        '/respondent/studies/join/bd382521-acde-4755-8fa1-b0405b6bf628',
+        undefined
+      ),
+      res
+    );
+    assert.equal(res.statusCode, 201);
+    assert.equal(
+      rpcBody.p_respondent_account_id,
+      '23572089-acde-4b51-8566-f770a0be2c3c'
+    );
+    assert.equal(
+      rpcBody.p_invitation_id,
+      'bd382521-acde-4755-8fa1-b0405b6bf628'
+    );
+    assert.equal(Object.hasOwn(rpcBody, 'p_explicit_acceptance'), false);
+    assert.equal(Object.hasOwn(rpcBody, 'p_requested_language'), false);
+    assert.equal(Object.hasOwn(rpcBody, 'respondent_identifier'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -286,21 +328,28 @@ test('public respondent registration creates its account and session atomically'
   }
 });
 
-test('self-registered respondents derive researcher ownership from the questionnaire', async () => {
-  const [migration, registerPage, settingsPage, loginSource, authSource] = await Promise.all([
+test('self-registered respondents join by invitation and consent remains per survey', async () => {
+  const [registrationMigration, studyMigration, registerPage, studyPage, joinPage, loginSource, authSource] = await Promise.all([
     fs.readFile(new URL('../supabase/public_respondent_registration_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../supabase/research_study_contract_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../register.html', import.meta.url), 'utf8'),
-    fs.readFile(new URL('../settings.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../constructor_study.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../join-study.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../login.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../auth.js', import.meta.url), 'utf8')
   ]);
-  assert.match(migration, /register_research_os_respondent/);
-  assert.match(migration, /created_by_account_id\s*\)\s*values\s*\([\s\S]*null/i);
-  assert.match(migration, /owner\.researcher_account_id[\s\S]*research_os_collection_sessions/i);
-  assert.doesNotMatch(migration, /respondent\.created_by_account_id/);
+  assert.match(registrationMigration, /register_research_os_respondent/);
+  assert.match(registrationMigration, /created_by_account_id\s*\)\s*values\s*\([\s\S]*null/i);
+  assert.match(studyMigration, /research_study_invitations/);
+  assert.match(studyMigration, /join_study_by_invitation/);
+  assert.match(studyMigration, /accept_consent_and_start_measurement/);
+  assert.match(studyMigration, /p_explicit_acceptance is distinct from true/);
   assert.match(registerPage, /registerRespondent/);
   assert.match(loginSource, /href="register\.html"/);
   assert.match(authSource, /\/api\/auth\/register/);
-  assert.doesNotMatch(settingsPage, /id="respondentId"/);
-  assert.doesNotMatch(settingsPage, /qrcodeResp/);
+  assert.match(studyPage, /join-study\.html\?invite=/);
+  assert.match(studyPage, /\/qr\.svg/);
+  assert.doesNotMatch(studyPage, /id="respondentId"/);
+  assert.doesNotMatch(joinPage, /explicit_acceptance/);
+  assert.match(joinPage, /location\.replace\('cabinet\.html'\)/);
 });

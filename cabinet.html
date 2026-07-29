@@ -98,16 +98,16 @@ async function loadCabinet(){
  document.getElementById('pageStatus').textContent='';
  try{
   const [qData,sData]=await Promise.all([
-   request('/respondent/questionnaires',{headers:headers()}),
+   request('/respondent/measurements',{headers:headers()}),
    request('/respondent/sessions',{headers:headers()})
   ]);
-  questionnaires=qData.questionnaires||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
+  questionnaires=qData.measurements||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
  }catch(error){document.getElementById('pageStatus').textContent=`${T[lang].loadError} ${error.message}`;document.getElementById('pageStatus').className='error';}
 }
 function renderQuestionnaires(){
  const box=document.getElementById('questionnaireList');if(!box)return;
  if(!questionnaires.length){box.className='empty';box.textContent=T[lang].emptyAvailable;return;}
- box.className='';box.innerHTML=questionnaires.map((q,index)=>`<article class="item"><h3>${escapeHtml(q.title)}</h3><div class="meta">${escapeHtml(q.description||'')}<br>${T[lang].version}: ${q.version} · ${T[lang].ready}</div><button onclick="openConsent(${index})">${T[lang].readStart}</button></article>`).join('');
+ box.className='';box.innerHTML=questionnaires.map((q,index)=>`<article class="item"><h3>${escapeHtml(q.questionnaire_title)}</h3><div class="meta">${escapeHtml(q.study_title)} · ${escapeHtml(q.timepoint_title)} (${escapeHtml(q.timepoint_code)}) · ${escapeHtml(q.group_title)}<br>${escapeHtml(q.questionnaire_description||'')}<br>${T[lang].version}: ${q.questionnaire_version} · ${T[lang].ready}</div><button onclick="openConsent(${index})">${T[lang].readStart}</button></article>`).join('');
 }
 function renderSessions(){
  const box=document.getElementById('sessionList');if(!box)return;
@@ -120,7 +120,7 @@ function renderSessions(){
 async function openConsent(index){
  selectedQuestionnaire=questionnaires[index];selectedConsent=null;document.getElementById('acceptCheckbox').checked=false;updateStartButton();
  try{
-  const data=await request(`/respondent/questionnaires/${encodeURIComponent(selectedQuestionnaire.questionnaire_id)}/consent?version=${selectedQuestionnaire.version}&lang=${encodeURIComponent(lang)}`,{headers:headers()});
+  const data=await request(`/respondent/measurements/${encodeURIComponent(selectedQuestionnaire.participant_measurement_id)}/consent?lang=${encodeURIComponent(lang)}`,{headers:headers()});
   selectedConsent=data.consent;document.getElementById('consentTitle').textContent=selectedConsent.consent_title;document.getElementById('consentMeta').textContent=`${selectedConsent.questionnaire_title} · v${selectedConsent.questionnaire_version} · ${selectedConsent.language} · SHA-256 ${selectedConsent.text_sha256}`;document.getElementById('consentText').textContent=selectedConsent.text;document.getElementById('consentDialog').showModal();
  }catch(error){document.getElementById('pageStatus').textContent=error.message;document.getElementById('pageStatus').className='error';}
 }
@@ -130,7 +130,7 @@ async function acceptAndStart(){
  if(!selectedQuestionnaire||!selectedConsent||!document.getElementById('acceptCheckbox').checked)return;
  const button=document.getElementById('signStartButton');button.disabled=true;
  try{
-  const data=await request(`/respondent/questionnaires/${encodeURIComponent(selectedQuestionnaire.questionnaire_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({questionnaire_version:selectedQuestionnaire.version,language:lang,explicit_acceptance:true})});
+  const data=await request(`/respondent/measurements/${encodeURIComponent(selectedQuestionnaire.participant_measurement_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({language:lang,explicit_acceptance:true})});
   location.href=`assessment.html?session_id=${encodeURIComponent(data.session_id)}`;
  }catch(error){button.disabled=false;document.getElementById('pageStatus').textContent=`${T[lang].startError} ${error.message}`;document.getElementById('pageStatus').className='error';closeConsent();}
 }
