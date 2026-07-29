@@ -372,8 +372,10 @@ test('multi-format readers are local and the editing workspace stays compact', a
   const localAssets = [
     '../vendor/mammoth.browser.min.js',
     '../vendor/pdf.min.js',
-    '../vendor/pdf.worker.min.js',
-    '../vendor/xlsx.full.min.js',
+    '../vendor/pdf.worker.min.js.part-00',
+    '../vendor/pdf.worker.min.js.part-01',
+    '../vendor/xlsx.full.min.js.part-00',
+    '../vendor/xlsx.full.min.js.part-01',
     '../vendor/js-yaml.min.js',
     '../vendor/jszip.min.js',
     '../vendor/pdfjs/standard_fonts/LICENSE_FOXIT'
@@ -381,7 +383,8 @@ test('multi-format readers are local and the editing workspace stays compact', a
 
   await Promise.all(localAssets.map(asset => fs.access(new URL(asset, import.meta.url))));
   assert.doesNotMatch(page, /<script[^>]+https?:\/\//i);
-  assert.match(page, /workerSrc = 'vendor\/pdf\.worker\.min\.js'/);
+  assert.match(page, /ensurePdfWorker/);
+  assert.match(page, /ensureXlsxLibrary/);
   assert.match(page, /standardFontDataUrl: 'vendor\/pdfjs\/standard_fonts\/'/);
   assert.match(page, /height:\s*280px/);
   assert.match(page, /max-height:\s*500px/);
