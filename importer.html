@@ -5,21 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Convertidor Universal de Cuestionarios | Research OS</title>
   
-  <!-- Mammoth para DOCX -->
-  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
-  <!-- PDF.js para leer texto de PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
-  <!-- SheetJS para XLSX, XLS, CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- JS-YAML para YAML / YML -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
-  <!-- JSZip para inspeccionar paquetes Apple Pages sin ejecutar contenido -->
-  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <!-- Bibliotecas locales: el importador funciona sin conexión a Internet -->
+  <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/js-yaml.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
   <script src="question-bank-import.js"></script>
   <script src="research-contracts.js"></script>
 
@@ -62,7 +52,7 @@
       box-sizing: border-box;
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 14px;
     }
 
     header {
@@ -178,7 +168,7 @@
 
     textarea {
       width: 100%;
-      height: 440px;
+      height: 280px;
       font-family: "Consolas", "Courier New", Courier, monospace;
       font-size: 0.85rem;
       padding: 12px;
@@ -213,6 +203,82 @@
       outline: none;
       border-color: var(--accent-color);
       box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .import-editor {
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px;
+      background: #090d16;
+    }
+
+    .import-editor-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .import-editor-grid .wide { grid-column: 1 / -1; }
+    .import-editor-grid .half { grid-column: span 2; }
+
+    .import-editor input,
+    .import-editor select,
+    .import-editor textarea {
+      width: 100%;
+      box-sizing: border-box;
+      margin-top: 5px;
+      padding: 7px 9px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: #0f172a;
+      color: var(--text-color);
+      font: inherit;
+    }
+
+    .import-editor textarea {
+      height: auto;
+      min-height: 56px;
+      resize: vertical;
+    }
+
+    .import-editor input:focus,
+    .import-editor select:focus,
+    .import-editor textarea:focus {
+      outline: none;
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.16);
+    }
+
+    .import-identity {
+      margin-bottom: 10px;
+      color: var(--text-muted);
+      font: 11px "Consolas", "Courier New", monospace;
+      overflow-wrap: anywhere;
+    }
+
+    .import-diagnostic {
+      margin-top: 7px;
+      color: var(--error-color);
+      font-size: 12px;
+    }
+
+    .preview-questions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 500px;
+      overflow: auto;
+    }
+
+    @media (max-width: 820px) {
+      .import-editor-grid { grid-template-columns: 1fr 1fr; }
+      .import-editor-grid .half { grid-column: 1 / -1; }
+    }
+
+    @media (max-width: 520px) {
+      .import-editor-grid { grid-template-columns: 1fr; }
+      .import-editor-grid .half,
+      .import-editor-grid .wide { grid-column: 1; }
     }
 
     .controls {
@@ -322,7 +388,8 @@
       <label id="ui-preview-label">Vista previa del reconocimiento</label>
     </div>
     <div id="preview-summary" style="margin-bottom:12px;color:var(--text-muted)"></div>
-    <div id="preview-questions" style="display:flex;flex-direction:column;gap:8px;max-height:340px;overflow:auto"></div>
+    <div id="preview-bank"></div>
+    <div id="preview-questions" class="preview-questions"></div>
     <div id="preview-diagnostics" style="margin-top:12px"></div>
   </div>
 
@@ -334,7 +401,7 @@
   </div>
 
   <div class="app-signature">
-    <span>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</span>
+    <span>✨ Designed and built in collaboration with Ray AI | Research OS Pilot</span>
   </div>
 </div>
 
@@ -354,6 +421,32 @@
       msgSuccess: "¡Interpretado y convertido con éxito!",
       msgCopied: "¡Resultado copiado al portapapeles!",
       needsResolution: "El contenido fue extraído, pero hay campos que deben resolverse antes de usar el banco.",
+      questions: "preguntas",
+      errors: "campos obligatorios pendientes",
+      bankTitle: "Nombre del banco",
+      bankCode: "Código del banco",
+      prompt: "Texto exacto de la pregunta",
+      questionCode: "Código de la pregunta",
+      responseType: "Tipo de respuesta",
+      scaleId: "Escala",
+      psychometricLevel: "Nivel psicométrico",
+      options: "Opciones: valor | texto (una por línea)",
+      block: "Bloque",
+      family: "Familia",
+      domain: "Dominio",
+      parameter: "Parámetro",
+      unit: "Unidad",
+      scaleDirection: "Dirección de la escala",
+      scoreDirection: "Dirección de puntuación",
+      trackingMode: "Dependencia temporal",
+      wave: "Ola / momento",
+      lag: "Ventana / desfase",
+      min: "Mínimo",
+      max: "Máximo",
+      step: "Paso",
+      status: "Estado",
+      emptyChoice: "— no determinado —",
+      editHelp: "Corrija aquí los campos reconocidos. Los cambios modifican el objeto canónico que se guardará.",
       pagesNoText: "Este archivo Pages moderno no contiene una vista PDF con texto. Pages guarda el texto en IWA propietario; expórtelo como DOCX o PDF para una extracción completa, sin OCR ni pérdida silenciosa."
     },
     en: {
@@ -370,6 +463,32 @@
       msgSuccess: "Successfully parsed and converted!",
       msgCopied: "Result copied to clipboard!",
       needsResolution: "The content was extracted, but some fields must be resolved before the bank can be used.",
+      questions: "questions",
+      errors: "required fields pending",
+      bankTitle: "Bank title",
+      bankCode: "Bank code",
+      prompt: "Exact question wording",
+      questionCode: "Question code",
+      responseType: "Response type",
+      scaleId: "Scale",
+      psychometricLevel: "Psychometric level",
+      options: "Options: value | text (one per line)",
+      block: "Block",
+      family: "Family",
+      domain: "Domain",
+      parameter: "Parameter",
+      unit: "Unit",
+      scaleDirection: "Scale direction",
+      scoreDirection: "Score direction",
+      trackingMode: "Time dependency",
+      wave: "Wave / moment",
+      lag: "Window / lag",
+      min: "Minimum",
+      max: "Maximum",
+      step: "Step",
+      status: "Status",
+      emptyChoice: "— not determined —",
+      editHelp: "Correct the recognized fields here. These changes update the canonical object that will be saved.",
       pagesNoText: "This modern Pages file has no embedded text PDF. Pages stores its text in proprietary IWA data; export it as DOCX or PDF for complete extraction without OCR or silent loss."
     },
     ru: {
@@ -386,6 +505,32 @@
       msgSuccess: "Успешно извлечено и сконвертировано!",
       msgCopied: "Результат скопирован в буфер обмена!",
       needsResolution: "Содержимое извлечено, но перед использованием банка необходимо разрешить неоднозначные поля.",
+      questions: "вопросов",
+      errors: "обязательных полей не заполнено",
+      bankTitle: "Название банка",
+      bankCode: "Код банка",
+      prompt: "Точная формулировка вопроса",
+      questionCode: "Код вопроса",
+      responseType: "Тип ответа",
+      scaleId: "Шкала",
+      psychometricLevel: "Психометрический уровень",
+      options: "Варианты: значение | текст (по одному в строке)",
+      block: "Блок",
+      family: "Семейство",
+      domain: "Домен",
+      parameter: "Параметр",
+      unit: "Единица",
+      scaleDirection: "Направление шкалы",
+      scoreDirection: "Направление оценки",
+      trackingMode: "Зависимость от времени",
+      wave: "Волна / момент",
+      lag: "Окно / лаг",
+      min: "Минимум",
+      max: "Максимум",
+      step: "Шаг",
+      status: "Статус",
+      emptyChoice: "— не определено —",
+      editHelp: "Исправляйте распознанные поля здесь. Изменяется именно канонический объект, который будет сохранён.",
       pagesNoText: "Этот современный файл Pages не содержит встроенного PDF с текстом. Pages хранит текст в закрытом формате IWA; экспортируйте файл в DOCX или PDF для полного извлечения без OCR и скрытых потерь."
     }
   };
@@ -412,6 +557,7 @@
     document.getElementById('ui-btn-copy').innerText = t.btnCopy;
     document.getElementById('ui-btn-convert').innerText = t.btnConvert;
     document.getElementById('ui-btn-use').innerText = t.btnUse;
+    if (currentImportResult) renderImportPreview(currentImportResult);
   }
 
   function generateUUID() {
@@ -425,7 +571,10 @@
     if (typeof pdfjsLib === 'undefined') {
       throw new Error("La librería PDF.js no está cargada.");
     }
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({
+      data: arrayBuffer,
+      standardFontDataUrl: 'vendor/pdfjs/standard_fonts/'
+    });
     const pdfDoc = await loadingTask.promise;
     let extractedText = '';
 
@@ -937,6 +1086,61 @@
     });
   }
 
+  const localLibraryPromises = {};
+  let pdfWorkerObjectUrl = null;
+
+  async function loadLocalTextParts(paths) {
+    const responses = await Promise.all(paths.map(path => fetch(path)));
+    const failed = responses.find(response => !response.ok);
+    if (failed) throw new Error(`No se pudo cargar la biblioteca local: ${failed.url}`);
+    return (await Promise.all(responses.map(response => response.text()))).join('');
+  }
+
+  function ensureXlsxLibrary() {
+    if (typeof XLSX !== 'undefined') return Promise.resolve();
+    if (!localLibraryPromises.xlsx) {
+      localLibraryPromises.xlsx = loadLocalTextParts([
+        'vendor/xlsx.full.min.js.part-00',
+        'vendor/xlsx.full.min.js.part-01'
+      ]).then(source => new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        const objectUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+        script.src = objectUrl;
+        script.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+          typeof XLSX !== 'undefined'
+            ? resolve()
+            : reject(new Error('La biblioteca XLSX local no se inició.'));
+        };
+        script.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          reject(new Error('No se pudo iniciar la biblioteca XLSX local.'));
+        };
+        document.head.appendChild(script);
+      }));
+    }
+    return localLibraryPromises.xlsx;
+  }
+
+  function ensurePdfWorker() {
+    if (typeof pdfjsLib === 'undefined') {
+      return Promise.reject(new Error("La librería PDF.js no está cargada."));
+    }
+    if (pdfWorkerObjectUrl) return Promise.resolve();
+    if (!localLibraryPromises.pdfWorker) {
+      localLibraryPromises.pdfWorker = loadLocalTextParts([
+        'vendor/pdf.worker.min.js.part-00',
+        'vendor/pdf.worker.min.js.part-01'
+      ]).then(source => {
+        pdfWorkerObjectUrl = URL.createObjectURL(
+          new Blob([source], { type: 'text/javascript' })
+        );
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerObjectUrl;
+      });
+    }
+    return localLibraryPromises.pdfWorker;
+  }
+
   async function handleFileSelect(event) {
     const fileInput = event.target;
     const file = fileInput.files[0];
@@ -959,10 +1163,12 @@
         extractedContent = res.value;
         currentInputKind = 'plain';
       } else if (ext === 'pdf') {
+        await ensurePdfWorker();
         const arrayBuffer = await file.arrayBuffer();
         extractedContent = await parsePdfWithLib(arrayBuffer);
         currentInputKind = 'plain';
       } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+        await ensureXlsxLibrary();
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
@@ -976,6 +1182,7 @@
           !entry.dir && /(?:^|\/)(?:preview|Preview|QuickLook\/Preview)\.pdf$/i.test(entry.name)
         );
         if (!pdfEntry) throw new Error(i18n[currentLang].pagesNoText);
+        await ensurePdfWorker();
         extractedContent = await parsePdfWithLib(await pdfEntry.async('arraybuffer'));
         currentInputKind = 'plain';
       } else if (ext === 'yml' || ext === 'yaml') {
@@ -1065,27 +1272,166 @@
       useButton.style.display = 'none';
       return;
     }
+    const t = i18n[currentLang];
     preview.style.display = 'block';
-    useButton.style.display = result.can_use ? '' : 'none';
+    useButton.style.display = '';
+    useButton.disabled = !result.can_use;
     document.getElementById('preview-summary').textContent =
-      `${result.bank.title || '—'} · ${result.counts.questions} questions · ${result.counts.errors} errors`;
+      `${result.bank.title || '—'} · ${result.counts.questions} ${t.questions} · ${result.counts.errors} ${t.errors}. ${t.editHelp}`;
+
+    const bankEditor = document.getElementById('preview-bank');
+    bankEditor.innerHTML = '';
+    const bankCard = document.createElement('div');
+    bankCard.className = 'import-editor';
+    bankCard.style.marginBottom = '10px';
+    const bankIdentity = document.createElement('div');
+    bankIdentity.className = 'import-identity';
+    bankIdentity.textContent = `bank UUID: ${result.bank.bank_id} · v${result.bank.version}`;
+    const bankGrid = document.createElement('div');
+    bankGrid.className = 'import-editor-grid';
+    bankGrid.append(
+      editorField(t.bankTitle, textInput(result.bank.title, value => {
+        result.bank.title = value.trim();
+        refreshImportResult();
+      }), 'half'),
+      editorField(t.bankCode, textInput(result.bank.code, value => {
+        result.bank.code = normalizeEditorCode(value, 'IMPORTED_BANK');
+        refreshImportResult();
+      }), 'half')
+    );
+    bankCard.append(bankIdentity, bankGrid);
+    bankEditor.appendChild(bankCard);
+
     const questions = document.getElementById('preview-questions');
     questions.innerHTML = '';
     result.bank.question_order.forEach((questionCode, index) => {
       const question = result.bank.questions[questionCode];
       const errors = result.diagnostics.filter(item => item.question_code === questionCode);
       const row = document.createElement('div');
-      row.style.cssText = 'border:1px solid var(--border-color);border-radius:8px;padding:10px;background:var(--bg-color)';
-      const title = document.createElement('div');
-      title.style.fontWeight = '700';
-      title.textContent = `${index + 1}. ${question.code} · ${question.prompt || '—'}`;
-      const meta = document.createElement('div');
-      meta.style.cssText = 'margin-top:5px;color:var(--text-muted);font-size:12px';
-      meta.textContent = `type: ${question.type || 'UNRESOLVED'} · scale: ${question.scale?.id || 'UNRESOLVED'} · options: ${question.options?.length || 0}`;
-      row.append(title, meta);
+      row.className = 'import-editor';
+      const identity = document.createElement('div');
+      identity.className = 'import-identity';
+      identity.textContent = `${index + 1}. UUID: ${question.question_id} · v${question.version}`;
+      const grid = document.createElement('div');
+      grid.className = 'import-editor-grid';
+
+      const typeSelect = selectInput([
+        ['', t.emptyChoice],
+        ['single_select', 'single_select'],
+        ['multiple_select', 'multiple_select'],
+        ['numeric_input', 'numeric_input'],
+        ['text_input', 'text_input']
+      ], question.type || '', value => {
+        question.type = value || null;
+        refreshImportResult();
+      });
+      const levelSelect = selectInput([
+        ['', t.emptyChoice],
+        ['nominal', 'nominal'],
+        ['ordinal', 'ordinal'],
+        ['interval_ratio', 'interval_ratio'],
+        ['textual', 'textual']
+      ], question.scale?.psychometric_level || '', value => {
+        ensureScale(question).psychometric_level = value || null;
+        refreshImportResult();
+      });
+      const statusSelect = selectInput([
+        ['draft', 'Draft'],
+        ['trial', 'Trial'],
+        ['active', 'Active']
+      ], question.status || 'draft', value => {
+        question.status = value;
+        refreshImportResult();
+      });
+      const options = (question.options || [])
+        .map((option, optionIndex) =>
+          `${option.value ?? optionIndex + 1} | ${option.text ?? ''}`
+        )
+        .join('\n');
+
+      grid.append(
+        editorField(t.prompt, areaInput(question.prompt, value => {
+          question.prompt = value.trim();
+          refreshImportResult();
+        }), 'wide'),
+        editorField(t.questionCode, textInput(question.code, value => {
+          renameImportedQuestion(questionCode, value);
+        })),
+        editorField(t.responseType, typeSelect),
+        editorField(t.scaleId, textInput(question.scale?.id || '', value => {
+          ensureScale(question).id = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.psychometricLevel, levelSelect),
+        editorField(t.options, areaInput(options, value => {
+          question.options = parseEditedOptions(value);
+          const inferred = QuestionBankImport.inferQuestionContract(question);
+          question.type = question.type || inferred.type;
+          question.scale = question.scale?.id ? question.scale : inferred.scale;
+          refreshImportResult();
+        }), 'wide'),
+        editorField(t.min, numberInput(question.scale?.min, value => {
+          ensureScale(question).min = numberOrNull(value);
+          refreshImportResult();
+        })),
+        editorField(t.max, numberInput(question.scale?.max, value => {
+          ensureScale(question).max = numberOrNull(value);
+          refreshImportResult();
+        })),
+        editorField(t.step, numberInput(question.scale?.step, value => {
+          ensureScale(question).step = numberOrNull(value);
+          refreshImportResult();
+        })),
+        editorField(t.status, statusSelect),
+        editorField(t.unit, textInput(question.scale?.unit || '', value => {
+          ensureScale(question).unit = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.scaleDirection, textInput(question.scale?.direction || '', value => {
+          ensureScale(question).direction = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.scoreDirection, textInput(question.score_direction || '', value => {
+          question.score_direction = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.trackingMode, selectInput([
+          ['', t.emptyChoice],
+          ['time_invariant', 'time_invariant'],
+          ['time_variant', 'time_variant']
+        ], question.time?.tracking_mode || '', value => {
+          ensureTime(question).tracking_mode = value || null;
+          refreshImportResult();
+        })),
+        editorField(t.wave, textInput(question.time?.wave || '', value => {
+          ensureTime(question).wave = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.lag, textInput(question.time?.lag || '', value => {
+          ensureTime(question).lag = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.block, textInput(question.block || '', value => {
+          question.block = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.family, textInput(question.family || '', value => {
+          question.family = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.domain, textInput(question.domain || '', value => {
+          question.domain = value.trim() || null;
+          refreshImportResult();
+        })),
+        editorField(t.parameter, textInput(question.parameter || '', value => {
+          question.parameter = value.trim() || null;
+          refreshImportResult();
+        }))
+      );
+      row.append(identity, grid);
       errors.forEach(item => {
         const error = document.createElement('div');
-        error.style.cssText = 'margin-top:5px;color:var(--error-color);font-size:12px';
+        error.className = 'import-diagnostic';
         error.textContent = item.message;
         row.appendChild(error);
       });
@@ -1099,6 +1445,141 @@
       line.textContent = item.message;
       diagnostics.appendChild(line);
     });
+  }
+
+  function editorField(label, control, className = '') {
+    const wrapper = document.createElement('label');
+    wrapper.className = className;
+    const caption = document.createElement('span');
+    caption.textContent = label;
+    wrapper.append(caption, control);
+    return wrapper;
+  }
+
+  function textInput(value, onChange) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value ?? '';
+    input.addEventListener('change', () => onChange(input.value));
+    return input;
+  }
+
+  function numberInput(value, onChange) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.step = 'any';
+    input.value = value ?? '';
+    input.addEventListener('change', () => onChange(input.value));
+    return input;
+  }
+
+  function areaInput(value, onChange) {
+    const area = document.createElement('textarea');
+    area.value = value ?? '';
+    area.addEventListener('change', () => onChange(area.value));
+    return area;
+  }
+
+  function selectInput(options, value, onChange) {
+    const select = document.createElement('select');
+    options.forEach(([optionValue, text]) => {
+      const option = document.createElement('option');
+      option.value = optionValue;
+      option.textContent = text;
+      option.selected = optionValue === value;
+      select.appendChild(option);
+    });
+    select.addEventListener('change', () => onChange(select.value));
+    return select;
+  }
+
+  function ensureScale(question) {
+    if (!question.scale || typeof question.scale !== 'object' || Array.isArray(question.scale)) {
+      question.scale = {
+        id: null,
+        psychometric_level: null,
+        min: null,
+        max: null,
+        step: null,
+        unit: null,
+        direction: null
+      };
+    }
+    return question.scale;
+  }
+
+  function ensureTime(question) {
+    if (!question.time || typeof question.time !== 'object' || Array.isArray(question.time)) {
+      question.time = { tracking_mode: null, wave: null, lag: null };
+    }
+    return question.time;
+  }
+
+  function numberOrNull(value) {
+    if (value === '' || value === null || value === undefined) return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function normalizeEditorCode(value, fallback) {
+    const normalized = String(value || '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+    return normalized || fallback;
+  }
+
+  function parseEditedOptions(value) {
+    return String(value || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map((line, index) => {
+        const separator = line.indexOf('|');
+        if (separator < 0) return { value: index + 1, text: line };
+        const rawValue = line.slice(0, separator).trim();
+        const numericValue = numberOrNull(rawValue);
+        return {
+          value: numericValue === null ? rawValue : numericValue,
+          text: line.slice(separator + 1).trim()
+        };
+      });
+  }
+
+  function renameImportedQuestion(oldCode, requestedCode) {
+    const bank = currentImportResult?.bank;
+    if (!bank?.questions?.[oldCode]) return;
+    const newCode = normalizeEditorCode(requestedCode, oldCode);
+    if (newCode !== oldCode && bank.questions[newCode]) {
+      showStatus(`Question code ${newCode} already exists.`, true);
+      renderImportPreview(currentImportResult);
+      return;
+    }
+    if (newCode !== oldCode) {
+      const question = bank.questions[oldCode];
+      delete bank.questions[oldCode];
+      question.code = newCode;
+      bank.questions[newCode] = question;
+      bank.question_order = bank.question_order.map(code => code === oldCode ? newCode : code);
+    }
+    refreshImportResult();
+  }
+
+  function refreshImportResult() {
+    if (!currentImportResult?.bank) return;
+    currentImportResult = QuestionBankImport.summarize(
+      currentImportResult.bank,
+      currentSourceFormat
+    );
+    document.getElementById('output-json').value =
+      JSON.stringify(currentImportResult.bank, null, 2);
+    renderImportPreview(currentImportResult);
+    showStatus(
+      currentImportResult.can_use ? i18n[currentLang].msgSuccess : i18n[currentLang].needsResolution,
+      !currentImportResult.can_use
+    );
   }
 
   async function saveAndUseInQuestionnaireConstructor() {
