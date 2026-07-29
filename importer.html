@@ -179,24 +179,27 @@
       background: #090d16; /* Глубокий цвет текстаовой зоны для контраста */
       color: #e2e8f0;
       line-height: 1.5;
+      scrollbar-width: auto;
+      scrollbar-color: var(--accent-color) #111827;
     }
 
     /* Настройка явных, видимых скроллбаров */
     textarea::-webkit-scrollbar {
-      width: 10px;
-      height: 10px;
+      width: 14px;
+      height: 14px;
     }
     textarea::-webkit-scrollbar-track {
-      background: #090d16;
-      border-radius: 6px;
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 8px;
     }
     textarea::-webkit-scrollbar-thumb {
-      background: #475569;
-      border-radius: 6px;
-      border: 2px solid #090d16;
+      background: var(--accent-color);
+      border-radius: 8px;
+      border: 3px solid #111827;
     }
     textarea::-webkit-scrollbar-thumb:hover {
-      background: var(--accent-color);
+      background: #7dd3fc;
     }
 
     textarea:focus {
@@ -268,6 +271,29 @@
       gap: 8px;
       max-height: 500px;
       overflow: auto;
+      padding-right: 6px;
+      scrollbar-width: auto;
+      scrollbar-color: var(--accent-color) #111827;
+    }
+
+    .preview-questions::-webkit-scrollbar {
+      width: 14px;
+    }
+
+    .preview-questions::-webkit-scrollbar-track {
+      background: #111827;
+      border: 1px solid #334155;
+      border-radius: 8px;
+    }
+
+    .preview-questions::-webkit-scrollbar-thumb {
+      background: var(--accent-color);
+      border: 3px solid #111827;
+      border-radius: 8px;
+    }
+
+    .preview-questions::-webkit-scrollbar-thumb:hover {
+      background: #7dd3fc;
     }
 
     @media (max-width: 820px) {
@@ -347,7 +373,7 @@
 <div class="container">
   <header>
     <div class="header-left">
-      <a href="index.html" class="hub-btn">← Back to Hub</a>
+      <a href="index.html" class="hub-btn" id="ui-back-hub">← Volver al inicio</a>
       <span class="brand-title">Research OS</span>
     </div>
     <div class="lang-selector">
@@ -371,14 +397,14 @@
           <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" id="ui-btn-upload">📂 Cargar Archivo</button>
         </div>
       </div>
-      <textarea id="input-json" placeholder="Cargue un archivo o pegue los datos del cuestionario..."></textarea>
+      <textarea id="input-json" placeholder="Cargue un archivo o pegue los datos del cuestionario..." data-placeholder-key="inputPlaceholder"></textarea>
     </div>
 
     <div class="panel">
       <div class="panel-header">
         <label for="output-json" id="ui-output-label">Resultado (Canonical Schema + UUID):</label>
       </div>
-      <textarea id="output-json" readonly placeholder="Espere el resultado..."></textarea>
+      <textarea id="output-json" readonly placeholder="Espere el resultado..." data-placeholder-key="outputPlaceholder"></textarea>
     </div>
   </div>
 
@@ -535,6 +561,80 @@
     }
   };
 
+  Object.assign(i18n.es, {
+    backHub: "← Volver al inicio",
+    inputPlaceholder: "Cargue un archivo o pegue los datos del cuestionario...",
+    outputPlaceholder: "Espere el resultado...",
+    readingFile: "📂 Leyendo y procesando el archivo...",
+    textReadError: "Error al leer el archivo de texto.",
+    emptyExtracted: "El contenido extraído está vacío.",
+    conversionError: "Error de conversión",
+    duplicateCode: "Ya existe una pregunta con el código {code}.",
+    pdfLibraryMissing: "La biblioteca PDF.js no está cargada.",
+    zipLibraryMissing: "La biblioteca JSZip no está cargada.",
+    diagnostics: {
+      INVALID_SCHEMA: "Se requiere el esquema research_os.question_bank versión 2.",
+      INVALID_BANK_ID: "Se requiere un UUID válido para el banco.",
+      MISSING_BANK_TITLE: "El banco importado necesita un nombre.",
+      MISSING_BANK_CODE: "El banco importado necesita un código.",
+      INVALID_QUESTION_COLLECTION: "Se requieren questions y question_order.",
+      MISSING_QUESTION: "La pregunta no está presente en questions.",
+      DUPLICATE_ORDER: "La pregunta aparece más de una vez en question_order.",
+      INVALID_QUESTION_ID: "Se requiere un UUID válido para la pregunta.",
+      CODE_MISMATCH: "La clave y el código de la pregunta no coinciden.",
+      MISSING_PROMPT: "Falta el texto de la pregunta.",
+      PLACEHOLDER_PROMPT: "La pregunta aún contiene un texto provisional sin completar.",
+      UNRESOLVED_TYPE: "Seleccione el tipo de respuesta antes de registrar esta pregunta.",
+      UNRESOLVED_SCALE: "Seleccione el contrato de escala antes de registrar esta pregunta.",
+      INVALID_OPTIONS: "Las opciones de la pregunta deben ser una lista.",
+      INVALID_STATUS: "El estado debe ser draft, trial o active.",
+      UNORDERED_QUESTION: "La pregunta no está incluida en question_order."
+    }
+  });
+  Object.assign(i18n.en, {
+    backHub: "← Back to Hub",
+    inputPlaceholder: "Upload a file or paste the questionnaire data...",
+    outputPlaceholder: "The result will appear here...",
+    readingFile: "📂 Reading and processing the file...",
+    textReadError: "Error reading the text file.",
+    emptyExtracted: "The extracted content is empty.",
+    conversionError: "Conversion error",
+    duplicateCode: "Question code {code} already exists.",
+    pdfLibraryMissing: "The PDF.js library is not loaded.",
+    zipLibraryMissing: "The JSZip library is not loaded.",
+    diagnostics: {}
+  });
+  Object.assign(i18n.ru, {
+    backHub: "← Вернуться на главную",
+    inputPlaceholder: "Загрузите файл или вставьте данные анкеты...",
+    outputPlaceholder: "Здесь появится результат...",
+    readingFile: "📂 Чтение и обработка файла...",
+    textReadError: "Ошибка чтения текстового файла.",
+    emptyExtracted: "Извлечённое содержимое пусто.",
+    conversionError: "Ошибка преобразования",
+    duplicateCode: "Вопрос с кодом {code} уже существует.",
+    pdfLibraryMissing: "Библиотека PDF.js не загружена.",
+    zipLibraryMissing: "Библиотека JSZip не загружена.",
+    diagnostics: {
+      INVALID_SCHEMA: "Требуется схема research_os.question_bank версии 2.",
+      INVALID_BANK_ID: "Требуется корректный UUID банка.",
+      MISSING_BANK_TITLE: "Импортированному банку нужно название.",
+      MISSING_BANK_CODE: "Импортированному банку нужен код.",
+      INVALID_QUESTION_COLLECTION: "Необходимы questions и question_order.",
+      MISSING_QUESTION: "Вопрос отсутствует в questions.",
+      DUPLICATE_ORDER: "Вопрос повторяется в question_order.",
+      INVALID_QUESTION_ID: "Требуется корректный UUID вопроса.",
+      CODE_MISMATCH: "Ключ и код вопроса не совпадают.",
+      MISSING_PROMPT: "Отсутствует текст вопроса.",
+      PLACEHOLDER_PROMPT: "Вопрос всё ещё содержит незавершённый временный текст.",
+      UNRESOLVED_TYPE: "Перед регистрацией вопроса выберите тип ответа.",
+      UNRESOLVED_SCALE: "Перед регистрацией вопроса выберите контракт шкалы.",
+      INVALID_OPTIONS: "Варианты ответа должны быть массивом.",
+      INVALID_STATUS: "Статус должен быть draft, trial или active.",
+      UNORDERED_QUESTION: "Вопрос не включён в question_order."
+    }
+  });
+
   let currentLang = 'es';
   let currentSourceFormat = 'text';
   let currentSourceTitle = '';
@@ -549,6 +649,7 @@
 
     const t = i18n[lang];
     document.getElementById('ui-title').innerText = t.title;
+    document.getElementById('ui-back-hub').innerText = t.backHub;
     document.getElementById('ui-input-label').innerText = t.inputLabel;
     document.getElementById('ui-output-label').innerText = t.outputLabel;
     document.getElementById('ui-preview-label').innerText = t.previewLabel;
@@ -557,6 +658,9 @@
     document.getElementById('ui-btn-copy').innerText = t.btnCopy;
     document.getElementById('ui-btn-convert').innerText = t.btnConvert;
     document.getElementById('ui-btn-use').innerText = t.btnUse;
+    document.querySelectorAll('[data-placeholder-key]').forEach(element => {
+      element.placeholder = t[element.dataset.placeholderKey];
+    });
     if (currentImportResult) renderImportPreview(currentImportResult);
   }
 
@@ -569,7 +673,7 @@
 
   async function parsePdfWithLib(arrayBuffer) {
     if (typeof pdfjsLib === 'undefined') {
-      throw new Error("La librería PDF.js no está cargada.");
+      throw new Error(i18n[currentLang].pdfLibraryMissing);
     }
     const loadingTask = pdfjsLib.getDocument({
       data: arrayBuffer,
@@ -581,7 +685,7 @@
     for (let i = 1; i <= pdfDoc.numPages; i++) {
       const page = await pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
-      const pageText = textContent.items.map(item => item.str).join(' ');
+      const pageText = QuestionBankImport.pdfItemsToText(textContent.items);
       extractedText += pageText + '\n';
     }
     return extractedText;
@@ -1081,7 +1185,7 @@
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = e => resolve(e.target.result);
-      reader.onerror = e => reject(new Error("Error al leer el archivo de texto."));
+      reader.onerror = () => reject(new Error(i18n[currentLang].textReadError));
       reader.readAsText(file);
     });
   }
@@ -1124,7 +1228,7 @@
 
   function ensurePdfWorker() {
     if (typeof pdfjsLib === 'undefined') {
-      return Promise.reject(new Error("La librería PDF.js no está cargada."));
+      return Promise.reject(new Error(i18n[currentLang].pdfLibraryMissing));
     }
     if (pdfWorkerObjectUrl) return Promise.resolve();
     if (!localLibraryPromises.pdfWorker) {
@@ -1146,7 +1250,7 @@
     const file = fileInput.files[0];
     if (!file) return;
 
-    showStatus("📂 Leyendo y procesando archivo...", false);
+    showStatus(i18n[currentLang].readingFile, false);
     const ext = file.name.split('.').pop().toLowerCase();
     const inputArea = document.getElementById('input-json');
     currentSourceFormat = ext;
@@ -1167,7 +1271,7 @@
         const arrayBuffer = await file.arrayBuffer();
         extractedContent = await parsePdfWithLib(arrayBuffer);
         currentInputKind = 'plain';
-      } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
+      } else if (ext === 'xlsx' || ext === 'xls') {
         await ensureXlsxLibrary();
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
@@ -1175,8 +1279,16 @@
         const worksheet = workbook.Sheets[firstSheetName];
         currentParsedValue = XLSX.utils.sheet_to_json(worksheet, { defval: null });
         extractedContent = JSON.stringify(currentParsedValue, null, 2);
+      } else if (ext === 'csv') {
+        await ensureXlsxLibrary();
+        const csvText = QuestionBankImport.decodeTextBytes(await file.arrayBuffer());
+        const workbook = XLSX.read(csvText, { type: 'string', codepage: 65001 });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        currentParsedValue = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+        extractedContent = JSON.stringify(currentParsedValue, null, 2);
       } else if (ext === 'pages') {
-        if (typeof JSZip === 'undefined') throw new Error('JSZip is not available.');
+        if (typeof JSZip === 'undefined') throw new Error(i18n[currentLang].zipLibraryMissing);
         const archive = await JSZip.loadAsync(await file.arrayBuffer());
         const pdfEntry = Object.values(archive.files).find(entry =>
           !entry.dir && /(?:^|\/)(?:preview|Preview|QuickLook\/Preview)\.pdf$/i.test(entry.name)
@@ -1198,7 +1310,7 @@
       }
 
       if (!extractedContent || !extractedContent.trim()) {
-        throw new Error("El contenido extraído está vacío.");
+        throw new Error(i18n[currentLang].emptyExtracted);
       }
 
       inputArea.value = extractedContent;
@@ -1239,13 +1351,14 @@
         canonicalResult = QuestionBankImport.plainTextToQuestionBank(rawText, metadata);
       } else {
         try {
-          const parsedData = currentParsedValue ??
-            QuestionBankImport.parseStructuredText(rawText, value =>
+          const parsedData = QuestionBankImport.parseStructuredText(rawText, value =>
               typeof jsyaml !== 'undefined' ? jsyaml.load(value) : null
             );
           canonicalResult = QuestionBankImport.canonicalOrConverted(parsedData, metadata);
         } catch (structuredError) {
-          if (currentParsedValue !== null) throw structuredError;
+          if (!QuestionBankImport.mayFallbackToPlainText(currentSourceFormat)) {
+            throw structuredError;
+          }
           canonicalResult = QuestionBankImport.plainTextToQuestionBank(rawText, metadata);
           currentInputKind = 'plain';
         }
@@ -1260,7 +1373,7 @@
     } catch (e) {
       currentImportResult = null;
       renderImportPreview(null);
-      showStatus(`Error de conversión: ${e.message}`, true);
+      showStatus(`${i18n[currentLang].conversionError}: ${e.message}`, true);
     }
   }
 
@@ -1432,7 +1545,7 @@
       errors.forEach(item => {
         const error = document.createElement('div');
         error.className = 'import-diagnostic';
-        error.textContent = item.message;
+        error.textContent = localizeDiagnostic(item);
         row.appendChild(error);
       });
       questions.appendChild(row);
@@ -1442,9 +1555,13 @@
     result.diagnostics.filter(item => !item.question_code).forEach(item => {
       const line = document.createElement('div');
       line.style.color = item.level === 'error' ? 'var(--error-color)' : 'var(--text-muted)';
-      line.textContent = item.message;
+      line.textContent = localizeDiagnostic(item);
       diagnostics.appendChild(line);
     });
+  }
+
+  function localizeDiagnostic(item) {
+    return i18n[currentLang].diagnostics?.[item.code] || item.message;
   }
 
   function editorField(label, control, className = '') {
@@ -1553,7 +1670,7 @@
     if (!bank?.questions?.[oldCode]) return;
     const newCode = normalizeEditorCode(requestedCode, oldCode);
     if (newCode !== oldCode && bank.questions[newCode]) {
-      showStatus(`Question code ${newCode} already exists.`, true);
+      showStatus(i18n[currentLang].duplicateCode.replace('{code}', newCode), true);
       renderImportPreview(currentImportResult);
       return;
     }
@@ -1632,6 +1749,9 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('input-json').addEventListener('input', () => {
+      currentParsedValue = null;
+    });
     const saved = (localStorage.getItem('app_language') || 'es').replace('-MX', '').replace('-US', '');
     setLanguage(i18n[saved] ? saved : 'es');
   });

@@ -8,6 +8,7 @@ const source = await fs.readFile(new URL('../question-bank-import.js', import.me
 const context = {
   crypto: webcrypto,
   Uint8Array,
+  TextDecoder,
   console
 };
 context.globalThis = context;
@@ -332,6 +333,29 @@ test('answer options without service fields or bullets are collected after an op
   );
 });
 
+test('UTF-8 CSV bytes preserve Spanish punctuation and accents', () => {
+  const decoded = importer.decodeTextBytes(
+    new TextEncoder().encode('code,prompt\nQ_1,¿Cómo está? Sí')
+  );
+  assert.equal(decoded, 'code,prompt\nQ_1,¿Cómo está? Sí');
+});
+
+test('PDF text items are reconstructed into visual lines before questionnaire parsing', () => {
+  const extracted = importer.pdfItemsToText([
+    { str: '1.', transform: [12, 0, 0, 12, 72, 760], width: 10, height: 12 },
+    { str: '¿Cómo está?', transform: [12, 0, 0, 12, 88, 760], width: 72, height: 12 },
+    { str: '1) Mal', transform: [12, 0, 0, 12, 72, 740], width: 34, height: 12 },
+    { str: '2) Bien', transform: [12, 0, 0, 12, 72, 720], width: 39, height: 12 }
+  ]);
+  assert.equal(extracted, '1. ¿Cómo está?\n1) Mal\n2) Bien');
+  const imported = importer.plainTextToQuestionBank(extracted, { title: 'PDF real' });
+  assert.equal(imported.questions.Q_1.prompt, '¿Cómo está?');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(imported.questions.Q_1.options)),
+    [{ value: 1, text: 'Mal' }, { value: 2, text: 'Bien' }]
+  );
+});
+
 test('missing content remains empty while generated service identity stays valid', () => {
   const imported = importer.plainTextToQuestionBank(
     '1. Describe the factor that mattered most?',
@@ -386,6 +410,16 @@ test('multi-format readers are local and the editing workspace stays compact', a
   assert.match(page, /ensurePdfWorker/);
   assert.match(page, /ensureXlsxLibrary/);
   assert.match(page, /standardFontDataUrl: 'vendor\/pdfjs\/standard_fonts\/'/);
+  assert.match(page, /QuestionBankImport\.pdfItemsToText\(textContent\.items\)/);
+  assert.match(page, /QuestionBankImport\.decodeTextBytes\(await file\.arrayBuffer\(\)\)/);
+  assert.match(page, /XLSX\.read\(csvText,\s*\{\s*type:\s*'string',\s*codepage:\s*65001\s*\}\)/);
+  assert.doesNotMatch(page, /currentParsedValue\s*\?\?/);
+  assert.match(page, /currentParsedValue = null;[\s\S]*addEventListener\('input'/);
+  assert.match(page, /id="ui-back-hub">← Volver al inicio/);
+  assert.match(page, /UNRESOLVED_SCALE:\s*"Seleccione el contrato de escala/);
   assert.match(page, /height:\s*280px/);
   assert.match(page, /max-height:\s*500px/);
+  assert.match(page, /textarea::\-webkit-scrollbar\s*\{[\s\S]*?width:\s*14px/);
+  assert.match(page, /\.preview-questions::\-webkit-scrollbar\s*\{[\s\S]*?width:\s*14px/);
+  assert.match(page, /scrollbar-color:\s*var\(--accent-color\)\s+#111827/);
 });

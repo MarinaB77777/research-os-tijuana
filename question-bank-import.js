@@ -407,6 +407,87 @@
     return new Set(['text', 'txt']).has(String(sourceFormat || '').toLowerCase());
   }
 
+  function decodeTextBytes(value) {
+    const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+    }
+    if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+      const swapped = new Uint8Array(bytes.length - 2);
+      for (let index = 2; index + 1 < bytes.length; index += 2) {
+        swapped[index - 2] = bytes[index + 1];
+        swapped[index - 1] = bytes[index];
+      }
+      return new TextDecoder('utf-16le').decode(swapped);
+    }
+    const withoutBom = bytes.length >= 3 &&
+      bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf
+      ? bytes.subarray(3)
+      : bytes;
+    try {
+      return new TextDecoder('utf-8', { fatal: true }).decode(withoutBom);
+    } catch (_) {
+      return new TextDecoder('windows-1252').decode(withoutBom);
+    }
+  }
+
+  function pdfItemsToText(items) {
+    const positioned = (Array.isArray(items) ? items : [])
+      .filter(item => item && String(item.str || '').trim())
+      .map((item, index) => ({
+        index,
+        text: String(item.str),
+        x: Number(item.transform?.[4]) || 0,
+        y: Number(item.transform?.[5]) || 0,
+        width: Math.max(0, Number(item.width) || 0),
+        height: Math.max(
+          1,
+          Math.abs(Number(item.height) || 0),
+          Math.abs(Number(item.transform?.[3]) || 0)
+        )
+      }));
+    if (!positioned.length) return '';
+
+    const heights = positioned.map(item => item.height).sort((left, right) => left - right);
+    const typicalHeight = heights[Math.floor(heights.length / 2)];
+    const yTolerance = Math.max(1.5, typicalHeight * 0.35);
+    const rows = [];
+
+    positioned
+      .sort((left, right) => right.y - left.y || left.x - right.x || left.index - right.index)
+      .forEach(item => {
+        let row = rows.find(candidate => Math.abs(candidate.y - item.y) <= yTolerance);
+        if (!row) {
+          row = { y: item.y, items: [] };
+          rows.push(row);
+        }
+        row.items.push(item);
+        row.y = row.items.reduce((sum, entry) => sum + entry.y, 0) / row.items.length;
+      });
+
+    return rows
+      .sort((left, right) => right.y - left.y)
+      .map(row => {
+        const rowItems = row.items.sort((left, right) => left.x - right.x || left.index - right.index);
+        let text = '';
+        let previousEnd = null;
+        rowItems.forEach(item => {
+          if (text) {
+            const gap = previousEnd === null ? 0 : item.x - previousEnd;
+            const needsSpace = gap > Math.max(0.8, item.height * 0.08) &&
+              !/^[,.;:!?%)\]}]/.test(item.text) &&
+              !/[(\[{¿¡]$/.test(text);
+            if (needsSpace) text += ' ';
+          }
+          text += item.text;
+          previousEnd = Math.max(previousEnd ?? item.x, item.x + item.width);
+        });
+        return text.trim();
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
   function questionFromTabularRows(rows, index) {
     const first = rows[0];
     const qCode = code(first.code || first.question_code || `Q_${index + 1}`, `Q_${index + 1}`);
@@ -977,6 +1058,8 @@
     parseLiteralDocument,
     parseStructuredText,
     mayFallbackToPlainText,
+    decodeTextBytes,
+    pdfItemsToText,
     rowsToQuestionBank,
     extractPlainTextQuestions,
     plainTextToQuestionBank,
