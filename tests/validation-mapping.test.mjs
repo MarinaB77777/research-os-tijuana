@@ -174,7 +174,7 @@ test('standard-method search defaults to available methods and includes licensed
   assert.equal(run('candidateAllowedByAccess(paidCandidate, "include_licensed")'), true);
 });
 
-test('author instrument prompts are not sent into outcome-level candidate discovery', () => {
+test('bank questions stay in the local group tree but are not sent into candidate discovery', () => {
   const bank = {
     schema: 'research_os.question_bank',
     bank_id: '177ced8e-6b08-4df3-9d84-40735890640b',
@@ -185,131 +185,137 @@ test('author instrument prompts are not sent into outcome-level candidate discov
       Q_1: {
         code: 'Q_1',
         prompt: 'A protected or private authored question',
-        block: 'SOCIAL',
-        family: 'RESOURCE',
-        domain: 'social',
-        parameter: null,
-        source_context: { variables: ['c1', 'c2'] }
+        question_id: '39744113-bf44-46ac-a3ac-3cc65f9fdd7c'
       }
     }
   };
-  const groups = plain(run('sourceBank = bank; variableGroups()', { bank }));
-  assert.deepEqual(groups, [{
-    block: 'SOCIAL',
-    family: 'RESOURCE',
-    domain: 'social',
-    parameter: null,
-    codes: ['Q_1'],
-    source_variables: ['c1', 'c2']
-  }]);
-  assert.doesNotMatch(JSON.stringify(groups), /protected|private|question/i);
+  const spec = {
+    bank_title: 'Author Bank',
+    deep_research_question_groups: [{
+      group_id: 'group-1',
+      deep_research_question: 'What does perceived support allow us to understand?',
+      question_codes: ['Q_1']
+    }]
+  };
+  const tree = plain(run('sourceBank = bank; buildValidationTree(spec)', { bank, spec }));
+  const targets = plain(run('validationTargets(tree)', { tree }));
+  assert.equal(tree.children[0].children[0].definition, 'A protected or private authored question');
+  assert.equal(tree.children[0].children[0].source_ref.included_in_candidate_discovery, false);
+  assert.doesNotMatch(JSON.stringify(targets), /protected|private|Q_1/i);
 });
 
-test('universal validation tree preserves every level and bank variables without a Health Model schema', () => {
-  const spec = {
-    domain_or_construct: 'Any research object',
-    research_question: 'What outcome is being studied?',
-    conceptual_definition: 'A researcher-defined meaning.',
-    expected_targets: [
-      { label: 'Component A', definition: 'First component.' },
-      { label: 'Component B', definition: null }
-    ],
-    expected_depth: 'Outcome, components, and variables'
+test('universal validation tree groups every selected bank question under one deep research question', () => {
+  const bank = {
+    schema: 'research_os.question_bank',
+    bank_id: '177ced8e-6b08-4df3-9d84-40735890640b',
+    code: 'GENERIC_BANK',
+    version: 1,
+    question_order: ['Q_1', 'Q_2'],
+    questions: {
+      Q_1: { code: 'Q_1', question_id: '39744113-bf44-46ac-a3ac-3cc65f9fdd7c', prompt: 'First authored question' },
+      Q_2: { code: 'Q_2', question_id: '8c1be574-2d2c-4200-a47f-7bde9bb36eb3', prompt: 'Second authored question' }
+    }
   };
-  const groups = [{
-    block: 'BLOCK_A',
-    family: 'FAMILY_A',
-    domain: 'generic',
-    parameter: 'Observed group',
-    codes: ['Q_1'],
-    source_variables: ['variable_1', 'variable_2']
-  }];
-  const tree = plain(run('buildValidationTree(spec, groups)', { spec, groups }));
+  const spec = {
+    bank_title: 'Generic Bank',
+    deep_research_question_groups: [{
+      group_id: 'group-1',
+      deep_research_question: 'What does this pair of questions allow us to understand?',
+      question_codes: ['Q_1', 'Q_2']
+    }]
+  };
+  const tree = plain(run('sourceBank = bank; buildValidationTree(spec)', { bank, spec }));
   assert.equal(tree.node_type, 'validation_target');
-  assert.equal(tree.children[0].node_type, 'research_outcome');
-  assert.equal(tree.children[0].children[0].node_type, 'conceptual_definition');
-  const children = tree.children[0].children[0].children;
-  assert.deepEqual(children.map(item => item.node_type), [
-    'child_construct',
-    'child_construct',
-    'variable_group'
-  ]);
-  assert.deepEqual(children[2].children.map(item => item.node_type), ['variable', 'variable']);
-  assert.equal(children[2].source_ref.question_prompts_included, false);
+  assert.equal(tree.children[0].node_type, 'deep_research_question');
+  assert.deepEqual(
+    tree.children[0].children.map(item => item.node_type),
+    ['bank_question_reference', 'bank_question_reference']
+  );
+  assert.deepEqual(tree.children[0].source_ref.question_codes, ['Q_1', 'Q_2']);
+  assert.equal(tree.children[0].source_ref.question_prompts_sent_to_ai, false);
   assert.doesNotMatch(JSON.stringify(tree), /health_model|StressBurden|TrajectoryRisk/i);
 });
 
-test('the same universal node contract accepts Health Model blocks and parameters unchanged', () => {
-  const spec = {
-    domain_or_construct: 'Health Model',
-    research_question: 'How does current burden manifest?',
-    conceptual_definition: 'Modeled burden compared with observed manifestation.',
-    expected_targets: [
-      { label: 'ModeledBurden', definition: 'A modeled state parameter.' },
-      { label: 'BurdenManifestationDelta', definition: 'A model-to-observation delta.' }
-    ],
-    expected_depth: 'Model, parameter, mechanism, and observed variable'
+test('the same universal group contract accepts Health Model questions without a special schema', () => {
+  const bank = {
+    schema: 'research_os.question_bank',
+    bank_id: '177ced8e-6b08-4df3-9d84-40735890640b',
+    code: 'HEALTH_MODEL',
+    version: 1,
+    question_order: ['K_1', 'K_2'],
+    questions: {
+      K_1: { code: 'K_1', question_id: '39744113-bf44-46ac-a3ac-3cc65f9fdd7c', prompt: 'Observed manifestation one', parameter: 'K_fact' },
+      K_2: { code: 'K_2', question_id: '8c1be574-2d2c-4200-a47f-7bde9bb36eb3', prompt: 'Observed manifestation two', parameter: 'K_fact' }
+    }
   };
-  const groups = [{
-    block: 'K',
-    family: 'MANIFESTATION',
-    domain: 'psychological',
-    parameter: 'K_fact',
-    codes: ['K_1', 'K_2'],
-    source_variables: ['k1', 'k2']
-  }];
-  const tree = plain(run('buildValidationTree(spec, groups)', { spec, groups }));
+  const spec = {
+    bank_title: 'Health Model',
+    deep_research_question_groups: [{
+      group_id: 'group-k',
+      deep_research_question: 'What do these manifestations jointly reveal about current burden?',
+      question_codes: ['K_1', 'K_2']
+    }]
+  };
+  const tree = plain(run('sourceBank = bank; buildValidationTree(spec)', { bank, spec }));
   const allNodes = [];
   (function collect(node) {
     allNodes.push(node);
     node.children.forEach(collect);
   }(tree));
-  assert.ok(allNodes.some(node => node.node_type === 'child_construct' && node.label === 'ModeledBurden'));
-  assert.ok(allNodes.some(node => node.node_type === 'variable_group' && node.label === 'K_fact'));
   assert.deepEqual(
-    allNodes.filter(node => node.node_type === 'variable').map(node => node.label),
-    ['k1', 'k2']
+    allNodes.filter(node => node.node_type === 'bank_question_reference').map(node => node.label),
+    ['K_1', 'K_2']
   );
   assert.equal(new Set(allNodes.map(node => Object.keys(node).sort().join('|'))).size, 1);
 });
 
-test('a bank variable group can be the validation target without inventing a child construct', () => {
+test('mapping is allowed only after every bank question belongs to a deep-question group', () => {
+  const bank = {
+    title: 'Observed process',
+    question_order: ['D_1', 'D_2'],
+    questions: {
+      D_1: { code: 'D_1', prompt: 'First question' },
+      D_2: { code: 'D_2', prompt: 'Second question' }
+    }
+  };
   const spec = {
-    domain_or_construct: 'Observed process',
-    research_question: 'What does the group represent?',
-    conceptual_definition: 'A group defined by the researcher bank.',
-    expected_targets: [],
-    expected_depth: 'Variable group',
+    bank_title: 'Observed process',
+    deep_research_question_groups: [{
+      group_id: 'group-1',
+      deep_research_question: 'What does this question reveal?',
+      question_codes: ['D_1']
+    }],
     target_population: 'Study population',
     language_and_cultural_context: 'es-MX'
   };
-  const groups = [{
-    block: null,
-    family: null,
-    domain: 'decision',
-    parameter: 'uncertainty_tolerance',
-    codes: ['D_1'],
-    source_variables: []
-  }];
-  assert.equal(run('completeSpec(spec, groups)', { spec, groups }), true);
-  const tree = plain(run('buildValidationTree(spec, groups)', { spec, groups }));
-  assert.equal(tree.children[0].children[0].children.length, 1);
-  assert.equal(tree.children[0].children[0].children[0].node_type, 'variable_group');
+  assert.equal(run('sourceBank = bank; deepQuestionGroups = spec.deep_research_question_groups; completeSpec(spec)', { bank, spec }), false);
+  spec.deep_research_question_groups.push({
+    group_id: 'group-2',
+    deep_research_question: 'What does the second question reveal?',
+    question_codes: ['D_2']
+  });
+  assert.equal(run('deepQuestionGroups = spec.deep_research_question_groups; completeSpec(spec)', { spec }), true);
 });
 
 test('each validation node receives its own bundle, direct coverage, aggregate coverage, and depth assessment', () => {
-  const spec = {
-    domain_or_construct: 'Research object',
-    research_question: 'Which outcome?',
-    conceptual_definition: 'Defined outcome.',
-    expected_targets: [{ label: 'Leaf construct', definition: 'Leaf meaning.' }],
-    expected_depth: 'Deep'
+  const bank = {
+    title: 'Research bank',
+    question_order: ['Q_1'],
+    questions: { Q_1: { code: 'Q_1', prompt: 'Research question' } }
   };
-  const tree = run('buildValidationTree(spec, [])', { spec });
-  const leafId = run('tree.children[0].children[0].children[0].node_id', { tree });
+  const spec = {
+    bank_title: 'Research bank',
+    deep_research_question_groups: [{
+      group_id: 'group-1',
+      deep_research_question: 'What does this question allow us to understand?',
+      question_codes: ['Q_1']
+    }]
+  };
+  const tree = run('sourceBank = bank; buildValidationTree(spec)', { bank, spec });
+  const targetId = run('tree.children[0].node_id', { tree });
   const candidate = {
     candidate_id: randomUUID(),
-    target_node_ids: [leafId],
+    target_node_ids: [targetId],
     depth_match: 'comparable',
     human_disposition: { status: 'accepted' }
   };
@@ -319,16 +325,18 @@ test('each validation node receives its own bundle, direct coverage, aggregate c
     candidate_registry: [candidate]
   };
   run('mapping = mappingValue; refreshValidationTree()', { mappingValue });
-  const leaf = plain(run('mapping.mapping_tree.children[0].children[0].children[0]'));
+  const target = plain(run('mapping.mapping_tree.children[0]'));
+  const questionReference = plain(run('mapping.mapping_tree.children[0].children[0]'));
   const root = plain(run('mapping.mapping_tree'));
-  assert.deepEqual(leaf.validation_bundle, [candidate.candidate_id]);
-  assert.deepEqual(leaf.approved_methods, [candidate.candidate_id]);
-  assert.equal(leaf.coverage.direct.percent, 100);
-  assert.equal(leaf.coverage.aggregate.percent, 100);
-  assert.equal(leaf.depth_assessment.by_candidate[candidate.candidate_id], 'comparable');
+  assert.deepEqual(target.validation_bundle, [candidate.candidate_id]);
+  assert.deepEqual(target.approved_methods, [candidate.candidate_id]);
+  assert.equal(target.coverage.direct.percent, 100);
+  assert.equal(target.coverage.aggregate.percent, 100);
+  assert.equal(target.depth_assessment.by_candidate[candidate.candidate_id], 'comparable');
+  assert.deepEqual(questionReference.coverage.aggregate.expected_node_ids, []);
   assert.deepEqual(root.validation_bundle, [candidate.candidate_id]);
   assert.equal(root.coverage.direct.percent, 0);
-  assert.ok(root.coverage.aggregate.percent > 0);
+  assert.equal(root.coverage.aggregate.percent, 100);
 });
 
 test('AI-provided links are restricted to HTTP(S) and rendered text is escaped', () => {
@@ -445,15 +453,19 @@ test('a verified DOI still requires the researcher attestation before bundle app
 
 test('generated mapping is owner-bound and preserves complete AI and evidence provenance', async () => {
   context.AIRouter.sendRequest = async (_task, _prompt, scopedInput) => {
-    assert.equal(scopedInput.domain_or_construct, 'Social resources');
+    assert.equal(scopedInput.bank_title, 'Social resources bank');
     assert.deepEqual(
-      plain(scopedInput.expected_subconstructs),
-      ['Support', 'Trust', 'Help-seeking']
+      plain(scopedInput.validation_targets.map(item => item.label)),
+      [
+        'What does the selected group show about available social support?',
+        'What does the selected question show about help-seeking?'
+      ]
     );
-    assert.equal(scopedInput.author_instrument, null);
-    assert.equal(scopedInput.conceptual_definition, 'Resources available from trusted people.');
+    assert.equal(scopedInput.author_instrument, undefined);
+    assert.equal(scopedInput.deep_research_question_groups, undefined);
+    assert.doesNotMatch(JSON.stringify(scopedInput), /Private authored wording/i);
     const coveredIds = scopedInput.validation_targets
-      .filter(item => ['Support', 'Trust'].includes(item.label))
+      .filter(item => item.label.includes('social support'))
       .map(item => item.node_id);
     return {
       candidates: [{
@@ -462,7 +474,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
         method_outcome: 'Perceived social support',
         evidence_type: 'questionnaire',
         target_node_ids: coveredIds,
-        covered_subconstructs: ['Support', 'Trust'],
+        covered_subconstructs: ['What does the selected group show about available social support?'],
         depth_match: 'partial',
         population_fit: { status: 'partial', explanation: 'Population review needed.' },
         language_cultural_fit: { status: 'unknown', explanation: 'No adaptation established.' },
@@ -479,7 +491,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
         ai_confidence: 0.7
       }],
       potentially_unique_constructs: [{
-        subconstruct: 'Help-seeking',
+        subconstruct: 'What does the selected question show about help-seeking?',
         reason: 'No direct analogue established.',
         separate_validation_required: true
       }],
@@ -505,16 +517,34 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
       };
     }
   });
+  const bankValue = {
+    schema: 'research_os.question_bank',
+    bank_id: '177ced8e-6b08-4df3-9d84-40735890640b',
+    code: 'SOCIAL_RESOURCES',
+    title: 'Social resources bank',
+    version: 1,
+    question_order: ['S_1', 'S_2', 'S_3'],
+    questions: {
+      S_1: { code: 'S_1', question_id: '39744113-bf44-46ac-a3ac-3cc65f9fdd7c', prompt: 'Private authored wording one' },
+      S_2: { code: 'S_2', question_id: '8c1be574-2d2c-4200-a47f-7bde9bb36eb3', prompt: 'Private authored wording two' },
+      S_3: { code: 'S_3', question_id: 'f06e9f89-3c56-4a02-8a9e-a233276289e1', prompt: 'Private authored wording three' }
+    }
+  };
+  const groupValues = [{
+    group_id: 'group-support',
+    deep_research_question: 'What does the selected group show about available social support?',
+    question_codes: ['S_1', 'S_2']
+  }, {
+    group_id: 'group-help',
+    deep_research_question: 'What does the selected question show about help-seeking?',
+    question_codes: ['S_3']
+  }];
   run(`
-    sourceBank = null;
-    domainInput.value = "Social resources";
-    questionInput.value = "To what extent is a person supported under critical life load?";
-    definitionInput.value = "Resources available from trusted people.";
-    subconstructInput.value = "Support\\nTrust\\nHelp-seeking";
-    depthInput.value = "Domain outcome and three subconstructs";
+    sourceBank = bankValue;
+    deepQuestionGroups = groupValues;
     populationInput.value = "Adults under life load";
     cultureInput.value = "es-MX";
-  `);
+  `, { bankValue, groupValues });
   await run('runMapping()');
 
   const result = plain(run('mapping'));
@@ -523,18 +553,18 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
   assert.equal(result.owner_account_id, researcher.account_id);
   assert.equal(result.status, 'candidate_mapping_only');
   assert.equal(result.mapping_tree.node_type, 'validation_target');
-  assert.equal(result.mapping_tree.children[0].node_type, 'research_outcome');
-  assert.equal(result.mapping_tree.children[0].children[0].node_type, 'conceptual_definition');
+  assert.equal(result.mapping_tree.children[0].node_type, 'deep_research_question');
   assert.deepEqual(
-    result.mapping_tree.children[0].children[0].children.map(item => item.node_type),
-    ['child_construct', 'child_construct', 'child_construct']
+    result.mapping_tree.children[0].children.map(item => item.node_type),
+    ['bank_question_reference', 'bank_question_reference']
   );
-  assert.equal(result.comparison_strategy.unit, 'validation_node_to_method_outcome');
+  assert.equal(result.comparison_strategy.unit, 'deep_research_question_to_method_outcome');
   assert.equal(
     result.comparison_strategy.coverage_rule,
-    'union_of_researcher_approved_method_targets_by_node'
+    'union_of_researcher_approved_deep_research_questions'
   );
   assert.equal(result.comparison_strategy.question_level_mapping, false);
+  assert.equal(result.author_instrument.code, 'SOCIAL_RESOURCES');
   assert.equal(result.candidate_registry[0].source_verification.status, 'bibliographic_metadata_verified');
   assert.equal(result.candidate_registry[0].human_disposition.status, 'pending');
   assert.deepEqual(
@@ -543,7 +573,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
   );
   assert.equal(result.ai_provenance.provider, 'groq');
   assert.equal(result.ai_provenance.model, 'openai/gpt-oss-20b');
-  assert.equal(result.ai_provenance.prompt_version, 'hierarchical_validation_mapping_v2');
+  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_mapping_v3');
   assert.equal(result.ai_provenance.human_authority, false);
   assert.equal(result.potentially_unique_constructs[0].separate_validation_required, true);
   assert.equal(result.methodology_basis.length, 5);
