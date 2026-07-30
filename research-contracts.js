@@ -3,6 +3,18 @@
 
   const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const ENTITY_STATUSES = Object.freeze(['draft', 'trial', 'active']);
+  const REUSE_PERMISSIONS = Object.freeze(['attribution_permitted', 'permission_required']);
+
+  function normalizeReusePolicy(value) {
+    const permission = REUSE_PERMISSIONS.includes(value?.permission)
+      ? value.permission
+      : 'attribution_permitted';
+    return {
+      permission,
+      attribution_required: true,
+      ownership_retained_by_author: true
+    };
+  }
 
   function createUuid() {
     if (global.crypto && typeof global.crypto.randomUUID === 'function') {
@@ -140,6 +152,7 @@
 
   global.ResearchContracts = Object.freeze({
     ENTITY_STATUSES,
+    REUSE_PERMISSIONS,
     createUuid,
     isUuid,
     normalizeCode,
@@ -150,6 +163,7 @@
     researcherToken,
     requestJson,
     questionKey,
+    normalizeReusePolicy,
     flattenQuestionBank
   });
 })(window);

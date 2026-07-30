@@ -91,17 +91,8 @@
 
     <!-- 3. API-ключи -->
     <div class="section">
-        <h2 data-i18n="sec1_title">3. Ваши API-ключи ИИ</h2>
-        <div class="grid">
-            <div class="form-group">
-                <label>Groq API Key (Free):</label>
-                <input type="password" id="key_groq" placeholder="gsk_...">
-            </div>
-            <div class="form-group">
-                <label>Google Gemini API Key (Free):</label>
-                <input type="password" id="key_gemini" placeholder="AIzaSy...">
-            </div>
-        </div>
+        <h2 data-i18n="sec1_title">3. Серверные подключения ИИ</h2>
+        <p data-i18n="ai_key_security">Ключи провайдеров существуют только как защищённые переменные серверного окружения. Они не записываются в базу данных, не вводятся и не сохраняются в браузере. Исследователь выбирает только доступную модель.</p>
     </div>
 
     <!-- 4. Маршрутизация ИИ -->
@@ -110,17 +101,20 @@
         <div class="form-group">
             <label data-i18n="label_analyzer">🔍 Анализ и поиск шкал (analyzer.html):</label>
             <select id="task_analyzer">
-                <option value='{"provider":"groq","model":"llama-3.3-70b-versatile"}'>Groq / Llama 3.3 (Fast)</option>
-                <option value='{"provider":"gemini","model":"gemini-1.5-flash"}'>Google / Gemini 1.5 Flash</option>
+                <option value='{"provider":"groq","model":"openai/gpt-oss-20b"}'>Groq / OpenAI GPT-OSS 20B (Fast)</option>
+                <option value='{"provider":"gemini","model":"gemini-3.6-flash"}'>Google / Gemini 3.6 Flash</option>
+                <option value='{"provider":"gemini","model":"gemini-3.5-flash-lite"}'>Google / Gemini 3.5 Flash-Lite</option>
             </select>
         </div>
         <div class="form-group">
             <label data-i18n="label_translator">🌐 Перевод и адаптация (translator.html):</label>
             <select id="task_translator">
-                <option value='{"provider":"gemini","model":"gemini-1.5-flash"}'>Google / Gemini 1.5 Flash</option>
-                <option value='{"provider":"groq","model":"llama-3.3-70b-versatile"}'>Groq / Llama 3.3</option>
+                <option value='{"provider":"groq","model":"openai/gpt-oss-20b"}'>Groq / OpenAI GPT-OSS 20B (Fast)</option>
+                <option value='{"provider":"gemini","model":"gemini-3.5-flash-lite"}'>Google / Gemini 3.5 Flash-Lite</option>
+                <option value='{"provider":"gemini","model":"gemini-3.6-flash"}'>Google / Gemini 3.6 Flash</option>
             </select>
         </div>
+        <p class="hint" data-i18n="ai_free_tier_notice">Free-tier limits are shared by all researchers. Do not send personal, confidential, or participant data to Gemini free-tier models.</p>
     </div>
 
     <button class="btn" onclick="saveAllSettings()" data-i18n="btn_save">💾 Сохранить настройки</button>
@@ -128,6 +122,7 @@
 </div>
 
 <script src="auth.js"></script>
+<script src="ai-router.js"></script>
 <script>
 const i18n = {
     ru: {
@@ -151,7 +146,9 @@ const i18n = {
         username_invalid: "Логин должен содержать от 3 до 128 символов: только латинские буквы, цифры и . _ @ + - без пробелов.",
         researcher_create_failed: "Не удалось создать исследователя: ",
         btn_download_qr: "📥 Скачать QR (PNG)",
-        sec1_title: "3. Ваши API-ключи ИИ",
+        sec1_title: "3. Серверные подключения ИИ",
+        ai_key_security: "Ключи провайдеров существуют только как защищённые переменные серверного окружения. Они не записываются в базу данных, не вводятся и не сохраняются в браузере. Исследователь выбирает только доступную модель.",
+        ai_free_tier_notice: "Бесплатные лимиты общие для всех исследователей. В бесплатные модели Gemini нельзя отправлять персональные, конфиденциальные данные или данные участников.",
         sec2_title: "4. Какой ИИ отвечает за задачи?",
         label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
         label_translator: "🌐 Перевод и адаптация (translator.html):",
@@ -179,7 +176,9 @@ const i18n = {
         username_invalid: "El usuario debe tener entre 3 y 128 caracteres: solo letras latinas, números y . _ @ + -, sin espacios.",
         researcher_create_failed: "No se pudo crear el investigador: ",
         btn_download_qr: "📥 Descargar QR (PNG)",
-        sec1_title: "3. Sus Claves API de IA",
+        sec1_title: "3. Conexiones de IA del servidor",
+        ai_key_security: "Las claves de proveedor existen solo como variables protegidas del entorno del servidor. No se escriben en la base de datos ni se introducen o guardan en el navegador. El investigador solo elige un modelo disponible.",
+        ai_free_tier_notice: "Los límites gratuitos se comparten entre todos los investigadores. No envíe datos personales, confidenciales ni datos de participantes a los modelos gratuitos de Gemini.",
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
         label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
         label_translator: "🌐 Traducción y adaptación (translator.html):",
@@ -207,7 +206,9 @@ const i18n = {
         username_invalid: "The username must be 3 to 128 characters: Latin letters, numbers and . _ @ + - only, with no spaces.",
         researcher_create_failed: "Could not create the researcher: ",
         btn_download_qr: "📥 Download QR (PNG)",
-        sec1_title: "3. Your AI API Keys",
+        sec1_title: "3. Server-side AI connections",
+        ai_key_security: "Provider keys exist only as protected server environment variables. They are not written to the database or entered or stored in the browser. The researcher only selects an available model.",
+        ai_free_tier_notice: "Free-tier limits are shared by all researchers. Do not send personal, confidential, or participant data to Gemini free-tier models.",
         sec2_title: "4. Assign AI models to tasks",
         label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
         label_translator: "🌐 Translation & adaptation (translator.html):",
@@ -299,37 +300,40 @@ function downloadResQR() {
     link.click();
 }
 
-function saveAllSettings() {
-    const keys = {
-        groq: document.getElementById('key_groq').value.trim(),
-        gemini: document.getElementById('key_gemini').value.trim()
-    };
-    localStorage.setItem('ai_api_keys', JSON.stringify(keys));
-
-    const config = {
-        analyzer: JSON.parse(document.getElementById('task_analyzer').value),
-        translator: JSON.parse(document.getElementById('task_translator').value)
-    };
-    localStorage.setItem('ai_router_config', JSON.stringify(config));
-
-    const toast = document.getElementById('toast');
-    toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 3000);
+async function saveAllSettings() {
+    localStorage.removeItem('ai_api_keys');
+    localStorage.removeItem('ai_router_config');
+    try {
+        await AIRouter.savePreferences({
+            analyzer: JSON.parse(document.getElementById('task_analyzer').value),
+            translator: JSON.parse(document.getElementById('task_translator').value)
+        });
+        const toast = document.getElementById('toast');
+        toast.style.display = 'block';
+        setTimeout(() => toast.style.display = 'none', 3000);
+    } catch (error) {
+        alert(error.message);
+    }
 }
 
-function loadSettings() {
-    const keys = JSON.parse(localStorage.getItem('ai_api_keys') || '{}');
-    if (keys.groq) document.getElementById('key_groq').value = keys.groq;
-    if (keys.gemini) document.getElementById('key_gemini').value = keys.gemini;
-
-    const config = JSON.parse(localStorage.getItem('ai_router_config') || '{}');
-    if (config.analyzer) document.getElementById('task_analyzer').value = JSON.stringify(config.analyzer);
-    if (config.translator) document.getElementById('task_translator').value = JSON.stringify(config.translator);
+async function loadSettings() {
+    localStorage.removeItem('ai_api_keys');
+    localStorage.removeItem('ai_router_config');
+    const config = await AIRouter.loadPreferences();
+    const applyAvailable = (elementId, value) => {
+        const select = document.getElementById(elementId);
+        const serialized = JSON.stringify(value || {});
+        if (Array.from(select.options).some(option => option.value === serialized)) {
+            select.value = serialized;
+        }
+    };
+    applyAvailable('task_analyzer', config.analyzer);
+    applyAvailable('task_translator', config.translator);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    loadSettings();
     accountManagerSession = await ResearchAuth.verify('researcher');
+    if (accountManagerSession) await loadSettings();
     const savedLang = localStorage.getItem('app_language') || 'ru';
     const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
     if (btn) btn.click();

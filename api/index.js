@@ -5,6 +5,25 @@ const UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 8000;
 })();
+const AI_UPSTREAM_TIMEOUT_MS = (() => {
+    const configured = Number.parseInt(process.env.AI_UPSTREAM_TIMEOUT_MS || '60000', 10);
+    return Number.isFinite(configured) && configured > 0 ? configured : 60000;
+})();
+const MAX_AI_REQUEST_BYTES = 250000;
+const AI_TASK_MODELS = Object.freeze({
+    analyzer: Object.freeze({
+        groq: new Set(['openai/gpt-oss-20b']),
+        gemini: new Set(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])
+    }),
+    translator: Object.freeze({
+        groq: new Set(['openai/gpt-oss-20b']),
+        gemini: new Set(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])
+    })
+});
+const DEFAULT_AI_PREFERENCES = Object.freeze({
+    analyzer: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
+    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+});
 
 function bearerToken(req) {
     const authorization = req.headers.authorization || '';
@@ -26,14 +45,19 @@ function sessionTokenHash(token) {
     return createHash('sha256').update(String(token), 'utf8').digest('hex');
 }
 
-async function fetchWithTimeout(url, options, timeoutMs = UPSTREAM_TIMEOUT_MS) {
+async function fetchWithTimeout(
+    url,
+    options,
+    timeoutMs = UPSTREAM_TIMEOUT_MS,
+    timeoutMessage = 'Authentication storage did not respond in time'
+) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
         return await fetch(url, { ...(options || {}), signal: controller.signal });
     } catch (error) {
         if (error?.name === 'AbortError') {
-            const timeoutError = new Error('Authentication storage did not respond in time');
+            const timeoutError = new Error(timeoutMessage);
             timeoutError.status = 504;
             throw timeoutError;
         }
@@ -130,6 +154,204 @@ async function callSupabaseRpc(supabaseUrl, key, functionName, body) {
     return response.json();
 }
 
+function aiProviderKey(provider) {
+    if (provider === 'groq') return process.env.GROQ_API_KEY || '';
+    if (provider === 'gemini') return process.env.GEMINI_API_KEY || '';
+    return '';
+}
+
+function validateAiRequest(body) {
+    const task = String(body?.task || '');
+    const provider = String(body?.provider || '');
+    const model = String(body?.model || '');
+    const systemPrompt = String(body?.system_prompt || '');
+    const taskProviders = AI_TASK_MODELS[task];
+    if (!taskProviders || !taskProviders[provider] || !taskProviders[provider].has(model)) {
+        return { ok: false, error: 'The requested AI task, provider, or model is not allowed' };
+    }
+    if (!systemPrompt.trim()) {
+        return { ok: false, error: 'A system prompt is required' };
+    }
+    const serializedPayload = typeof body?.payload === 'string'
+        ? body.payload
+        : JSON.stringify(body?.payload ?? null);
+    const requestBytes = Buffer.byteLength(systemPrompt, 'utf8') +
+        Buffer.byteLength(serializedPayload, 'utf8');
+    if (requestBytes > MAX_AI_REQUEST_BYTES) {
+        return { ok: false, error: 'The AI request exceeds the allowed size' };
+    }
+    return { ok: true, task, provider, model, systemPrompt, serializedPayload };
+}
+
+function validateAiPreferences(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { ok: false, error: 'AI preferences must be an object' };
+    }
+    const extraKeys = Object.keys(value).filter(key => !Object.hasOwn(AI_TASK_MODELS, key));
+    if (extraKeys.length) {
+        return { ok: false, error: 'AI preferences may contain task-to-model choices only' };
+    }
+    const preferences = {};
+    for (const task of Object.keys(AI_TASK_MODELS)) {
+        const selected = value[task] || DEFAULT_AI_PREFERENCES[task];
+        const provider = String(selected?.provider || '');
+        const model = String(selected?.model || '');
+        if (!AI_TASK_MODELS[task][provider]?.has(model)) {
+            return { ok: false, error: `The AI preference for ${task} is not allowed` };
+        }
+        preferences[task] = { provider, model };
+    }
+    return { ok: true, preferences };
+}
+
+function normalizeDoi(value) {
+    const normalized = String(value || '')
+        .trim()
+        .replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, '')
+        .replace(/^doi:\s*/i, '');
+    if (!/^10\.\d{4,9}\/\S+$/i.test(normalized) || normalized.length > 512) return null;
+    return normalized.toLowerCase();
+}
+
+function firstMetadataValue(value) {
+    return Array.isArray(value) && value.length ? String(value[0] || '') : null;
+}
+
+function crossrefPublishedDate(message) {
+    const parts = message?.published?.['date-parts']?.[0] ||
+        message?.['published-print']?.['date-parts']?.[0] ||
+        message?.['published-online']?.['date-parts']?.[0];
+    if (!Array.isArray(parts) || !parts.length) return null;
+    const [year, month = 1, day = 1] = parts.map(Number);
+    if (!Number.isInteger(year)) return null;
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+async function verifyCrossrefDoi(doi) {
+    const headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Research-OS-Tijuana/1.0'
+    };
+    const mailto = String(process.env.CROSSREF_MAILTO || '').trim();
+    const query = mailto ? `?mailto=${encodeURIComponent(mailto)}` : '';
+    const response = await fetchWithTimeout(
+        `https://api.crossref.org/works/${encodeURIComponent(doi)}${query}`,
+        { headers },
+        UPSTREAM_TIMEOUT_MS,
+        'Crossref metadata service did not respond in time'
+    );
+    if (!response.ok) {
+        const error = new Error(
+            response.status === 404
+                ? 'DOI metadata was not found in Crossref'
+                : `Crossref metadata lookup failed with status ${response.status}`
+        );
+        error.status = response.status === 404 ? 404 : 502;
+        throw error;
+    }
+    const payload = await response.json();
+    const message = payload?.message;
+    if (!message || normalizeDoi(message.DOI) !== doi) {
+        const error = new Error('Crossref returned metadata for a different DOI');
+        error.status = 502;
+        throw error;
+    }
+    return {
+        doi,
+        title: firstMetadataValue(message.title),
+        authors: Array.isArray(message.author)
+            ? message.author.map(author => ({
+                given: author?.given || null,
+                family: author?.family || null,
+                orcid: author?.ORCID || null
+            }))
+            : [],
+        published_date: crossrefPublishedDate(message),
+        container_title: firstMetadataValue(message['container-title']),
+        publisher: message.publisher || null,
+        work_type: message.type || null,
+        url: message.URL || `https://doi.org/${doi}`,
+        licenses: Array.isArray(message.license)
+            ? message.license.map(item => ({
+                url: item?.URL || null,
+                start: item?.start?.['date-time'] || null,
+                content_version: item?.['content-version'] || null
+            }))
+            : []
+    };
+}
+
+async function callAiProvider(request) {
+    const apiKey = aiProviderKey(request.provider);
+    if (!apiKey) {
+        const error = new Error(`Server-side ${request.provider.toUpperCase()} credentials are not configured`);
+        error.status = 503;
+        throw error;
+    }
+    let response;
+    if (request.provider === 'groq') {
+        response = await fetchWithTimeout(
+            'https://api.groq.com/openai/v1/chat/completions',
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: request.model,
+                    messages: [
+                        { role: 'system', content: request.systemPrompt },
+                        { role: 'user', content: request.serializedPayload }
+                    ],
+                    temperature: 0.1,
+                    response_format: { type: 'json_object' }
+                })
+            },
+            AI_UPSTREAM_TIMEOUT_MS
+        );
+    } else {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(request.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+        response = await fetchWithTimeout(
+            url,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${request.systemPrompt}\n\nData in JSON:\n${request.serializedPayload}`
+                        }]
+                    }],
+                    generationConfig: { responseMimeType: 'application/json' }
+                })
+            },
+            AI_UPSTREAM_TIMEOUT_MS
+        );
+    }
+    if (!response.ok) {
+        const error = new Error(`AI provider request failed with status ${response.status}`);
+        error.status = 502;
+        throw error;
+    }
+    const data = await response.json();
+    const rawText = request.provider === 'groq'
+        ? data?.choices?.[0]?.message?.content
+        : data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (typeof rawText !== 'string' || !rawText.trim()) {
+        const error = new Error('AI provider returned no structured result');
+        error.status = 502;
+        throw error;
+    }
+    try {
+        return JSON.parse(rawText);
+    } catch (_) {
+        const error = new Error('AI provider returned invalid JSON');
+        error.status = 502;
+        throw error;
+    }
+}
+
 export default async function handler(req, res) {
     const { url, method } = req;
     const requestUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
@@ -137,6 +359,105 @@ export default async function handler(req, res) {
     
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseAdminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (path === '/ai/preferences' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_researcher_ai_preferences',
+                { p_researcher_account_id: access.principal.account_id }
+            );
+            const stored = Array.isArray(loaded) ? loaded[0] : loaded;
+            const validated = validateAiPreferences(stored || DEFAULT_AI_PREFERENCES);
+            const preferences = validated.ok
+                ? validated.preferences
+                : DEFAULT_AI_PREFERENCES;
+            return res.status(200).json({ ok: true, preferences });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/ai/preferences' && method === 'PUT') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const validated = validateAiPreferences(req.body?.preferences);
+        if (!validated.ok) {
+            return res.status(400).json({ ok: false, error: validated.error });
+        }
+        try {
+            await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_researcher_ai_preferences',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_preferences: validated.preferences
+                }
+            );
+            return res.status(200).json({ ok: true, preferences: validated.preferences });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/ai/request' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const validated = validateAiRequest(req.body);
+        if (!validated.ok) {
+            return res.status(400).json({ ok: false, error: validated.error });
+        }
+        try {
+            const result = await callAiProvider(validated);
+            return res.status(200).json({
+                ok: true,
+                task: validated.task,
+                provider: validated.provider,
+                model: validated.model,
+                result
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/evidence/doi' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const doi = normalizeDoi(requestUrl.searchParams.get('doi'));
+        if (!doi) {
+            return res.status(400).json({ ok: false, error: 'A valid DOI is required' });
+        }
+        try {
+            const metadata = await verifyCrossrefDoi(doi);
+            return res.status(200).json({
+                ok: true,
+                verification: {
+                    status: 'bibliographic_metadata_verified',
+                    registry: 'Crossref',
+                    verified_at: new Date().toISOString(),
+                    scope: 'DOI existence and deposited bibliographic metadata only',
+                    scientific_appropriateness: 'requires_researcher_review',
+                    rights_status: 'requires_researcher_review'
+                },
+                metadata
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
 
     if (path === '/auth/register' && method === 'POST') {
         const normalizedUsername = String(req.body?.username || '').trim();
@@ -866,9 +1187,18 @@ export default async function handler(req, res) {
                 const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
                 const owned = await ownedEntityIds('question_bank', access.principal.account_id, supabaseUrl, supabaseAdminKey);
-                banks = banks.filter(bank => bank.status === 'active' || owned.has(bank.bank_id));
+                banks = banks.filter(bank =>
+                    owned.has(bank.bank_id) ||
+                    (
+                        bank.status === 'active' &&
+                        (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
+                    )
+                );
             } else {
-                banks = banks.filter(bank => bank.status === 'active');
+                banks = banks.filter(bank =>
+                    bank.status === 'active' &&
+                    (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
+                );
             }
             return res.status(200).json({ ok: true, banks });
         } catch (error) {
@@ -1239,7 +1569,28 @@ export default async function handler(req, res) {
             return res.status(authorization.status).json({ ok: false, error: authorization.error });
         }
 
-        const packageData = req.body;
+        const requestedPackageData = req.body;
+        const requestedReusePermission = requestedPackageData?.reuse_policy?.permission ||
+            'attribution_permitted';
+        if (!['attribution_permitted', 'permission_required'].includes(requestedReusePermission)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Question-bank reuse permission must be attribution_permitted or permission_required'
+            });
+        }
+        const packageData = {
+            ...requestedPackageData,
+            reuse_policy: {
+                permission: requestedReusePermission,
+                attribution_required: true,
+                ownership_retained_by_author: true
+            },
+            authorship: {
+                owner_account_id: authorization.principal.account_id,
+                owner_identifier: authorization.principal.user_identifier,
+                asserted_by: 'authenticated_server'
+            }
+        };
         const questionMap = packageData?.questions;
         const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

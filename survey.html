@@ -273,32 +273,38 @@
             <a href="constructor_quest.html" class="btn" id="tool1-btn">Abrir Constructor</a>
           </div>
             
-          <!-- Инструмент 2: Конвертация данных -->
+          <!-- Инструмент 2: Конвертация опросников -->
           <div class="tool-card">
-            <div class="tool-title">🔄 <span id="tool2-title">Conversión de Datos</span></div>
-            <div class="tool-desc" id="tool2-desc">Transformación de exportaciones brutas de CSV/Excel al formato estandarizado de Research OS.</div>
+            <div class="tool-title">🔄 <span id="tool2-title">Conversión de Cuestionarios</span></div>
+            <div class="tool-desc" id="tool2-desc">Importación de archivos de cuestionarios a un banco canónico editable con vista previa.</div>
             <a href="importer.html" class="btn" id="tool2-btn">Abrir Conversor</a>
           </div>
             
           <!-- Инструмент 3: Мультиязычный перевод -->
           <div class="tool-card">
             <div class="tool-title">🌐 <span id="tool3-title">Traducción Multilingüe</span></div>
-            <div class="tool-desc" id="tool3-desc">Localización de cuestionarios y escalas en inglés, español y ruso para pilotos internacionales.</div>
+            <div class="tool-desc" id="tool3-desc">Traducción canónica con control de estructura, procedencia de IA y aprobación del investigador.</div>
             <a href="translator.html" class="btn" id="tool3-btn">Abrir Traductor</a>
           </div>
             
-          <!-- Инструмент 4: Валидация выборки -->
+          <!-- Инструмент 4: Валидация структуры -->
           <div class="tool-card">
-            <div class="tool-title">🛡️ <span id="tool4-title">Validación de Muestra</span></div>
-            <div class="tool-desc" id="tool4-desc">Verificación de requisitos de volumen de datos, valores perdidos y protección contra errores estadísticos.</div>
+            <div class="tool-title">🛡️ <span id="tool4-title">Validación de Estructura</span></div>
+            <div class="tool-desc" id="tool4-desc">Verificación de esquemas canónicos e integridad estructural del archivo.</div>
             <a href="validator.html" class="btn" id="tool4-btn">Abrir Validador</a>
           </div>
             
-          <!-- Инструмент 5: Статистический анализ -->
+          <!-- Инструмент 5: Карта валидационного покрытия -->
           <div class="tool-card">
-            <div class="tool-title">📊 <span id="tool5-title">Análisis Estadístico</span></div>
-            <div class="tool-desc" id="tool5-desc">Seguimiento longitudinal, cortes de cohortes, cálculo de correlaciones de Pearson y dinámica de pistas.</div>
-            <a href="analyzer.html" class="btn" id="tool5-btn">Abrir Analizador</a>
+            <div class="tool-title">🧭 <span id="tool5-title">Mapa de Cobertura y Validación</span></div>
+            <div class="tool-desc" id="tool5-desc">Comparación de outcomes, bundles de métodos, evidencia DOI y aprobación del investigador.</div>
+            <a href="analyzer.html" class="btn" id="tool5-btn">Abrir Mapa</a>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">🤖 <span id="tool6-title">Colega de IA</span></div>
+            <div class="tool-desc" id="tool6-desc">Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.</div>
+            <a href="settings.html" class="btn" id="tool6-btn">Configurar IA</a>
           </div>
             
         </div>
@@ -326,18 +332,21 @@
         tool1Title: "Constructor de Preguntas",
         tool1Desc: "Creación de escalas estructuradas (Likert, categorías, rangos) y exportación a JSON para estudios.",
         tool1Btn: "Abrir Constructor",
-        tool2Title: "Conversión de Datos",
-        tool2Desc: "Transformación de exportaciones brutas de CSV/Excel al formato estandarizado de Research OS.",
+        tool2Title: "Conversión de Cuestionarios",
+        tool2Desc: "Importación de archivos de cuestionarios a un banco canónico editable con vista previa.",
         tool2Btn: "Abrir Conversor",
         tool3Title: "Traducción Multilingüe",
-        tool3Desc: "Localización de cuestionarios y escalas en inglés, español y ruso para pilotos internacionales.",
+        tool3Desc: "Traducción canónica con control de estructura, procedencia de IA y aprobación del investigador.",
         tool3Btn: "Abrir Traductor",
-        tool4Title: "Validación de Muestra",
-        tool4Desc: "Verificación de requisitos de volumen de datos, valores perdidos y protección contra errores estadísticos.",
+        tool4Title: "Validación de Estructura",
+        tool4Desc: "Verificación de esquemas canónicos e integridad estructural del archivo.",
         tool4Btn: "Abrir Validador",
-        tool5Title: "Análisis Estadístico",
-        tool5Desc: "Seguimiento longitudinal, cortes de cohortes, cálculo de correlaciones de Pearson y dinámica de pistas.",
-        tool5Btn: "Abrir Analizador",
+        tool5Title: "Mapa de Cobertura y Validación",
+        tool5Desc: "Comparación de outcomes, bundles de métodos, evidencia DOI y aprobación del investigador.",
+        tool5Btn: "Abrir Mapa",
+        tool6Title: "Colega de IA",
+        tool6Desc: "Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.",
+        tool6Btn: "Configurar IA",
         activeStatus: "Conectado",
         disconnect: "Desconectar"
       },
@@ -355,18 +364,21 @@
         tool1Title: "Question Builder",
         tool1Desc: "Create structured scales (Likert, categories, ranking) and export to JSON format for research studies.",
         tool1Btn: "Open Builder",
-        tool2Title: "Data Conversion",
-        tool2Desc: "Convert raw respondent exports from CSV/Excel into a standardized Research OS format.",
+        tool2Title: "Questionnaire Conversion",
+        tool2Desc: "Import questionnaire files into a previewed, editable canonical question bank.",
         tool2Btn: "Open Converter",
         tool3Title: "Multilingual Translation",
-        tool3Desc: "Localize questionnaires and scales into English, Spanish, and Russian for international pilots.",
+        tool3Desc: "Canonical translation with structural integrity, AI provenance, and researcher approval.",
         tool3Btn: "Open Translator",
-        tool4Title: "Sample Validation",
-        tool4Desc: "Check minimum data volume requirements, missing values, and protect against statistical errors.",
+        tool4Title: "Structure Validation",
+        tool4Desc: "Verify canonical schemas and file-level structural integrity.",
         tool4Btn: "Open Validator",
-        tool5Title: "Statistical Analysis",
-        tool5Desc: "Longitudinal tracking, cohort slices, Pearson correlation calculations, and individual track dynamics.",
-        tool5Btn: "Open Analyzer",
+        tool5Title: "Validation Coverage Map",
+        tool5Desc: "Outcome comparison, method bundles, DOI evidence, and researcher approval.",
+        tool5Btn: "Open Map",
+        tool6Title: "AI Colleague",
+        tool6Desc: "Choose available models for translation and search. Provider keys remain exclusively on the server.",
+        tool6Btn: "Configure AI",
         activeStatus: "Connected",
         disconnect: "Disconnect"
       },
@@ -384,18 +396,21 @@
         tool1Title: "Конструктор вопросов",
         tool1Desc: "Создание структурированных шкал (Ликерта, категории, ранжирование) и экспорт в формат JSON для исследований.",
         tool1Btn: "Открыть конструктор",
-        tool2Title: "Конвертация данных",
-        tool2Desc: "Преобразование сырых выгрузок респондентов из CSV/Excel в единый стандартизированный формат Research OS.",
+        tool2Title: "Конвертация опросников",
+        tool2Desc: "Импорт файлов опросников в редактируемый канонический банк с предварительным просмотром.",
         tool2Btn: "Открыть конвертер",
         tool3Title: "Мультиязычный перевод",
-        tool3Desc: "Локализация опросников и шкал на английский, испанский и русский языки для международных пилотов.",
+        tool3Desc: "Канонический перевод с контролем структуры, AI-происхождением и одобрением исследователя.",
         tool3Btn: "Открыть переводчик",
-        tool4Title: "Валидация выборки",
-        tool4Desc: "Проверка минимальных требований к объему данных, проверка пропущенных значений и защита от статистических ошибок.",
+        tool4Title: "Валидация структуры",
+        tool4Desc: "Проверка канонических схем и структурной целостности файла.",
         tool4Btn: "Открыть валидатор",
-        tool5Title: "Статистический анализ",
-        tool5Desc: "Лонгитюдный трекинг, когортные срезы, расчет корреляций Пирсона и динамики индивидуальных треков.",
-        tool5Btn: "Открыть анализатор",
+        tool5Title: "Карта валидационного покрытия",
+        tool5Desc: "Сравнение выводов, bundles методов, DOI-доказательства и одобрение исследователя.",
+        tool5Btn: "Открыть карту",
+        tool6Title: "AI-коллега",
+        tool6Desc: "Выберите доступные модели для перевода и поиска. Ключи провайдеров остаются исключительно на сервере.",
+        tool6Btn: "Настроить AI",
         activeStatus: "Conectado",
         disconnect: "Desconectar"
       }
@@ -455,6 +470,10 @@
       document.getElementById('tool5-title').innerText = t.tool5Title;
       document.getElementById('tool5-desc').innerText = t.tool5Desc;
       document.getElementById('tool5-btn').innerText = t.tool5Btn;
+
+      document.getElementById('tool6-title').innerText = t.tool6Title;
+      document.getElementById('tool6-desc').innerText = t.tool6Desc;
+      document.getElementById('tool6-btn').innerText = t.tool6Btn;
             
       renderBanksTable();
     }

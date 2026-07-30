@@ -458,6 +458,12 @@
 
   let currentLang = 'ru';
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, function(char) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char];
+    });
+  }
+
   function setLanguage(lang) {
     currentLang = lang;
     document.querySelectorAll('.lang-selector button').forEach(btn => btn.classList.remove('active'));
@@ -789,7 +795,7 @@
       event.target.value = '';
       validateSchema();
     } catch (err) {
-      document.getElementById('validation-report').innerHTML = '<div class="error-item">❌ Ошибка чтения файла: ' + err.message + '</div>';
+      document.getElementById('validation-report').innerHTML = '<div class="error-item">❌ Ошибка чтения файла: ' + escapeHtml(err.message) + '</div>';
       event.target.value = '';
     }
   }
@@ -808,7 +814,7 @@
       rawParsed = parseInputData(rawText);
     } catch (e) {
       reportBox.innerHTML = '<div class="status-badge invalid">ОШИБКА ПАРСИНГА</div>' +
-        '<div class="error-item">❌ Не удалось разобрать структуру: ' + e.message + '</div>';
+        '<div class="error-item">❌ Не удалось разобрать структуру: ' + escapeHtml(e.message) + '</div>';
       return;
     }
 
@@ -817,7 +823,7 @@
       packageData = convertToCanonicalSchema(rawParsed);
     } catch (e) {
       reportBox.innerHTML = '<div class="status-badge invalid">ОШИБКА СХЕМЫ</div>' +
-        '<div class="error-item">❌ Ошибка нормализации: ' + e.message + '</div>';
+        '<div class="error-item">❌ Ошибка нормализации: ' + escapeHtml(e.message) + '</div>';
       return;
     }
 
@@ -970,8 +976,8 @@
       `;
     }
 
-    errors.forEach(function(err) { htmlReport += '<div class="error-item">' + err + '</div>'; });
-    warnings.forEach(function(warn) { htmlReport += '<div class="warning-item">' + warn + '</div>'; });
+    errors.forEach(function(err) { htmlReport += '<div class="error-item">' + escapeHtml(err) + '</div>'; });
+    warnings.forEach(function(warn) { htmlReport += '<div class="warning-item">' + escapeHtml(warn) + '</div>'; });
 
     reportBox.innerHTML = htmlReport;
   }

@@ -325,6 +325,16 @@
 <script>
   let currentLang = 'ru';
 
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    }[char]));
+  }
+
   const i18n = {
     ru: {
       back: "← Назад в Hub",
@@ -598,7 +608,7 @@
 
     } catch (e) {
       runBtn.disabled = true;
-      warningContainer.innerHTML = `<div class="alert-box">❌ ${e.message || t.errJson}</div>`;
+      warningContainer.innerHTML = `<div class="alert-box">❌ ${escapeHtml(e.message || t.errJson)}</div>`;
     }
   }
 
@@ -767,7 +777,7 @@
       for (const [id, data] of Object.entries(res.trajectories)) {
         container.innerHTML += `
           <div class="trajectory-item">
-            <span>👤 ${id} (${data.waves} waves)</span>
+            <span>👤 ${escapeHtml(id)} (${data.waves} waves)</span>
             <span>${data.initial} → ${data.latest} (<b style="color: ${data.delta <= 0 ? '#34d399' : '#f87171'}">${data.delta > 0 ? '+' + data.delta : data.delta}</b>)</span>
           </div>
         `;
@@ -777,7 +787,7 @@
       for (const [g, data] of Object.entries(res.cohorts)) {
         container.innerHTML += `
           <div class="trajectory-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-            <div>🏷️ ${g} (n = ${data.n})</div>
+            <div>🏷️ ${escapeHtml(g)} (n = ${data.n})</div>
             <div style="display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted);">
               <span>${t.mean}: <b style="color: var(--accent-color);">${data.mean}</b></span>
               <span>${t.median}: <b>${data.median}</b></span>

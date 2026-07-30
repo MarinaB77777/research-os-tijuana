@@ -456,6 +456,16 @@
               </select>
             </div>
           </div>
+          <div class="field">
+            <label data-i18n="reusePolicyLabel">Uso por otros investigadores</label>
+            <select id="reusePolicySelect" onchange="onReusePolicyChange(this.value)">
+              <option value="attribution_permitted" data-i18n="reuseAttributionPermitted">Uso libre con atribución obligatoria</option>
+              <option value="permission_required" data-i18n="reusePermissionRequired">Solo con permiso del autor</option>
+            </select>
+            <div data-i18n="reusePolicyNotice" style="font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:6px;">
+              La autoría y la propiedad permanecen siempre con el titular de la cuenta. El modo predeterminado evita solicitar permiso para cada pregunta, pero exige atribución.
+            </div>
+          </div>
           <div id="bankIdentity" style="font-size: 10px; color: var(--text-muted); margin-bottom: 12px;"></div>
           <div class="field">
             <label data-i18n="exportFormatLabel">Formato del archivo</label>
@@ -538,6 +548,10 @@
           bankTitleLabel: "Nombre del banco",
           bankCodeLabel: "Código del banco",
           bankStatusLabel: "Estado del banco",
+          reusePolicyLabel: "Uso por otros investigadores",
+          reuseAttributionPermitted: "Uso libre con atribución obligatoria",
+          reusePermissionRequired: "Solo con permiso del autor",
+          reusePolicyNotice: "La autoría y la propiedad permanecen siempre con el titular de la cuenta. El modo predeterminado evita solicitar permiso para cada pregunta, pero exige atribución.",
           exportFormatLabel: "Formato del archivo",
           exportMultiBtn: "💾 Elegir ubicación y guardar",
           syncDbBtn: "☁️ Guardar en la base de datos",
@@ -617,6 +631,10 @@
           bankTitleLabel: "Bank name",
           bankCodeLabel: "Bank code",
           bankStatusLabel: "Bank status",
+          reusePolicyLabel: "Use by other researchers",
+          reuseAttributionPermitted: "Free use with required attribution",
+          reusePermissionRequired: "Author permission required",
+          reusePolicyNotice: "Authorship and ownership always remain with the account owner. The default avoids per-question permission requests while requiring attribution.",
           exportFormatLabel: "File format",
           exportMultiBtn: "💾 Choose location and save",
           syncDbBtn: "☁️ Save to database",
@@ -696,6 +714,10 @@
           bankTitleLabel: "Название банка",
           bankCodeLabel: "Код банка",
           bankStatusLabel: "Статус банка",
+          reusePolicyLabel: "Использование другими исследователями",
+          reuseAttributionPermitted: "Свободное использование с обязательной атрибуцией",
+          reusePermissionRequired: "Только с разрешения автора",
+          reusePolicyNotice: "Авторство и владение всегда остаются у владельца кабинета. Режим по умолчанию не требует разрешения на каждый вопрос, но требует указания автора.",
           exportFormatLabel: "Формат файла",
           exportMultiBtn: "💾 Выбрать место и сохранить",
           syncDbBtn: "☁️ Сохранить в базе данных",
@@ -1031,6 +1053,16 @@
         return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
       }
 
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        }[char]));
+      }
+
       function normalizeBankCode(value) {
         return String(value || '')
           .normalize('NFKD')
@@ -1048,11 +1080,21 @@
             title: typeof parsed.title === 'string' ? parsed.title : '',
             code: normalizeBankCode(parsed.code),
             version: Number.isInteger(parsed.version) && parsed.version > 0 ? parsed.version : 1,
-            status: ['draft', 'trial', 'active'].includes(parsed.status) ? parsed.status : 'draft'
+            status: ['draft', 'trial', 'active'].includes(parsed.status) ? parsed.status : 'draft',
+            reuse_permission: ['attribution_permitted', 'permission_required'].includes(parsed.reuse_permission)
+              ? parsed.reuse_permission
+              : 'attribution_permitted'
           };
         } catch (error) {
           console.error('Question-bank identity read error:', error);
-          return { bank_id: createUuid(), title: '', code: '', version: 1, status: 'draft' };
+          return {
+            bank_id: createUuid(),
+            title: '',
+            code: '',
+            version: 1,
+            status: 'draft',
+            reuse_permission: 'attribution_permitted'
+          };
         }
       }
 
@@ -1068,6 +1110,8 @@
         document.getElementById('bankTitleInput').value = bankMetadata.title;
         document.getElementById('bankCodeInput').value = bankMetadata.code;
         document.getElementById('bankStatusSelect').value = bankMetadata.status;
+        document.getElementById('reusePolicySelect').value =
+          bankMetadata.reuse_permission || 'attribution_permitted';
         document.getElementById('bankIdentity').textContent =
           `UUID: ${bankMetadata.bank_id} · v${bankMetadata.version}`;
       }
@@ -1091,6 +1135,12 @@
       function onBankStatusChange(value) {
         if (!['draft', 'trial', 'active'].includes(value)) return;
         bankMetadata.status = value;
+        saveBankMetadata();
+      }
+
+      function onReusePolicyChange(value) {
+        if (!['attribution_permitted', 'permission_required'].includes(value)) return;
+        bankMetadata.reuse_permission = value;
         saveBankMetadata();
       }
 
@@ -1154,7 +1204,7 @@
         bank.forEach((v, idx) => {
           const item = document.createElement('button');
           item.className = `nav-item ${idx === currentIndex ? 'active' : ''}`;
-          item.innerHTML = `<span style="font-weight: 700; color: var(--primary);">${v.id || 'var_' + idx}</span><span style="font-size: 10px; color: var(--text-muted);">${v.type} / ${v.scale}</span>`;
+          item.innerHTML = `<span style="font-weight: 700; color: var(--primary);">${escapeHtml(v.id || 'var_' + idx)}</span><span style="font-size: 10px; color: var(--text-muted);">${escapeHtml(v.type)} / ${escapeHtml(v.scale)}</span>`;
           item.onclick = () => {
             currentIndex = idx;
             updateUI();
@@ -1218,7 +1268,7 @@
           errorsFound = true;
         } else if (duplicateId) {
           idErrEl.style.display = 'flex';
-          idErrEl.innerHTML = `<span>${dict.errDuplicateId} ('${v.id}')</span>`;
+          idErrEl.innerHTML = `<span>${escapeHtml(dict.errDuplicateId)} ('${escapeHtml(v.id)}')</span>`;
           errorsFound = true;
         } else {
           idErrEl.style.display = 'none';
@@ -1400,8 +1450,8 @@
           const codeLabel = (v.type === 'nominal') ? 'ID código' : 'Peso s';
           
           line.innerHTML = `
-            <input type="text" value="${opt.l}" placeholder="${dict.placeholderCategory}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
-            <input type="number" id="weight_input_${optIdx}" value="${opt.s}" placeholder="${codeLabel}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
+            <input type="text" value="${escapeHtml(opt.l)}" placeholder="${escapeHtml(dict.placeholderCategory)}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
+            <input type="number" id="weight_input_${optIdx}" value="${escapeHtml(opt.s)}" placeholder="${escapeHtml(codeLabel)}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
             <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;">✕</button>
           `;
           wrapper.appendChild(line);
@@ -1581,7 +1631,7 @@
               item.className = 'preview-option-item';
               const tagLabel = (v.type === 'nominal') ? `[ID: ${opt.s}]` : `[s = ${opt.s}]`;
               const routeTag = opt.target && opt.target !== 'next' ? ` ➔ [${opt.target}]` : '';
-              item.innerHTML = `<input type="radio" name="preview_group" /> <span style="flex:1;">${opt.l}</span> <span style="font-size: 10px; color: var(--primary); font-family: monospace;">${tagLabel}${routeTag}</span>`;
+              item.innerHTML = `<input type="radio" name="preview_group" /> <span style="flex:1;">${escapeHtml(opt.l)}</span> <span style="font-size: 10px; color: var(--primary); font-family: monospace;">${escapeHtml(tagLabel)}${escapeHtml(routeTag)}</span>`;
               body.appendChild(item);
             });
           }
@@ -1592,18 +1642,18 @@
           const unitStr = v.config?.unit ? ` (${v.config.unit})` : '';
           body.innerHTML = `
             <div style="display: flex; flex-direction: column; gap: 8px;">
-              <input type="range" min="${minVal}" max="${maxVal}" step="${stepVal}" value="${minVal}" style="width:100%; accent-color: var(--primary);" />
+              <input type="range" min="${escapeHtml(minVal)}" max="${escapeHtml(maxVal)}" step="${escapeHtml(stepVal)}" value="${escapeHtml(minVal)}" style="width:100%; accent-color: var(--primary);" />
               <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted);">
-                <span>Min: ${minVal}</span>
-                <span style="color: var(--primary); font-weight: 700;">Rango [${minVal} — ${maxVal}]${unitStr}</span>
-                <span>Max: ${maxVal}</span>
+                <span>Min: ${escapeHtml(minVal)}</span>
+                <span style="color: var(--primary); font-weight: 700;">Rango [${escapeHtml(minVal)} — ${escapeHtml(maxVal)}]${escapeHtml(unitStr)}</span>
+                <span>Max: ${escapeHtml(maxVal)}</span>
               </div>
             </div>
           `;
         } else if (v.type === 'textual') {
           body.innerHTML = `
-            <textarea placeholder="${v.config?.placeholder || (currentLang === 'es-MX' ? 'Ingrese texto de respuesta...' : 'Enter text...')}" disabled style="width: 100%; min-height: 100px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text);"></textarea>
-            <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; text-align: right;">Máx. longitud: ${v.config?.maxLength ?? 500} car.</div>
+            <textarea placeholder="${escapeHtml(v.config?.placeholder || (currentLang === 'es-MX' ? 'Ingrese texto de respuesta...' : 'Enter text...'))}" disabled style="width: 100%; min-height: 100px; background: var(--input-bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; color: var(--text);"></textarea>
+            <div style="font-size: 10px; color: var(--text-muted); margin-top: 6px; text-align: right;">Máx. longitud: ${escapeHtml(v.config?.maxLength ?? 500)} car.</div>
           `;
         }
       }
@@ -1712,6 +1762,11 @@
           global_mode: currentMode,
           global_time_reference: generatedAt,
           generated_at: generatedAt,
+          reuse_policy: {
+            permission: bankMetadata.reuse_permission || 'attribution_permitted',
+            attribution_required: true,
+            ownership_retained_by_author: true
+          },
           question_order: Object.keys(questions),
           questions
         };

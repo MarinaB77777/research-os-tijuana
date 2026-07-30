@@ -60,6 +60,13 @@ create table if not exists public.research_os_entity_ownership (
     primary key (entity_type, entity_id)
 );
 
+create table if not exists public.research_os_ai_preferences (
+    researcher_account_id uuid primary key
+        references public.research_os_accounts(account_id) on delete cascade,
+    preferences jsonb not null check (jsonb_typeof(preferences) = 'object'),
+    updated_at timestamptz not null default now()
+);
+
 alter table public.research_os_collection_sessions
     add column if not exists respondent_account_id uuid
         references public.research_os_accounts(account_id) on delete restrict,
@@ -74,12 +81,65 @@ create index if not exists research_os_collection_sessions_researcher_account
 alter table public.research_os_accounts enable row level security;
 alter table public.research_os_auth_sessions enable row level security;
 alter table public.research_os_entity_ownership enable row level security;
+alter table public.research_os_ai_preferences enable row level security;
 revoke all on public.research_os_accounts from public, anon, authenticated;
 revoke all on public.research_os_auth_sessions from public, anon, authenticated;
 revoke all on public.research_os_entity_ownership from public, anon, authenticated;
+revoke all on public.research_os_ai_preferences from public, anon, authenticated;
 grant select, insert, update on public.research_os_accounts to service_role;
 grant select, insert, update, delete on public.research_os_auth_sessions to service_role;
 grant select, insert on public.research_os_entity_ownership to service_role;
+grant select, insert, update on public.research_os_ai_preferences to service_role;
+
+create or replace function public.load_researcher_ai_preferences(
+    p_researcher_account_id uuid
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+    select p.preferences
+      from public.research_os_ai_preferences p
+      join public.research_os_accounts a
+        on a.account_id = p.researcher_account_id
+       and a.role = 'researcher'
+       and a.status = 'active'
+     where p.researcher_account_id = p_researcher_account_id;
+$$;
+
+create or replace function public.save_researcher_ai_preferences(
+    p_researcher_account_id uuid,
+    p_preferences jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    if jsonb_typeof(p_preferences) is distinct from 'object'
+       or not exists (
+           select 1
+             from public.research_os_accounts a
+            where a.account_id = p_researcher_account_id
+              and a.role = 'researcher'
+              and a.status = 'active'
+       ) then
+        raise exception 'An active researcher and an AI preference object are required';
+    end if;
+    insert into public.research_os_ai_preferences (
+        researcher_account_id, preferences, updated_at
+    ) values (
+        p_researcher_account_id, p_preferences, now()
+    )
+    on conflict (researcher_account_id) do update set
+        preferences = excluded.preferences,
+        updated_at = now();
+    return p_preferences;
+end;
+$$;
 
 create or replace function public.create_research_os_account(
     p_username text,
@@ -252,7 +312,43 @@ create or replace function public.save_owned_question_bank_package(
 returns jsonb
 language plpgsql security definer set search_path = public, pg_temp
 as $$
+declare
+    v_owner_identifier text;
 begin
+    select a.user_identifier
+      into v_owner_identifier
+      from public.research_os_accounts a
+     where a.account_id = p_researcher_account_id
+       and a.role = 'researcher'
+       and a.status = 'active';
+    if v_owner_identifier is null then
+        raise exception 'An active researcher account is required';
+    end if;
+    package_data := jsonb_set(
+        package_data,
+        '{authorship}',
+        jsonb_build_object(
+            'owner_account_id', p_researcher_account_id,
+            'owner_identifier', v_owner_identifier,
+            'asserted_by', 'authenticated_server'
+        ),
+        true
+    );
+    package_data := jsonb_set(
+        package_data,
+        '{reuse_policy}',
+        jsonb_build_object(
+            'permission',
+            case
+                when package_data #>> '{reuse_policy,permission}' = 'permission_required'
+                    then 'permission_required'
+                else 'attribution_permitted'
+            end,
+            'attribution_required', true,
+            'ownership_retained_by_author', true
+        ),
+        true
+    );
     perform public.claim_research_os_entity(
         'question_bank', (package_data ->> 'bank_id')::uuid, p_researcher_account_id
     );
@@ -309,7 +405,13 @@ as $$
      )
        and (requested_version is null or qb.version = requested_version)
        and (
-           qb.status = 'active'
+           (
+               qb.status = 'active'
+               and coalesce(
+                   qb.package_data #>> '{reuse_policy,permission}',
+                   'attribution_permitted'
+               ) = 'attribution_permitted'
+           )
            or exists (
                select 1
                  from public.research_os_entity_ownership o
@@ -336,6 +438,10 @@ revoke all on function public.save_owned_questionnaire_package(jsonb, uuid)
     from public, anon, authenticated;
 revoke all on function public.load_question_bank_package_for_account(text, integer, uuid)
     from public, anon, authenticated;
+revoke all on function public.load_researcher_ai_preferences(uuid)
+    from public, anon, authenticated;
+revoke all on function public.save_researcher_ai_preferences(uuid, jsonb)
+    from public, anon, authenticated;
 grant execute on function public.create_research_os_account(text, text, text, text, uuid)
     to service_role;
 grant execute on function public.authenticate_research_os_account(text, text)
@@ -349,6 +455,10 @@ grant execute on function public.save_owned_parameter_definition(jsonb, uuid)
 grant execute on function public.save_owned_questionnaire_package(jsonb, uuid)
     to service_role;
 grant execute on function public.load_question_bank_package_for_account(text, integer, uuid)
+    to service_role;
+grant execute on function public.load_researcher_ai_preferences(uuid)
+    to service_role;
+grant execute on function public.save_researcher_ai_preferences(uuid, jsonb)
     to service_role;
 
 commit;

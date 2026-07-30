@@ -1,85 +1,118 @@
 /**
  * AI Router Module
- * Централизованный менеджер вызовов API
+ * Browser client for the authenticated server-side AI gateway.
+ * Provider credentials never enter browser storage or browser requests.
  */
 
+localStorage.removeItem('ai_api_keys');
+localStorage.removeItem('ai_router_config');
+
+const AI_TASK_DEFAULTS = Object.freeze({
+    analyzer: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
+    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+});
+const AI_TASK_MODELS = Object.freeze({
+    analyzer: new Set([
+        'groq:openai/gpt-oss-20b',
+        'gemini:gemini-3.6-flash',
+        'gemini:gemini-3.5-flash-lite'
+    ]),
+    translator: new Set([
+        'groq:openai/gpt-oss-20b',
+        'gemini:gemini-3.6-flash',
+        'gemini:gemini-3.5-flash-lite'
+    ])
+});
+
 const AIRouter = {
-    getTaskConfig(taskName) {
-        const settings = JSON.parse(localStorage.getItem('ai_router_config') || '{}');
-        return settings[taskName] || { provider: 'groq', model: 'llama-3.3-70b-versatile' };
+    preferences: {
+        analyzer: AI_TASK_DEFAULTS.analyzer,
+        translator: AI_TASK_DEFAULTS.translator
     },
 
-    getApiKey(provider) {
-        const keys = JSON.parse(localStorage.getItem('ai_api_keys') || '{}');
-        return keys[provider] || '';
+    researcherSession() {
+        try {
+            const session = JSON.parse(sessionStorage.getItem('research_os.auth.v1') || 'null');
+            return session?.role === 'researcher' && session?.token ? session : null;
+        } catch (_) {
+            return null;
+        }
+    },
+
+    getTaskConfig(taskName) {
+        const configured = this.preferences[taskName];
+        const allowed = AI_TASK_MODELS[taskName];
+        if (configured && allowed?.has(`${configured.provider}:${configured.model}`)) {
+            return configured;
+        }
+        return AI_TASK_DEFAULTS[taskName] || AI_TASK_DEFAULTS.analyzer;
+    },
+
+    async loadPreferences() {
+        const session = this.researcherSession();
+        if (!session) return this.preferences;
+        const response = await fetch('/api/ai/preferences', {
+            headers: { 'Authorization': `Bearer ${session.token}` },
+            cache: 'no-store'
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `${response.status} ${response.statusText}`);
+        }
+        this.preferences = data.preferences;
+        return this.preferences;
+    },
+
+    async savePreferences(preferences) {
+        const session = this.researcherSession();
+        if (!session) {
+            throw new Error('Researcher login is required to save AI preferences.');
+        }
+        const response = await fetch('/api/ai/preferences', {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${session.token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ preferences })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `${response.status} ${response.statusText}`);
+        }
+        this.preferences = data.preferences;
+        return this.preferences;
     },
 
     async sendRequest(taskName, systemPrompt, payload) {
         const config = this.getTaskConfig(taskName);
-        const apiKey = this.getApiKey(config.provider);
-
-        if (!apiKey) {
-            throw new Error(`Не найден API-ключ для сервиса: ${config.provider.toUpperCase()}. Введите его на странице settings.html`);
+        const session = this.researcherSession();
+        if (!session || session.role !== 'researcher' || !session.token) {
+            throw new Error('Researcher login is required for AI-assisted operations.');
         }
 
-        const userContent = typeof payload === 'object' ? JSON.stringify(payload) : payload;
-
-        switch (config.provider) {
-            case 'groq':
-            case 'openai':
-            case 'deepseek':
-                return await this.callOpenAICompatibleAPI(config, apiKey, systemPrompt, userContent);
-            case 'gemini':
-                return await this.callGeminiAPI(config, apiKey, systemPrompt, userContent);
-            default:
-                throw new Error(`Неподдерживаемый сервис: ${config.provider}`);
-        }
-    },
-
-    async callOpenAICompatibleAPI(config, apiKey, systemPrompt, userContent) {
-        let endpoint = 'https://api.openai.com/v1/chat/completions';
-        if (config.provider === 'groq') endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-        if (config.provider === 'deepseek') endpoint = 'https://api.deepseek.com/chat/completions';
-
-        const response = await fetch(endpoint, {
+        const response = await fetch('/api/ai/request', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer ${session.token}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+                task: taskName,
+                provider: config.provider,
                 model: config.model,
-                messages: [
-                    { role: 'system', content: systemPrompt },
-                    { role: 'user', content: userContent }
-                ],
-                temperature: 0.1,
-                response_format: { type: "json_object" }
+                system_prompt: systemPrompt,
+                payload
             })
         });
 
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message || 'Ошибка API');
-        return JSON.parse(data.choices[0].message.content);
-    },
-
-    async callGeminiAPI(config, apiKey, systemPrompt, userContent) {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.model}:generateContent?key=${apiKey}`;
-        const fullPrompt = `${systemPrompt}\n\nДанные в JSON:\n${userContent}`;
-
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: fullPrompt }] }],
-                generationConfig: { responseMimeType: "application/json" }
-            })
-        });
-
-        const data = await response.json();
-        if (data.error) throw new Error(data.error.message || 'Ошибка Gemini API');
-
-        const rawText = data.candidates[0].content.parts[0].text;
-        return JSON.parse(rawText);
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json')
+            ? await response.json()
+            : { error: await response.text() };
+        if (!response.ok) {
+            throw new Error(data.error || `${response.status} ${response.statusText}`);
+        }
+        return data.result;
     }
 };

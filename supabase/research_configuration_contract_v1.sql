@@ -377,14 +377,19 @@ begin
 end;
 $$;
 
-create or replace function public.list_question_banks()
+drop function if exists public.list_question_banks();
+create function public.list_question_banks()
 returns table (
     bank_id uuid, version integer, code text, title text, status text,
-    global_time_reference timestamptz, updated_at timestamptz
+    reuse_permission text, global_time_reference timestamptz, updated_at timestamptz
 )
 language sql stable security definer set search_path = public, pg_temp
 as $$
     select qb.bank_id, qb.version, qb.code, qb.title, qb.status,
+           coalesce(
+               qb.package_data #>> '{reuse_policy,permission}',
+               'attribution_permitted'
+           ) as reuse_permission,
            qb.global_time_reference, qb.updated_at
       from public.question_banks qb
      order by qb.title, qb.version desc;

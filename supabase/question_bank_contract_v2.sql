@@ -101,6 +101,12 @@ begin
        or (package_data ->> 'schema_version')::integer is distinct from 2 then
         raise exception 'research_os.question_bank schema version 2 is required';
     end if;
+    if package_data #>> '{reuse_policy,permission}' not in
+       ('attribution_permitted', 'permission_required')
+       or (package_data #>> '{reuse_policy,attribution_required}')::boolean is distinct from true
+       or (package_data #>> '{reuse_policy,ownership_retained_by_author}')::boolean is distinct from true then
+        raise exception 'A valid reuse policy with retained authorship and required attribution is required';
+    end if;
 
     v_bank_id := (package_data ->> 'bank_id')::uuid;
     v_bank_version := (package_data ->> 'version')::integer;
@@ -384,6 +390,10 @@ as $$
     select qb.package_data
       from public.question_banks qb
      where qb.status = 'active'
+       and coalesce(
+           qb.package_data #>> '{reuse_policy,permission}',
+           'attribution_permitted'
+       ) = 'attribution_permitted'
        and (
            qb.code = upper(bank_reference)
            or (
