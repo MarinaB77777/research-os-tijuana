@@ -11,6 +11,7 @@
   <script src="vendor/js-yaml.min.js"></script>
   <script src="vendor/jszip.min.js"></script>
   <script src="question-bank-import.js"></script>
+  <script src="question-bank-file-reader.js"></script>
   <script src="research-contracts.js"></script>
 
   <style>
@@ -1251,69 +1252,17 @@
     if (!file) return;
 
     showStatus(i18n[currentLang].readingFile, false);
-    const ext = file.name.split('.').pop().toLowerCase();
     const inputArea = document.getElementById('input-json');
-    currentSourceFormat = ext;
-    currentSourceTitle = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
     currentParsedValue = null;
     currentInputKind = 'structured';
 
     try {
-      let extractedContent = "";
-
-      if (ext === 'docx') {
-        const arrayBuffer = await file.arrayBuffer();
-        const res = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-        extractedContent = res.value;
-        currentInputKind = 'plain';
-      } else if (ext === 'pdf') {
-        await ensurePdfWorker();
-        const arrayBuffer = await file.arrayBuffer();
-        extractedContent = await parsePdfWithLib(arrayBuffer);
-        currentInputKind = 'plain';
-      } else if (ext === 'xlsx' || ext === 'xls') {
-        await ensureXlsxLibrary();
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        currentParsedValue = XLSX.utils.sheet_to_json(worksheet, { defval: null });
-        extractedContent = JSON.stringify(currentParsedValue, null, 2);
-      } else if (ext === 'csv') {
-        await ensureXlsxLibrary();
-        const csvText = QuestionBankImport.decodeTextBytes(await file.arrayBuffer());
-        const workbook = XLSX.read(csvText, { type: 'string', codepage: 65001 });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        currentParsedValue = XLSX.utils.sheet_to_json(worksheet, { defval: null });
-        extractedContent = JSON.stringify(currentParsedValue, null, 2);
-      } else if (ext === 'pages') {
-        if (typeof JSZip === 'undefined') throw new Error(i18n[currentLang].zipLibraryMissing);
-        const archive = await JSZip.loadAsync(await file.arrayBuffer());
-        const pdfEntry = Object.values(archive.files).find(entry =>
-          !entry.dir && /(?:^|\/)(?:preview|Preview|QuickLook\/Preview)\.pdf$/i.test(entry.name)
-        );
-        if (!pdfEntry) throw new Error(i18n[currentLang].pagesNoText);
-        await ensurePdfWorker();
-        extractedContent = await parsePdfWithLib(await pdfEntry.async('arraybuffer'));
-        currentInputKind = 'plain';
-      } else if (ext === 'yml' || ext === 'yaml') {
-        const text = await readFileAsText(file);
-        if (typeof jsyaml !== 'undefined') {
-          currentParsedValue = jsyaml.load(text);
-          extractedContent = JSON.stringify(currentParsedValue, null, 2);
-        } else {
-          extractedContent = text;
-        }
-      } else {
-        extractedContent = await readFileAsText(file);
-      }
-
-      if (!extractedContent || !extractedContent.trim()) {
-        throw new Error(i18n[currentLang].emptyExtracted);
-      }
-
-      inputArea.value = extractedContent;
+      const result = await QuestionBankFileReader.readQuestionnaireFile(file);
+      currentSourceFormat = result.extension;
+      currentSourceTitle = result.source_title;
+      currentParsedValue = result.parsed_value;
+      currentInputKind = result.input_kind;
+      inputArea.value = result.content;
       fileInput.value = "";
 
       processConversion();

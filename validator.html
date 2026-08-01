@@ -5,19 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Универсальный Валидатор Схемы | Research OS</title>
 
-  <!-- Mammoth для DOCX -->
-  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"></script>
-  <!-- PDF.js для чтения текста из PDF -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
-  <!-- SheetJS для XLSX, XLS, CSV -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- JS-YAML для YAML / YML -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+  <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="vendor/pdf.min.js"></script>
+  <script src="vendor/js-yaml.min.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="question-bank-import.js"></script>
+  <script src="question-bank-file-reader.js"></script>
 
   <style>
     :root {
@@ -394,7 +387,7 @@
       <div class="panel-header">
         <label for="input-data" id="ui-input-label">Исходный файл (DOCX, PDF, XLSX, CSV, YAML, JSON, TXT, PY):</label>
         <div class="file-input-wrapper">
-          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js" onchange="handleFileSelect(event)">
+          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages" onchange="handleFileSelect(event)">
           <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" id="ui-btn-upload">📂 Загрузить файл</button>
         </div>
       </div>
@@ -769,29 +762,11 @@
   async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
-    const ext = file.name.split('.').pop().toLowerCase();
     const inputArea = document.getElementById('input-data');
 
     try {
-      let content = "";
-      if (ext === 'docx') {
-        const buf = await file.arrayBuffer();
-        const res = await mammoth.extractRawText({ arrayBuffer: buf });
-        content = res.value;
-      } else if (ext === 'pdf') {
-        const buf = await file.arrayBuffer();
-        content = await parsePdfWithLib(buf);
-      } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        content = JSON.stringify(XLSX.utils.sheet_to_json(sheet), null, 2);
-      } else {
-        const reader = new FileReader();
-        content = await new Promise(function(res) { reader.onload = function(e) { res(e.target.result); }; reader.readAsText(file); });
-      }
-
-      inputArea.value = content;
+      const result=await QuestionBankFileReader.readQuestionnaireFile(file);
+      inputArea.value = result.content;
       event.target.value = '';
       validateSchema();
     } catch (err) {

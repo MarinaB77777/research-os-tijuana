@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <title>Research OS | AI Translator</title>
+    <script src="vendor/mammoth.browser.min.js"></script>
+    <script src="vendor/pdf.min.js"></script>
+    <script src="vendor/js-yaml.min.js"></script>
+    <script src="vendor/jszip.min.js"></script>
     <script src="question-bank-import.js"></script>
+    <script src="question-bank-file-reader.js"></script>
     <script src="ai-router.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
@@ -68,8 +73,8 @@
     </div>
 
     <div class="upload-card" onclick="document.getElementById('fileInput').click()">
-        📥 <strong data-i18n="upload_trans_title">Cargue un banco o cuestionario (.py / .json / .txt / .js)</strong>
-        <input type="file" id="fileInput" accept=".py,.json,.txt,.js" style="display:none" onchange="loadFile(this.files[0])">
+        📥 <strong data-i18n="upload_trans_title">Cargue un banco o cuestionario desde un archivo compatible</strong>
+        <input type="file" id="fileInput" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages" style="display:none" onchange="loadFile(this.files[0])">
     </div>
 
     <div id="progressBox" class="progress-box">
@@ -128,7 +133,7 @@ const i18n = {
         lang_es: "Испанский (Spanish)",
         lang_en: "Английский (English)",
         lang_ru: "Русский (Russian)",
-        upload_trans_title: "Загрузите банк вопросов или анкету (.py / .json / .txt / .js)",
+        upload_trans_title: "Загрузите банк вопросов или анкету из совместимого файла",
         status_prep: "Подготовка...",
         status_translating: "Переводим пачку",
         col_original: "Оригинал",
@@ -156,7 +161,7 @@ const i18n = {
         lang_es: "Español (Spanish)",
         lang_en: "Inglés (English)",
         lang_ru: "Ruso (Russian)",
-        upload_trans_title: "Cargue un banco o cuestionario (.py / .json / .txt / .js)",
+        upload_trans_title: "Cargue un banco o cuestionario desde un archivo compatible",
         status_prep: "Preparando...",
         status_translating: "Traduciendo el lote",
         col_original: "Original",
@@ -184,7 +189,7 @@ const i18n = {
         lang_es: "Spanish (Spanish)",
         lang_en: "English (English)",
         lang_ru: "Russian (Russian)",
-        upload_trans_title: "Upload a question bank or questionnaire (.py / .json / .txt / .js)",
+        upload_trans_title: "Upload a question bank or questionnaire from a compatible file",
         status_prep: "Preparing...",
         status_translating: "Translating batch",
         col_original: "Original",
@@ -246,21 +251,19 @@ function parseStructuredDocument(text, fileName) {
         return window.QuestionBankImport.canonicalOrConverted(parsed, {});
     }
 
-function loadFile(file) {
+async function loadFile(file) {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const content = e.target.result;
-            currentFileName = file.name || '';
-            document.getElementById('originalView').innerText = content.slice(0, 1500) + (content.length > 1500 ? "\n\n... [показано начало файла]" : "");
-            loadedDocument = parseStructuredDocument(content, file.name);
-            startTranslation();
-        } catch (err) {
-            alert(i18n[currentLang].error_file + err.message);
-        }
-    };
-    reader.readAsText(file);
+    try {
+        const result=await QuestionBankFileReader.readQuestionnaireFile(file),content=result.content;
+        currentFileName = file.name || '';
+        document.getElementById('originalView').innerText = content.slice(0, 1500) + (content.length > 1500 ? "\n\n... [показано начало файла]" : "");
+        loadedDocument = QuestionBankFileReader.toCanonicalQuestionBank(result,{interface_language:currentLang});
+        startTranslation();
+    } catch (err) {
+        alert(i18n[currentLang].error_file + err.message);
+    } finally {
+        document.getElementById('fileInput').value='';
+    }
 }
 
 function valueAt(root, path) {

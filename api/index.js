@@ -25,6 +25,138 @@ const DEFAULT_AI_PREFERENCES = Object.freeze({
     translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
 });
 
+function sameQuestionnaireValue(left, right) {
+    return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function hasQuestionnaireAnswer(value) {
+    if (value === undefined || value === null) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+}
+
+function validateQuestionnaireGraph(questionnaire) {
+    const items = Array.isArray(questionnaire?.items)
+        ? [...questionnaire.items].sort((a, b) => Number(a?.position) - Number(b?.position))
+        : [];
+    if (!items.length) throw new Error('Questionnaire has no items');
+    const itemById = new Map();
+    for (const item of items) {
+        if (!UUID_V4.test(item?.item_id || '') || itemById.has(item.item_id)) {
+            throw new Error('Questionnaire item identities must be unique UUIDs');
+        }
+        if (item.required !== undefined && typeof item.required !== 'boolean') {
+            throw new Error(`Questionnaire item ${item.item_id} has an invalid required flag`);
+        }
+        itemById.set(item.item_id, item);
+    }
+    if (!itemById.has(questionnaire?.start_item_id)) {
+        throw new Error('Questionnaire start item is missing');
+    }
+    const minimumAnswered = Number(questionnaire?.completion_policy?.minimum_answered_items ?? 1);
+    if (!Number.isInteger(minimumAnswered) || minimumAnswered < 1 ||
+        questionnaire?.completion_policy?.require_terminal_route === false) {
+        throw new Error('Questionnaire completion policy is invalid');
+    }
+    const nextInOrder = itemId => {
+        const index = items.findIndex(item => item.item_id === itemId);
+        return index >= 0 && index + 1 < items.length ? items[index + 1].item_id : 'end';
+    };
+    const normalizeTarget = (itemId, target) => {
+        const normalized = target || 'next';
+        if (normalized === 'next') return nextInOrder(itemId);
+        if (normalized === 'end' || itemById.has(normalized)) return normalized;
+        throw new Error(`Questionnaire route from ${itemId} has a missing target`);
+    };
+    const visiting = new Set();
+    const shortestById = new Map();
+    const reachable = new Set();
+    const walk = itemId => {
+        if (itemId === 'end') return 0;
+        if (visiting.has(itemId)) throw new Error('Questionnaire routing contains a cycle');
+        if (shortestById.has(itemId)) return shortestById.get(itemId);
+        visiting.add(itemId);
+        reachable.add(itemId);
+        const node = questionnaire?.routing?.nodes?.[itemId];
+        if (!node || !Array.isArray(node.rules || [])) {
+            throw new Error(`Questionnaire routing node ${itemId} is missing or invalid`);
+        }
+        const ruleValues = new Set();
+        for (const rule of node.rules || []) {
+            if (rule?.operator !== 'equals' || !Object.prototype.hasOwnProperty.call(rule, 'value')) {
+                throw new Error(`Questionnaire routing rule at ${itemId} is invalid`);
+            }
+            const valueKey = JSON.stringify(rule.value);
+            if (ruleValues.has(valueKey)) throw new Error(`Questionnaire routing at ${itemId} has duplicate conditions`);
+            ruleValues.add(valueKey);
+        }
+        const targets = [node.default_target, ...(node.rules || []).map(rule => rule.target)]
+            .map(target => normalizeTarget(itemId, target));
+        let shortest = Infinity;
+        for (const target of new Set(targets)) shortest = Math.min(shortest, 1 + walk(target));
+        visiting.delete(itemId);
+        shortestById.set(itemId, shortest);
+        return shortest;
+    };
+    const shortestRoute = walk(questionnaire.start_item_id);
+    if (reachable.size !== items.length) throw new Error('Questionnaire contains unreachable items');
+    if (!Number.isFinite(shortestRoute) || minimumAnswered > shortestRoute) {
+        throw new Error('Minimum answered items exceeds the shortest valid route');
+    }
+    return { items, itemById, nextInOrder, minimumAnswered };
+}
+
+function validateCompletedQuestionnaireRoute(questionnaire, responseRecords, submittedRoute) {
+    const graph = validateQuestionnaireGraph(questionnaire);
+    const recordByItemId = new Map();
+    for (const record of responseRecords) {
+        if (recordByItemId.has(record?.questionnaire_item_id)) {
+            throw new Error('A questionnaire item was answered more than once');
+        }
+        if (!hasQuestionnaireAnswer(record?.value)) {
+            throw new Error('A submitted response has no answer value');
+        }
+        recordByItemId.set(record?.questionnaire_item_id, record);
+    }
+    const route = [];
+    let currentItemId = questionnaire.start_item_id;
+    while (currentItemId !== 'end') {
+        if (route.includes(currentItemId) || route.length >= graph.items.length) {
+            throw new Error('Questionnaire completion route contains a cycle');
+        }
+        const item = graph.itemById.get(currentItemId);
+        if (!item) throw new Error('Questionnaire completion route has a missing item');
+        route.push(currentItemId);
+        const record = recordByItemId.get(currentItemId);
+        if (item.required !== false && !record) {
+            throw new Error(`Required questionnaire item ${currentItemId} has no answer`);
+        }
+        const answer = record?.value;
+        const node = questionnaire.routing.nodes[currentItemId];
+        const rule = (node.rules || []).find(candidate => candidate.operator === 'equals' &&
+            (Array.isArray(answer)
+                ? answer.some(value => sameQuestionnaireValue(value, candidate.value))
+                : sameQuestionnaireValue(answer, candidate.value)));
+        const target = rule?.target || node.default_target || 'next';
+        currentItemId = target === 'next' ? graph.nextInOrder(currentItemId) : target;
+        if (currentItemId !== 'end' && !graph.itemById.has(currentItemId)) {
+            throw new Error('Questionnaire completion route has an invalid target');
+        }
+    }
+    if (responseRecords.some(record => !route.includes(record.questionnaire_item_id))) {
+        throw new Error('Response records contain an item outside the completed route');
+    }
+    if (responseRecords.length < graph.minimumAnswered) {
+        throw new Error('Completed route does not meet the minimum answered-item threshold');
+    }
+    if (!Array.isArray(submittedRoute) || submittedRoute.length !== route.length ||
+        submittedRoute.some((itemId, index) => itemId !== route[index])) {
+        throw new Error('Submitted route does not match the answers and questionnaire routing');
+    }
+    return route;
+}
+
 function bearerToken(req) {
     const authorization = req.headers.authorization || '';
     if (/^Bearer\s+/i.test(authorization)) {
@@ -1174,6 +1306,33 @@ export default async function handler(req, res) {
         }
     }
 
+    const respondentSessionDiscardMatch = path.match(
+        /^\/respondent\/sessions\/([0-9a-f-]+)\/discard$/i
+    );
+    if (respondentSessionDiscardMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const sessionId = respondentSessionDiscardMatch[1];
+        if (!UUID_V4.test(sessionId)) {
+            return res.status(400).json({ ok: false, error: 'Valid collection session UUID is required' });
+        }
+        try {
+            const result = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'discard_response_session',
+                {
+                    p_session_id: sessionId,
+                    p_respondent_account_id: access.principal.account_id,
+                    p_reason: 'participant_exit_before_completion'
+                }
+            );
+            return res.status(200).json({ ok: true, result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
     // Каталог зарегистрированных банков используется конструкторами анкеты
     // и параметров. Он не содержит жёстко заданных тестовых сущностей.
     if (url.split('?')[0] === '/question-banks' && method === 'GET') {
@@ -1193,7 +1352,7 @@ export default async function handler(req, res) {
                         bank.status === 'active' &&
                         (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
                     )
-                );
+                ).map(bank => ({ ...bank, owned_by_current_account: owned.has(bank.bank_id) }));
             } else {
                 banks = banks.filter(bank =>
                     bank.status === 'active' &&
@@ -1469,6 +1628,11 @@ export default async function handler(req, res) {
             });
         }
         try {
+            validateQuestionnaireGraph(questionnaireData);
+        } catch (error) {
+            return res.status(400).json({ ok: false, error: error.message });
+        }
+        try {
             const saved = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
@@ -1511,7 +1675,10 @@ export default async function handler(req, res) {
                 const owned = await ownedEntityIds('questionnaire', access.principal.account_id, supabaseUrl, supabaseAdminKey);
                 questionnaires = questionnaires.filter(questionnaire =>
                     questionnaire.status === 'active' || owned.has(questionnaire.questionnaire_id)
-                );
+                ).map(questionnaire => ({
+                    ...questionnaire,
+                    owned_by_current_account: owned.has(questionnaire.questionnaire_id)
+                }));
             } else {
                 questionnaires = questionnaires.filter(questionnaire => questionnaire.status === 'active');
             }
@@ -1750,7 +1917,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ ok: false, error: 'Non-empty response_records array is required' });
         }
         const sessionResponse = await fetch(
-            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference,questionnaire_id,questionnaire_version,study_id,study_version,enrollment_id,participant_measurement_id,study_questionnaire_assignment_id,timepoint_id,timepoint_code,timepoint_ordinal,group_membership_id,group_id,group_code,subject_link_id&limit=1`,
+            `${supabaseUrl}/rest/v1/research_os_collection_sessions?session_id=eq.${encodeURIComponent(pathSessionId)}&respondent_identifier=eq.${encodeURIComponent(access.principal.user_identifier)}&status=eq.active&select=session_id,global_time_reference,started_at,questionnaire_id,questionnaire_version,study_id,study_version,enrollment_id,participant_measurement_id,study_questionnaire_assignment_id,timepoint_id,timepoint_code,timepoint_ordinal,group_membership_id,group_id,group_code,subject_link_id&limit=1`,
             {
                 headers: {
                     'apikey': supabaseAdminKey,
@@ -1777,6 +1944,14 @@ export default async function handler(req, res) {
                 error: 'Questionnaire identity does not match the collection session'
             });
         }
+        const startedTime = new Date(sourceIdentity.collection_started_at).getTime();
+        const sessionStartedTime = new Date(collectionSession.started_at).getTime();
+        const finishedTime = new Date(sourceIdentity.collection_finished_at).getTime();
+        if (!Number.isFinite(startedTime) || !Number.isFinite(sessionStartedTime) ||
+            startedTime !== sessionStartedTime || !Number.isFinite(finishedTime) ||
+            finishedTime < sessionStartedTime) {
+            return res.status(400).json({ ok: false, error: 'Collection start or finish time is invalid' });
+        }
         for (const field of [
             'study_id', 'study_version', 'enrollment_id', 'participant_measurement_id',
             'study_questionnaire_assignment_id', 'timepoint_id', 'timepoint_code',
@@ -1794,6 +1969,7 @@ export default async function handler(req, res) {
             const presentedTime = new Date(record?.presented_at).getTime();
             const answeredTime = new Date(record?.answered_at).getTime();
             if (record?.session_id !== pathSessionId ||
+                record?.participant_id !== access.principal.user_identifier ||
                 !record?.response_id ||
                 !record?.questionnaire_item_id ||
                 !record?.question_id ||
@@ -1801,12 +1977,13 @@ export default async function handler(req, res) {
                 !record?.bank_id ||
                 !record?.bank_version ||
                 !record?.code ||
-                record?.value === undefined ||
+                !hasQuestionnaireAnswer(record?.value) ||
                 !record?.presented_at ||
                 !record?.answered_at ||
                 !Number.isFinite(presentedTime) ||
                 !Number.isFinite(answeredTime) ||
                 presentedTime > answeredTime ||
+                answeredTime > finishedTime ||
                 !Number.isInteger(record?.answered_utc_offset_minutes) ||
                 record.answered_utc_offset_minutes < -840 ||
                 record.answered_utc_offset_minutes > 840 ||
@@ -1814,6 +1991,30 @@ export default async function handler(req, res) {
                 record.global_time_reference !== sessionGlobalTimeReference) {
                 return res.status(400).json({ ok: false, error: 'A response record does not satisfy the identity/time contract' });
             }
+        }
+        const questionnaireResponse = await fetch(
+            `${supabaseUrl}/rest/v1/questionnaires?questionnaire_id=eq.${encodeURIComponent(collectionSession.questionnaire_id)}&version=eq.${encodeURIComponent(collectionSession.questionnaire_version)}&select=package_data&limit=1`,
+            { headers: serviceHeaders(supabaseAdminKey) }
+        );
+        if (!questionnaireResponse.ok) {
+            return res.status(questionnaireResponse.status).json({
+                ok: false,
+                error: `Questionnaire completion contract could not be loaded: ${await questionnaireResponse.text()}`
+            });
+        }
+        const questionnaireRows = await questionnaireResponse.json();
+        const questionnairePackage = Array.isArray(questionnaireRows) ? questionnaireRows[0]?.package_data : null;
+        if (!questionnairePackage) {
+            return res.status(409).json({ ok: false, error: 'Session questionnaire version is unavailable' });
+        }
+        try {
+            validateCompletedQuestionnaireRoute(
+                questionnairePackage,
+                responseRecords,
+                sourceIdentity.route_item_ids
+            );
+        } catch (error) {
+            return res.status(422).json({ ok: false, error: error.message });
         }
         try {
             const response = await fetch(`${supabaseUrl}/rest/v1/rpc/save_response_records`, {
@@ -1872,6 +2073,35 @@ export default async function handler(req, res) {
             ok: false,
             error: 'The calculation/report engine is not connected to this API route yet; no report was generated'
         });
+    }
+
+    const analysisRecordsMatch = path.match(
+        /^\/analysis\/studies\/([0-9a-f-]+)\/records$/i
+    );
+    if (analysisRecordsMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'researcher', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const studyId = analysisRecordsMatch[1];
+        const requestUrl = new URL(url, `http://${req.headers.host || 'localhost'}`);
+        const studyVersion = Number(requestUrl.searchParams.get('version'));
+        if (!UUID_V4.test(studyId) || !Number.isInteger(studyVersion) || studyVersion < 1) {
+            return res.status(400).json({ ok: false, error: 'Valid study UUID and version are required' });
+        }
+        try {
+            const records = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_researcher_analysis_records',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_study_id: studyId,
+                    p_study_version: studyVersion
+                }
+            );
+            return res.status(200).json({ ok: true, records: Array.isArray(records) ? records : [] });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
     return res.status(404).json({ error: 'Endpoint not found', url });

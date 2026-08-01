@@ -240,16 +240,15 @@
       <!-- Управление банками вопросов из папок -->
       <div class="manager-section">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
-          <div class="section-title" id="lbl-banks-header" style="margin:0;">📂 Carga y Gestión de Bancos de Preguntas (Carpetas / Archivos)</div>
-          <input type="file" id="folder-loader" accept=".json" multiple style="display:none;" onchange="handleFolderUpload(event)">
-          <button class="btn btn-secondary" onclick="document.getElementById('folder-loader').click()" id="lbl-upload-btn">📁 Cargar Archivos de Bancos</button>
+          <div class="section-title" id="lbl-banks-header" style="margin:0;">📂 Bancos de preguntas registrados</div>
+          <a class="btn btn-secondary" href="importer.html?return=survey.html" id="lbl-upload-btn">📁 Importar archivo</a>
         </div>
         <div class="banks-table-container">
           <table>
             <thead>
               <tr>
                 <th id="th-name">Nombre del Banco / Encuesta</th>
-                <th id="th-author">ID de Autor</th>
+                <th id="th-author">Propiedad</th>
                 <th id="th-status">Estado en Sistema</th>
                 <th id="th-action">Acción</th>
               </tr>
@@ -257,6 +256,19 @@
             <tbody id="banks-table-body">
               <!-- Динамические строки -->
             </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="manager-section">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+          <div class="section-title" id="lbl-questionnaires-header" style="margin:0;">📋 Cuestionarios registrados</div>
+          <a class="btn btn-secondary" href="constructor_survey.html" id="lbl-questionnaire-create">＋ Crear cuestionario</a>
+        </div>
+        <div class="banks-table-container">
+          <table>
+            <thead><tr><th id="qth-name">Cuestionario</th><th id="qth-version">Versión</th><th id="qth-status">Estado</th><th id="qth-action">Acción</th></tr></thead>
+            <tbody id="questionnaires-table-body"></tbody>
           </table>
         </div>
       </div>
@@ -322,10 +334,10 @@
         subtitle: "— Panel de Control del Investigador",
         idTitle: "Número de Identificación del Investigador (Autoría):",
         sessionStatus: "● Sesión Activa (Derechos de Administrador)",
-        banksHeader: "📂 Carga y Gestión de Bancos de Preguntas (Carpetas / Archivos)",
-        uploadBtn: "📁 Cargar Archivos de Bancos",
+        banksHeader: "📂 Bancos de preguntas registrados",
+        uploadBtn: "📁 Importar archivo",
         thName: "Nombre del Banco / Encuesta",
-        thAuthor: "ID de Autor",
+        thAuthor: "Propiedad",
         thStatus: "Estado en Sistema",
         thAction: "Acción",
         toolsHeader: "🛠️ Herramientas de Investigador",
@@ -347,17 +359,16 @@
         tool6Title: "Colega de IA",
         tool6Desc: "Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.",
         tool6Btn: "Configurar IA",
-        activeStatus: "Conectado",
-        disconnect: "Desconectar"
+        questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Disponible con atribución",open:"Abrir",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
       },
       en: {
         subtitle: "— Researcher Control Panel",
         idTitle: "Researcher Identification Number (Authorship):",
         sessionStatus: "● Session Active (Study Administrator Rights)",
-        banksHeader: "📂 Question Bank Upload & Management (Folders / Files)",
-        uploadBtn: "📁 Upload Bank Files",
+        banksHeader: "📂 Registered question banks",
+        uploadBtn: "📁 Import file",
         thName: "Bank / Survey Name",
-        thAuthor: "Author ID",
+        thAuthor: "Ownership",
         thStatus: "System Status",
         thAction: "Action",
         toolsHeader: "🛠️ Researcher Tools",
@@ -379,17 +390,16 @@
         tool6Title: "AI Colleague",
         tool6Desc: "Choose available models for translation and search. Provider keys remain exclusively on the server.",
         tool6Btn: "Configure AI",
-        activeStatus: "Connected",
-        disconnect: "Disconnect"
+        questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Available with attribution",open:"Open",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
       },
       ru: {
         subtitle: "— Панель управления исследователя",
         idTitle: "Идентификационный номер исследователя (Авторство):",
         sessionStatus: "● Сессия активна (Права администратора исследования)",
-        banksHeader: "📂 Загрузка и управление банками вопросов (Папки / Файлы)",
-        uploadBtn: "📁 Загрузить файлы банков",
+        banksHeader: "📂 Зарегистрированные банки вопросов",
+        uploadBtn: "📁 Импортировать файл",
         thName: "Название банка / опросника",
-        thAuthor: "Автор ID",
+        thAuthor: "Владение",
         thStatus: "Статус в системе",
         thAction: "Действие",
         toolsHeader: "🛠️ Инструменты исследователя",
@@ -411,24 +421,22 @@
         tool6Title: "AI-коллега",
         tool6Desc: "Выберите доступные модели для перевода и поиска. Ключи провайдеров остаются исключительно на сервере.",
         tool6Btn: "Настроить AI",
-        activeStatus: "Conectado",
-        disconnect: "Desconectar"
+        questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Доступен с атрибуцией",open:"Открыть",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
       }
     };
         
-    let uploadedBanks = [
-      { id: "bank_01", title: "Estrés y carga laboral (Wave 1)", authorId: "", active: true }
-    ];
+    let registeredBanks = [];
+    let registeredQuestionnaires = [];
     async function initSession() {
       const session = await ResearchAuth.requireRole('researcher', 'survey.html');
       if (!session) return;
       researcherId = session.user_identifier;
       document.getElementById('author-id-display').innerText = researcherId;
-      uploadedBanks.forEach(bank => { if (!bank.authorId) bank.authorId = researcherId; });
       document.getElementById('errorBanner').style.display = 'none';
       document.getElementById('researcherContent').style.display = 'flex';
       const savedLang = localStorage.getItem('app_language') || 'es';
       setLanguage(savedLang);
+      await loadRegisteredCatalogs();
     }
         
     function setLanguage(lang) {
@@ -474,62 +482,48 @@
       document.getElementById('tool6-title').innerText = t.tool6Title;
       document.getElementById('tool6-desc').innerText = t.tool6Desc;
       document.getElementById('tool6-btn').innerText = t.tool6Btn;
-            
+      document.getElementById('lbl-questionnaires-header').innerText=t.questionnairesHeader;
+      document.getElementById('lbl-questionnaire-create').innerText=t.questionnaireCreate;
+      document.getElementById('qth-name').innerText=t.qName;document.getElementById('qth-version').innerText=t.qVersion;document.getElementById('qth-status').innerText=t.qStatus;document.getElementById('qth-action').innerText=t.qAction;
       renderBanksTable();
+      renderQuestionnairesTable();
     }
-        
-    async function handleFolderUpload(event) {
-      const files = event.target.files;
-      if (!files.length) return;
-            
-      for (let file of files) {
-        try {
-          const text = await file.text();
-          const json = JSON.parse(text);
-          uploadedBanks.push({
-            id: json.id || ('bank_' + Date.now()),
-            title: json.title || file.name,
-            authorId: researcherId,
-            active: true
-          });
-        } catch (e) {
-          uploadedBanks.push({
-            id: 'bank_' + Date.now(),
-            title: file.name,
-            authorId: researcherId,
-            active: true
-          });
-        }
-      }
-      renderBanksTable();
+
+    function authHeaders(){return ResearchAuth.authHeaders('researcher');}
+    async function requestJson(url){const response=await fetch(url,{headers:authHeaders()});const data=await response.json();if(!response.ok)throw new Error(data.error||String(response.status));return data;}
+    async function loadRegisteredCatalogs(){
+      try{const [banks,questionnaires]=await Promise.all([requestJson('/question-banks'),requestJson('/questionnaires?status=all')]);registeredBanks=banks.banks||[];registeredQuestionnaires=questionnaires.questionnaires||[];renderBanksTable();renderQuestionnairesTable();}
+      catch(error){document.getElementById('errorBanner').textContent=error.message;document.getElementById('errorBanner').style.display='block';}
     }
-        
-    function toggleBank(index) {
-      uploadedBanks[index].active = !uploadedBanks[index].active;
-      renderBanksTable();
-    }
+
+    function openBank(bank){location.href=`constructor_survey.html?bank=${encodeURIComponent(bank.bank_id)}&version=${encodeURIComponent(bank.version)}`;}
+    function openQuestionnaire(questionnaire){location.href=`constructor_survey.html?questionnaire=${encodeURIComponent(questionnaire.questionnaire_id)}&version=${encodeURIComponent(questionnaire.version)}`;}
         
     function renderBanksTable() {
       const tbody = document.getElementById('banks-table-body');
       const t = i18n[currentLang] || i18n.es;
       tbody.innerHTML = '';
             
-      uploadedBanks.forEach((bank, idx) => {
+      if(!registeredBanks.length){tbody.innerHTML=`<tr><td colspan="4" style="color:var(--text-muted)">${t.emptyBanks}</td></tr>`;return;}
+      registeredBanks.forEach((bank, idx) => {
         tbody.innerHTML += `
           <tr>
-            <td>📋 ${bank.title}</td>
-            <td><code style="color: var(--accent-color);">${bank.authorId || researcherId}</code></td>
-            <td><span style="color: ${bank.active ? 'var(--success-color)' : 'var(--text-muted)'};">${bank.active ? t.activeStatus : (currentLang === 'es' ? 'Desconectado' : 'Отключен')}</span></td>
-            <td><button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="toggleBank(${idx})">${bank.active ? t.disconnect : t.activeStatus}</button></td>
+            <td>📚 ${escapeHtml(bank.title)}<div style="color:var(--text-muted)">${escapeHtml(bank.code)} · v${Number(bank.version)}</div></td>
+            <td>${bank.owned_by_current_account?t.mine:t.available}</td>
+            <td>${escapeHtml(bank.status)}</td>
+            <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" onclick="openBank(registeredBanks[${idx}])">${t.open}</button></td>
           </tr>
         `;
       });
     }
+
+    function renderQuestionnairesTable(){const tbody=document.getElementById('questionnaires-table-body'),t=i18n[currentLang]||i18n.es;tbody.innerHTML='';if(!registeredQuestionnaires.length){tbody.innerHTML=`<tr><td colspan="4" style="color:var(--text-muted)">${t.emptyQuestionnaires}</td></tr>`;return;}registeredQuestionnaires.forEach((q,idx)=>{tbody.innerHTML+=`<tr><td>📋 ${escapeHtml(q.title)}<div style="color:var(--text-muted)">${escapeHtml(q.code)}</div></td><td>v${Number(q.version)}</td><td>${escapeHtml(q.status)}${q.owned_by_current_account?` · ${t.mine}`:''}</td><td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" onclick="openQuestionnaire(registeredQuestionnaires[${idx}])">${t.open}</button> <a class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" href="constructor_study.html">${t.useInStudy}</a></td></tr>`;});}
+    function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
         
     window.addEventListener('DOMContentLoaded', initSession);
   </script>
   <div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
-    ✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot
+    ✨ CRM Sharks · Ray AI | Research OS Pilot
   </div>
 </body>
 </html>

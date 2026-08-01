@@ -33,18 +33,18 @@
     </div>
   </section>
 </main>
-<footer>✨ Designed and built in collaboration with Gemini AI and Ray AI | Research OS Pilot</footer>
+<footer>✨ CRM Sharks · Ray AI | Research OS Pilot</footer>
 <script src="auth.js"></script>
 <script src="research-contracts.js"></script>
 <script>
 'use strict';
 const RC=window.ResearchContracts;
 const T={
- ru:{cabinet:'← В кабинет',loading:'Загрузка анкеты…',back:'Назад',next:'Далее',finish:'Завершить и отправить',progress:'Вопрос',of:'из',loadError:'Анкету не удалось загрузить.',sessionInactive:'Эта сессия уже не активна.',submitError:'Ответы не удалось сохранить.',answerAtLeastOne:'Для завершения нужен хотя бы один ответ.',submitting:'Сохранение ответов…'},
- es:{cabinet:'← Al panel',loading:'Cargando cuestionario…',back:'Atrás',next:'Siguiente',finish:'Finalizar y enviar',progress:'Pregunta',of:'de',loadError:'No se pudo cargar el cuestionario.',sessionInactive:'Esta sesión ya no está activa.',submitError:'No se pudieron guardar las respuestas.',answerAtLeastOne:'Se requiere al menos una respuesta para finalizar.',submitting:'Guardando respuestas…'},
- en:{cabinet:'← Participant hub',loading:'Loading questionnaire…',back:'Back',next:'Next',finish:'Finish and submit',progress:'Question',of:'of',loadError:'The questionnaire could not be loaded.',sessionInactive:'This session is no longer active.',submitError:'The responses could not be saved.',answerAtLeastOne:'At least one answer is required to finish.',submitting:'Saving responses…'}
+ ru:{cabinet:'← В кабинет',loading:'Загрузка анкеты…',back:'Назад',next:'Далее',finish:'Завершить и отправить',progress:'Вопрос',of:'из',loadError:'Анкету не удалось загрузить.',sessionInactive:'Эта сессия уже не активна.',submitError:'Ответы не удалось сохранить.',requiredAnswer:'Ответьте на обязательный вопрос.',minimumAnswers:'Для завершения недостаточно ответов.',invalidRoute:'Маршрут анкеты некорректен.',submitting:'Сохранение ответов…'},
+ es:{cabinet:'← Al panel',loading:'Cargando cuestionario…',back:'Atrás',next:'Siguiente',finish:'Finalizar y enviar',progress:'Pregunta',of:'de',loadError:'No se pudo cargar el cuestionario.',sessionInactive:'Esta sesión ya no está activa.',submitError:'No se pudieron guardar las respuestas.',requiredAnswer:'Responda la pregunta obligatoria.',minimumAnswers:'No hay suficientes respuestas para completar.',invalidRoute:'La ruta del cuestionario no es válida.',submitting:'Guardando respuestas…'},
+ en:{cabinet:'← Participant hub',loading:'Loading questionnaire…',back:'Back',next:'Next',finish:'Finish and submit',progress:'Question',of:'of',loadError:'The questionnaire could not be loaded.',sessionInactive:'This session is no longer active.',submitError:'The responses could not be saved.',requiredAnswer:'Answer the required question.',minimumAnswers:'There are not enough answers to complete.',invalidRoute:'The questionnaire route is invalid.',submitting:'Saving responses…'}
 };
-let lang='ru',principal=null,sessionId=null,collectionSession=null,questionnaire=null,items=[],itemById=new Map(),history=[],currentItemId=null,answers=new Map(),presentedAt=new Map();
+let lang='ru',principal=null,sessionId=null,collectionSession=null,questionnaire=null,items=[],itemById=new Map(),history=[],currentItemId=null,answers=new Map(),presentedAt=new Map(),sessionFinalized=false,discardRequested=false;
 function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function applyLanguage(){document.documentElement.lang=lang;document.querySelectorAll('[data-i18n]').forEach(el=>{const v=T[lang][el.dataset.i18n];if(v)el.textContent=v;});}
@@ -53,7 +53,11 @@ function localized(value){
  return value??'';
 }
 async function request(url,options){const response=await fetch(url,options);const data=await response.json();if(!response.ok)throw new Error(data.error||`${response.status}`);return data;}
-function returnToCabinet(){location.href='cabinet.html';}
+async function discardIncompleteSession(){
+ if(sessionFinalized||discardRequested||!sessionId||collectionSession?.status!=='active')return;discardRequested=true;
+ try{await fetch(`/respondent/sessions/${encodeURIComponent(sessionId)}/discard`,{method:'POST',headers:headers(),keepalive:true});}catch(_error){}
+}
+async function returnToCabinet(){await discardIncompleteSession();location.href='cabinet.html';}
 async function loadSession(){
  try{
   const data=await request(`/respondent/sessions/${encodeURIComponent(sessionId)}`,{headers:headers()});collectionSession=data.session;
@@ -84,6 +88,7 @@ function readCurrentAnswer(){
  if(value===undefined)answers.delete(item.item_id);else{const answeredNow=new Date();answers.set(item.item_id,{value,presented_at:presentedAt.get(item.item_id),answered_at:answeredNow.toISOString(),answered_utc_offset_minutes:-answeredNow.getTimezoneOffset()});}return value;
 }
 function sameValue(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+function hasAnswer(value){return value!==undefined&&value!==null&&!(typeof value==='string'&&value.trim()==='')&&!(Array.isArray(value)&&value.length===0);}
 function resolvedTarget(item,answer){
  const node=questionnaire.routing?.nodes?.[item.item_id]||{},rule=(node.rules||[]).find(candidate=>candidate.operator==='equals'&&(Array.isArray(answer)?answer.some(value=>sameValue(value,candidate.value)):sameValue(answer,candidate.value)));return rule?.target||node.default_target||'next';
 }
@@ -92,20 +97,24 @@ function resolvedNext(item,answer){const target=resolvedTarget(item,answer);retu
 function isTerminalRoute(item,answer){return resolvedNext(item,answer)==='end';}
 async function goNext(){
  const item=itemById.get(currentItemId),answer=readCurrentAnswer(),target=resolvedNext(item,answer);
+ if(item.required!==false&&!hasAnswer(answer)){document.getElementById('status').textContent=T[lang].requiredAnswer;document.getElementById('status').className='error';return;}
  if(target==='end'){await submitAll();return;}
  if(!itemById.has(target)){document.getElementById('status').textContent='Invalid route target';document.getElementById('status').className='error';return;}
+ if(history.includes(target)||target===currentItemId){document.getElementById('status').textContent=T[lang].invalidRoute;document.getElementById('status').className='error';return;}
  history.push(currentItemId);currentItemId=target;renderCurrent();
 }
 function goBack(){readCurrentAnswer();const previous=history.pop();if(previous){currentItemId=previous;renderCurrent();}}
 async function submitAll(){
- const activePath=new Set([...history,currentItemId]);
- if(![...answers.keys()].some(itemId=>activePath.has(itemId))){document.getElementById('status').textContent=T[lang].answerAtLeastOne;document.getElementById('status').className='error';return;}
+ const routeItemIds=[...history,currentItemId],activePath=new Set(routeItemIds),minimumAnswered=Number(questionnaire.completion_policy?.minimum_answered_items||1),routeAnswers=routeItemIds.filter(itemId=>hasAnswer(answers.get(itemId)?.value));
+ if(routeItemIds.some(itemId=>itemById.get(itemId)?.required!==false&&!hasAnswer(answers.get(itemId)?.value))){document.getElementById('status').textContent=T[lang].requiredAnswer;document.getElementById('status').className='error';return;}
+ if(routeAnswers.length<minimumAnswered){document.getElementById('status').textContent=`${T[lang].minimumAnswers} (${routeAnswers.length}/${minimumAnswered})`;document.getElementById('status').className='error';return;}
  const button=document.getElementById('nextButton');button.disabled=true;document.getElementById('backButton').disabled=true;document.getElementById('status').textContent=T[lang].submitting;document.getElementById('status').className='muted';
  const finishedAt=new Date().toISOString(),records=[];
  answers.forEach((answer,itemId)=>{if(!activePath.has(itemId))return;const item=itemById.get(itemId),q=item.definition_snapshot||{};records.push({response_id:RC.createUuid(),session_id:sessionId,participant_id:principal.user_identifier,questionnaire_item_id:item.item_id,bank_id:item.source_bank_id,bank_version:item.source_bank_version,question_id:item.question_id,question_version:item.question_version,code:item.code,value:answer.value,scale:q.scale||null,presented_at:answer.presented_at,answered_at:answer.answered_at,answered_utc_offset_minutes:answer.answered_utc_offset_minutes,global_time_reference:collectionSession.global_time_reference});});
- const identity={source_instance_id:RC.createUuid(),session_id:sessionId,participant_id:principal.user_identifier,subject_link_id:collectionSession.subject_link_id||null,enrollment_id:collectionSession.enrollment_id||null,participant_measurement_id:collectionSession.participant_measurement_id||null,study_id:collectionSession.study_id||null,study_version:collectionSession.study_version||null,group_membership_id:collectionSession.group_membership_id||null,group_id:collectionSession.group_id||null,group_code:collectionSession.group_code||null,timepoint_id:collectionSession.timepoint_id||null,timepoint_code:collectionSession.timepoint_code||null,timepoint_ordinal:collectionSession.timepoint_ordinal||null,study_questionnaire_assignment_id:collectionSession.study_questionnaire_assignment_id||null,domain_id:'questionnaire',source_type:'self_report',data_structure_type:'questionnaire',data_source_path:`${questionnaire.questionnaire_id}:${questionnaire.version}`,questionnaire_id:questionnaire.questionnaire_id,questionnaire_version:questionnaire.version,collection_started_at:collectionSession.started_at,collection_finished_at:finishedAt,global_time_reference:collectionSession.global_time_reference,client_time_zone:Intl.DateTimeFormat().resolvedOptions().timeZone||null};
- try{await request(`/pilot/sessions/${encodeURIComponent(sessionId)}/answers`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({domain_data_identity:identity,response_records:records})});location.href=`cabinet.html?completed=${encodeURIComponent(sessionId)}`;}catch(error){button.disabled=false;document.getElementById('backButton').disabled=history.length===0;document.getElementById('status').textContent=`${T[lang].submitError} ${error.message}`;document.getElementById('status').className='error';}
+ const identity={source_instance_id:RC.createUuid(),session_id:sessionId,participant_id:principal.user_identifier,subject_link_id:collectionSession.subject_link_id||null,enrollment_id:collectionSession.enrollment_id||null,participant_measurement_id:collectionSession.participant_measurement_id||null,study_id:collectionSession.study_id||null,study_version:collectionSession.study_version||null,group_membership_id:collectionSession.group_membership_id||null,group_id:collectionSession.group_id||null,group_code:collectionSession.group_code||null,timepoint_id:collectionSession.timepoint_id||null,timepoint_code:collectionSession.timepoint_code||null,timepoint_ordinal:collectionSession.timepoint_ordinal||null,study_questionnaire_assignment_id:collectionSession.study_questionnaire_assignment_id||null,domain_id:'questionnaire',source_type:'self_report',data_structure_type:'questionnaire',data_source_path:`${questionnaire.questionnaire_id}:${questionnaire.version}`,questionnaire_id:questionnaire.questionnaire_id,questionnaire_version:questionnaire.version,route_item_ids:routeItemIds,completion_policy_snapshot:{minimum_answered_items:minimumAnswered,require_terminal_route:true},collection_started_at:collectionSession.started_at,collection_finished_at:finishedAt,global_time_reference:collectionSession.global_time_reference,client_time_zone:Intl.DateTimeFormat().resolvedOptions().timeZone||null};
+ try{await request(`/pilot/sessions/${encodeURIComponent(sessionId)}/answers`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({domain_data_identity:identity,response_records:records})});sessionFinalized=true;location.href=`cabinet.html?completed=${encodeURIComponent(sessionId)}`;}catch(error){button.disabled=false;document.getElementById('backButton').disabled=history.length===0;document.getElementById('status').textContent=`${T[lang].submitError} ${error.message}`;document.getElementById('status').className='error';}
 }
+window.addEventListener('pagehide',()=>{void discardIncompleteSession();});
 document.addEventListener('DOMContentLoaded',async()=>{principal=await ResearchAuth.requireRole('respondent','assessment.html');if(!principal)return;lang=localStorage.getItem('app_language')||'ru';if(!T[lang])lang='ru';applyLanguage();sessionId=new URLSearchParams(location.search).get('session_id');if(!sessionId){document.getElementById('title').textContent=T[lang].loadError;document.getElementById('description').textContent='session_id is required';return;}await loadSession();});
 </script>
 </body>

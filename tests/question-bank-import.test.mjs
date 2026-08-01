@@ -392,7 +392,10 @@ test('constructor routes all file imports through preview and consumes only vali
 });
 
 test('multi-format readers are local and the editing workspace stays compact', async () => {
-  const page = await fs.readFile(new URL('../importer.html', import.meta.url), 'utf8');
+  const [page, reader] = await Promise.all([
+    fs.readFile(new URL('../importer.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../question-bank-file-reader.js', import.meta.url), 'utf8')
+  ]);
   const localAssets = [
     '../vendor/mammoth.browser.min.js',
     '../vendor/pdf.min.js',
@@ -407,12 +410,14 @@ test('multi-format readers are local and the editing workspace stays compact', a
 
   await Promise.all(localAssets.map(asset => fs.access(new URL(asset, import.meta.url))));
   assert.doesNotMatch(page, /<script[^>]+https?:\/\//i);
-  assert.match(page, /ensurePdfWorker/);
-  assert.match(page, /ensureXlsxLibrary/);
-  assert.match(page, /standardFontDataUrl: 'vendor\/pdfjs\/standard_fonts\/'/);
-  assert.match(page, /QuestionBankImport\.pdfItemsToText\(textContent\.items\)/);
-  assert.match(page, /QuestionBankImport\.decodeTextBytes\(await file\.arrayBuffer\(\)\)/);
-  assert.match(page, /XLSX\.read\(csvText,\s*\{\s*type:\s*'string',\s*codepage:\s*65001\s*\}\)/);
+  assert.match(page, /question-bank-file-reader\.js/);
+  assert.match(page, /QuestionBankFileReader\.readQuestionnaireFile/);
+  assert.match(reader, /ensurePdfWorker/);
+  assert.match(reader, /ensureXlsxLibrary/);
+  assert.match(reader, /standardFontDataUrl: 'vendor\/pdfjs\/standard_fonts\/'/);
+  assert.match(reader, /QuestionBankImport\.pdfItemsToText\(content\.items\)/);
+  assert.match(reader, /QuestionBankImport\.decodeTextBytes\(await file\.arrayBuffer\(\)\)/);
+  assert.match(reader, /XLSX\.read\(decoded,\s*\{\s*type:\s*'string',\s*codepage:\s*65001\s*\}\)/);
   assert.doesNotMatch(page, /currentParsedValue\s*\?\?/);
   assert.match(page, /currentParsedValue = null;[\s\S]*addEventListener\('input'/);
   assert.match(page, /id="ui-back-hub">← Volver al inicio/);

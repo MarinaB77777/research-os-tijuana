@@ -70,8 +70,11 @@ test('uploaded, AI-generated, and dataset labels are escaped before HTML renderi
   assert.match(validator, /escapeHtml\(err\.message\)/);
   assert.match(validator, /escapeHtml\(err\)/);
   assert.match(validator, /escapeHtml\(warn\)/);
-  assert.match(dataAnalysis, /\$\{escapeHtml\(id\)\}/);
-  assert.match(dataAnalysis, /\$\{escapeHtml\(g\)\}/);
+  assert.match(dataAnalysis, /function esc\(value\)/);
+  assert.match(dataAnalysis, /select\.add\(new Option\(key,key\)\)/);
+  assert.match(dataAnalysis, /new Option\(`\$\{study\.title\}/);
+  assert.match(dataAnalysis, /assumptions\.map\(item=>`<li>\$\{esc\(item\)\}<\/li>`\)/);
+  assert.match(dataAnalysis, /esc\(JSON\.stringify\(snapshot,null,2\)\)/);
   assert.match(questionConstructor, /\$\{escapeHtml\(opt\.l\)\}/);
   assert.doesNotMatch(questionConstructor, /\$\{opt\.l\}/);
 });
