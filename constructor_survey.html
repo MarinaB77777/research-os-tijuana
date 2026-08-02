@@ -66,6 +66,10 @@
       <label data-i18n="savedQuestionnaire">Cuestionario registrado</label>
       <div class="row"><select id="questionnaireSelect"></select><button onclick="loadSavedQuestionnaire()" data-i18n="open">Abrir</button></div>
     </div>
+    <div class="field">
+      <label data-i18n="questionnaireFile">Abrir cuestionario desde archivo JSON</label>
+      <input id="questionnaireFile" type="file" accept=".json,.questionnaire.json,application/json" onchange="loadQuestionnaireFile(this)">
+    </div>
     <div class="field"><label data-i18n="name">Nombre</label><input id="name" oninput="onName()"></div>
     <div class="grid2">
       <div class="field"><label data-i18n="code">Código</label><input id="code" readonly></div>
@@ -122,9 +126,9 @@ const consentTexts={
 };
 Object.keys(consentTexts).forEach(key=>Object.assign(texts[key],consentTexts[key]));
 const importTexts={
- es:{importBank:'Importar archivo',imported:'Banco importado listo para componer el cuestionario.'},
- en:{importBank:'Import file',imported:'The imported bank is ready for questionnaire composition.'},
- ru:{importBank:'Импорт файла',imported:'Импортированный банк готов для составления анкеты.'}
+ es:{importBank:'Importar archivo',imported:'Banco importado listo para componer el cuestionario.',questionnaireFile:'Abrir cuestionario desde archivo JSON'},
+ en:{importBank:'Import file',imported:'The imported bank is ready for questionnaire composition.',questionnaireFile:'Open questionnaire JSON file'},
+ ru:{importBank:'Импорт файла',imported:'Импортированный банк готов для составления анкеты.',questionnaireFile:'Открыть анкету из JSON-файла'}
 };
 Object.keys(importTexts).forEach(key=>Object.assign(texts[key],importTexts[key]));
 const completionTexts={
@@ -258,12 +262,25 @@ async function loadQuestionnaireCatalog(){
 async function loadConsentCatalog(){
  try{const data=await RC.requestJson('/consents?status=all');consentCatalog=data.consents||[];renderConsentSelection();}catch(e){consentCatalog=[];renderConsentSelection();setStatus(e.message,'error');}
 }
+function stateFromQuestionnairePackage(pkg){
+ if(pkg?.schema!=='research_os.questionnaire'||pkg?.schema_version!==1||!RC.isUuid(pkg.questionnaire_id)||!Array.isArray(pkg.items)||!pkg.routing?.nodes)throw new Error('research_os.questionnaire schema version 1 is required');
+ const nodes=pkg.routing.nodes;
+ return {questionnaire_id:pkg.questionnaire_id,version:pkg.version,status:pkg.status,name:pkg.title,code:pkg.code,description:pkg.description||'',primary_language:pkg.primary_language,global_time_reference:pkg.global_time_reference,consent:pkg.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1},completion_policy:pkg.completion_policy||{minimum_answered_items:1,require_terminal_route:true},start_item_id:pkg.start_item_id,items:pkg.items.map(item=>({...item,required:item.required!==false,default_target:nodes[item.item_id]?.default_target||'next',rules:nodes[item.item_id]?.rules||[]}))};
+}
+function applyQuestionnairePackage(pkg){
+ const previous=state;
+ try{state=stateFromQuestionnairePackage(pkg);renderIdentity();renderItems();buildPackage();RC.writeJson(DRAFT_KEY,state);setStatus(texts[lang].valid,'ok');}
+ catch(error){state=previous;renderIdentity();renderItems();throw error;}
+}
+async function loadQuestionnaireFile(input){
+ try{const file=input?.files?.[0];if(!file)return;const pkg=JSON.parse(await file.text());applyQuestionnairePackage(pkg);}
+ catch(error){setStatus(error.message,'error');}
+ finally{if(input)input.value='';}
+}
 async function loadSavedQuestionnaire(){
  const value=document.getElementById('questionnaireSelect').value;if(!value)return;const [id,version]=value.split(':');
- try{const data=await RC.requestJson(`/questionnaires/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`),pkg=data.questionnaire||data;const nodes=pkg.routing?.nodes||{};
-  state={questionnaire_id:pkg.questionnaire_id,version:pkg.version,status:pkg.status,name:pkg.title,code:pkg.code,description:pkg.description||'',primary_language:pkg.primary_language,global_time_reference:pkg.global_time_reference,consent:pkg.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1},completion_policy:pkg.completion_policy||{minimum_answered_items:1,require_terminal_route:true},start_item_id:pkg.start_item_id,items:(pkg.items||[]).map(item=>({...item,required:item.required!==false,default_target:nodes[item.item_id]?.default_target||'next',rules:nodes[item.item_id]?.rules||[]}))};
-  RC.writeJson(DRAFT_KEY,state);renderIdentity();renderItems();setStatus(texts[lang].valid,'ok');
- }catch(e){setStatus(e.message,'error');}
+ try{const data=await RC.requestJson(`/questionnaires/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`);applyQuestionnairePackage(data.questionnaire||data);}
+ catch(e){setStatus(e.message,'error');}
 }
 async function loadSelectedBank(){
  const value=document.getElementById('bankSelect').value;if(!value)return;const [id,version]=value.split(':');
