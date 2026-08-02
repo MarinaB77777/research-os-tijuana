@@ -486,6 +486,7 @@
       </div>
     </div>
 
+    <script src="research-contracts.js"></script>
     <script>
       const i18n = {
         "es-MX": {
@@ -997,24 +998,29 @@
             scale: typeof v.scale === 'string' ? v.scale : 'single_choice',
             tracking_mode: tracking_mode,
             prompt: typeof v.prompt === 'string' ? v.prompt : '',
-            wave: typeof v.wave === 'string' ? v.wave : 'wave_1',
-            lag: typeof v.lag === 'string' ? v.lag : 'immediate',
+            wave: v.wave === null ? null : (typeof v.wave === 'string' ? v.wave : 'wave_1'),
+            lag: v.lag === null ? null : (typeof v.lag === 'string' ? v.lag : 'immediate'),
             options: Array.isArray(v.options) ? v.options.map(o => {
-              const numVal = parseFloat(o?.s);
+              const rawValue = o?.s;
+              const numVal = typeof rawValue === 'number' ? rawValue : Number(rawValue);
               return {
                 l: typeof o?.l === 'string' ? o.l : '',
-                s: !isNaN(numVal) ? numVal : null,
+                s: type === 'ordinal'
+                  ? (Number.isFinite(numVal) ? numVal : null)
+                  : (rawValue === undefined || rawValue === null || rawValue === '' ? null : rawValue),
               };
             }) : [],
             config: {
-              min: !isNaN(parseFloat(config.min)) ? parseFloat(config.min) : 0,
-              max: !isNaN(parseFloat(config.max)) ? parseFloat(config.max) : 100,
-              step: !isNaN(parseFloat(config.step)) && parseFloat(config.step) > 0 ? parseFloat(config.step) : 1,
-              direction: ['direct', 'inverse'].includes(config.direction) ? config.direction : 'direct',
+              min: config.min !== null && Number.isFinite(Number(config.min)) ? Number(config.min) : (type === 'interval_ratio' ? 0 : null),
+              max: config.max !== null && Number.isFinite(Number(config.max)) ? Number(config.max) : (type === 'interval_ratio' ? 100 : null),
+              step: config.step !== null && Number.isFinite(Number(config.step)) && Number(config.step) > 0 ? Number(config.step) : (type === 'interval_ratio' ? 1 : null),
+              direction: ['direct', 'inverse'].includes(config.direction) ? config.direction : (type === 'interval_ratio' ? 'direct' : null),
               unit: typeof config.unit === 'string' ? config.unit : '',
               maxLength: !isNaN(parseInt(config.maxLength, 10)) && parseInt(config.maxLength, 10) > 0 ? parseInt(config.maxLength, 10) : 500,
               placeholder: typeof config.placeholder === 'string' ? config.placeholder : ''
-            }
+            },
+            block: Object.prototype.hasOwnProperty.call(v, 'block') ? (typeof v.block === 'string' && v.block.trim() ? v.block : null) : undefined,
+            score_direction: Object.prototype.hasOwnProperty.call(v, 'score_direction') ? v.score_direction : undefined
           };
         });
       }
@@ -1075,24 +1081,34 @@
       function loadBankMetadata() {
         try {
           const parsed = JSON.parse(localStorage.getItem('ros_question_bank_identity_v1') || '{}');
+          const createdAt = typeof parsed.global_time_reference === 'string' && parsed.global_time_reference
+            ? parsed.global_time_reference
+            : new Date().toISOString();
           return {
             bank_id: isUuid(parsed.bank_id) ? parsed.bank_id : createUuid(),
             title: typeof parsed.title === 'string' ? parsed.title : '',
             code: normalizeBankCode(parsed.code),
             version: Number.isInteger(parsed.version) && parsed.version > 0 ? parsed.version : 1,
             status: ['draft', 'trial', 'active'].includes(parsed.status) ? parsed.status : 'draft',
+            primary_language: typeof parsed.primary_language === 'string' ? parsed.primary_language : 'es-MX',
+            global_time_reference: createdAt,
+            generated_at: typeof parsed.generated_at === 'string' && parsed.generated_at ? parsed.generated_at : createdAt,
             reuse_permission: ['attribution_permitted', 'permission_required'].includes(parsed.reuse_permission)
               ? parsed.reuse_permission
               : 'attribution_permitted'
           };
         } catch (error) {
           console.error('Question-bank identity read error:', error);
+          const createdAt = new Date().toISOString();
           return {
             bank_id: createUuid(),
             title: '',
             code: '',
             version: 1,
             status: 'draft',
+            primary_language: 'es-MX',
+            global_time_reference: createdAt,
+            generated_at: createdAt,
             reuse_permission: 'attribution_permitted'
           };
         }
@@ -1149,6 +1165,95 @@
           localStorage.setItem('ros_strict_cyan_bank_v3', JSON.stringify(bank));
         } catch (e) {
           console.error("Storage save error:", e);
+        }
+      }
+
+      function editorTypeForQuestion(question) {
+        const level = question?.scale?.psychometric_level;
+        if (['nominal', 'ordinal', 'interval_ratio'].includes(level)) return level;
+        if (question?.type === 'text_input') return 'textual';
+        if (question?.type === 'numeric_input') return 'interval_ratio';
+        return level === 'ordinal' ? 'ordinal' : 'nominal';
+      }
+
+      function questionBankPackageToEditor(packageData) {
+        ResearchContracts.flattenQuestionBank(packageData);
+        const questions = packageData.question_order.map(code => {
+          const question = packageData.questions[code];
+          const type = editorTypeForQuestion(question);
+          const scale = question.scale && typeof question.scale === 'object' ? question.scale : {};
+          const time = question.time && typeof question.time === 'object' ? question.time : {};
+          return {
+            question_id: question.question_id,
+            version: question.version,
+            status: question.status,
+            id: question.code,
+            block: question.block || null,
+            family: question.family || null,
+            domain: question.domain || null,
+            parameter: question.parameter ?? null,
+            type,
+            scale: scale.id || (type === 'textual' ? 'short_string' : type === 'interval_ratio' ? 'continuous_slider' : 'single_choice'),
+            tracking_mode: ['time_variant', 'time_invariant'].includes(time.tracking_mode) ? time.tracking_mode : 'time_invariant',
+            prompt: typeof question.prompt === 'string' ? question.prompt : '',
+            wave: time.wave === null ? null : (typeof time.wave === 'string' ? time.wave : 'wave_1'),
+            lag: time.lag === null ? null : (typeof time.lag === 'string' ? time.lag : 'immediate'),
+            options: Array.isArray(question.options)
+              ? question.options.map(option => ({ l: String(option?.text ?? ''), s: option?.value ?? null }))
+              : [],
+            config: {
+              min: scale.min ?? null,
+              max: scale.max ?? null,
+              step: scale.step ?? null,
+              direction: ['direct', 'inverse'].includes(scale.direction) ? scale.direction : null,
+              unit: typeof scale.unit === 'string' ? scale.unit : '',
+              maxLength: Number.isInteger(question.max_length) && question.max_length > 0 ? question.max_length : 500,
+              placeholder: typeof question.placeholder === 'string' ? question.placeholder : ''
+            },
+            score_direction: question.score_direction ?? null
+          };
+        });
+        return {
+          questions: sanitizeBankData(questions, currentLang),
+          metadata: {
+            bank_id: packageData.bank_id,
+            title: packageData.title,
+            code: packageData.code,
+            version: packageData.version,
+            status: packageData.status,
+            primary_language: packageData.primary_language || 'es-MX',
+            global_time_reference: packageData.global_time_reference,
+            generated_at: packageData.generated_at || packageData.global_time_reference,
+            reuse_permission: packageData.reuse_policy?.permission || 'attribution_permitted'
+          },
+          mode: packageData.global_mode === 'dynamic' ? 'dynamic' : 'static'
+        };
+      }
+
+      async function loadRegisteredBankForEditing() {
+        const params = new URLSearchParams(window.location.search);
+        const bankId = params.get('bank');
+        if (!bankId) return;
+        const version = params.get('version');
+        try {
+          const packageData = await ResearchContracts.requestJson(
+            `/question-banks/${encodeURIComponent(bankId)}${version ? `?version=${encodeURIComponent(version)}` : ''}`
+          );
+          const restored = questionBankPackageToEditor(packageData);
+          bank = restored.questions;
+          bankMetadata = restored.metadata;
+          currentIndex = 0;
+          currentMode = restored.mode;
+          saveBank();
+          saveBankMetadata();
+          renderBankMetadata();
+          document.getElementById('btnModeStatic').classList.toggle('active', currentMode === 'static');
+          document.getElementById('btnModeDynamic').classList.toggle('active', currentMode === 'dynamic');
+          document.getElementById('temporalContainer').style.display = currentMode === 'dynamic' ? 'block' : 'none';
+          updateUI();
+          setDatabaseStatus(`${packageData.title} · ${bank.length} · UUID ${packageData.bank_id} · v${packageData.version}`, true);
+        } catch (error) {
+          setDatabaseStatus(error.message, false);
         }
       }
 
@@ -1335,7 +1440,8 @@
           if (question.type === 'nominal' || question.type === 'ordinal') {
             if (!Array.isArray(question.options) || question.options.length === 0) return true;
             const values = question.options.map(option => option.s);
-            if (values.some(value => !Number.isFinite(value)) ||
+            if ((question.type === 'ordinal' && values.some(value => !Number.isFinite(value))) ||
+                (question.type === 'nominal' && values.some(value => value === null || value === undefined || String(value).trim() === '')) ||
                 new Set(values.map(String)).size !== values.length ||
                 question.options.some(option => !option.l?.trim())) return true;
           }
@@ -1388,6 +1494,9 @@
           if (sObj.id === v.scale) opt.selected = true;
           scaleSelect.appendChild(opt);
         });
+        if (v.scale && !typeScales.some(scale => scale.id === v.scale)) {
+          scaleSelect.add(new Option(v.scale, v.scale, true, true));
+        }
 
         document.getElementById('questionStatusSelect').value = v.status || 'draft';
         document.getElementById('promptInput').value = v.prompt || '';
@@ -1451,7 +1560,7 @@
           
           line.innerHTML = `
             <input type="text" value="${escapeHtml(opt.l)}" placeholder="${escapeHtml(dict.placeholderCategory)}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
-            <input type="number" id="weight_input_${optIdx}" value="${escapeHtml(opt.s)}" placeholder="${escapeHtml(codeLabel)}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
+            <input type="${v.type === 'ordinal' ? 'number' : 'text'}" id="weight_input_${optIdx}" value="${escapeHtml(opt.s)}" placeholder="${escapeHtml(codeLabel)}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
             <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;">✕</button>
           `;
           wrapper.appendChild(line);
@@ -1495,8 +1604,8 @@
       function updateOptionWeight(optIdx, val) {
         const v = bank[currentIndex];
         if (!v || !v.options[optIdx]) return;
-        const parsed = parseFloat(val);
-        v.options[optIdx].s = (val === '' || isNaN(parsed)) ? null : parsed;
+        const parsed = Number(val);
+        v.options[optIdx].s = val === '' ? null : (v.type === 'ordinal' ? (Number.isFinite(parsed) ? parsed : null) : val);
         saveBank();
         renderPreview();
       }
@@ -1718,7 +1827,9 @@
             question_id: variable.question_id,
             code,
             version: variable.version || 1,
-            block: blockMatch ? blockMatch[0] : code,
+            block: Object.prototype.hasOwnProperty.call(variable, 'block')
+              ? variable.block
+              : (blockMatch ? blockMatch[0] : code),
             family: variable.family || null,
             domain: variable.domain || null,
             parameter: variable.parameter ?? null,
@@ -1734,9 +1845,9 @@
               unit: variable.config?.unit || null,
               direction: variable.config?.direction || null
             },
-            score_direction: ordered
-              ? `higher_is_${direction}_${semanticToken(variable.id)}`
-              : null,
+            score_direction: Object.prototype.hasOwnProperty.call(variable, 'score_direction')
+              ? variable.score_direction
+              : (ordered ? `higher_is_${direction}_${semanticToken(variable.id)}` : null),
             time: {
               tracking_mode: variable.tracking_mode,
               wave: variable.wave,
@@ -1748,7 +1859,8 @@
         saveBank();
         bankMetadata.code = bankCode;
         saveBankMetadata();
-        const generatedAt = new Date().toISOString();
+        const generatedAt = bankMetadata.generated_at || new Date().toISOString();
+        const globalTimeReference = bankMetadata.global_time_reference || generatedAt;
         return {
           schema: 'research_os.question_bank',
           schema_version: 2,
@@ -1757,10 +1869,10 @@
           title,
           version: bankMetadata.version,
           status: bankMetadata.status,
-          primary_language: 'es-MX',
+          primary_language: bankMetadata.primary_language || 'es-MX',
           interface_language: currentLang,
           global_mode: currentMode,
-          global_time_reference: generatedAt,
+          global_time_reference: globalTimeReference,
           generated_at: generatedAt,
           reuse_policy: {
             permission: bankMetadata.reuse_permission || 'attribution_permitted',
@@ -1991,6 +2103,7 @@
           : (storedLanguage.startsWith('en') ? 'en-US' : 'es-MX');
         changeLanguage(interfaceLanguage);
         renderBankMetadata();
+        void loadRegisteredBankForEditing();
       });
     </script>
     <style>
