@@ -46,15 +46,40 @@ test('database analysis contract admits only completed sessions from an owned st
   assert.match(migration, /global_time_reference/);
   assert.match(migration, /questionnaire_item_id/);
   assert.match(migration, /question_version/);
+  assert.match(migration, /'question_prompt', question\.definition -> 'prompt'/);
+  assert.match(migration, /'question_domain', question\.definition -> 'domain'/);
+  assert.match(migration, /'question_parameter', question\.definition -> 'parameter'/);
+  assert.match(migration, /response\.question_id::text \|\| ':v' \|\| response\.question_version::text/);
 });
 
 test('statistical page has no fabricated startup result and exposes the complete method set', async () => {
   const page = await fs.readFile(new URL('../data-analysis.html', import.meta.url), 'utf8');
-  assert.match(page, /import \{ ScientificStats \} from '\.\/analyticsCore\.js'/);
+  assert.match(page, /await import\('\.\/analyticsCore\.js'\)/);
   for (const method of ['pearsonCorrelation','spearmanCorrelation','welchTTest','mannWhitney','oneWayAnova','kruskalWallis','pairedTTest','fisherExact','chiSquareIndependence']) assert.match(page, new RegExp(method));
   assert.match(page, /\/analysis\/studies\//);
   assert.match(page, /ResearchAuth\.requireRole\('researcher'/);
+  assert.match(page, /question_prompt/);
+  assert.match(page, /subject_by_study_timepoint/);
+  assert.match(page, /laggedPearson/);
+  assert.match(page, /changeSpearman/);
   assert.doesNotMatch(page, /"participant_id": "P_01"/);
   assert.doesNotMatch(page, /Условия применимости статистического метода соблюдены/);
   assert.match(page, /CRM Sharks · Ray AI/);
+});
+
+test('statistical page forms reproducible groups from canonical questionnaire answers', async () => {
+  const page = await fs.readFile(new URL('../data-analysis.html', import.meta.url), 'utf8');
+  assert.match(page, /value="derived_group"/);
+  assert.match(page, /function applyDerivedGroupMemberships\(\)/);
+  assert.match(page, /group\.rules\.every/);
+  assert.match(page, /rule\.variable_key/);
+  assert.match(page, /rule\.timepoint_code/);
+  assert.match(page, /is_missing/);
+  assert.match(page, /between/);
+  assert.match(page, /derived_group_definitions/);
+  assert.match(page, /satisfy more than one selected answer-based group/);
+  assert.match(page, /button\.classList\.toggle\('active'/);
+  assert.ok(page.indexOf("applyLanguage(storedLanguage()") < page.indexOf("await import('./analyticsCore.js')"), 'language controls must initialize before the statistics engine');
+  assert.match(page, /<details class="technical"><summary id="technicalSummary">/);
+  assert.doesNotMatch(page, /placeholder="Buscar por código, UUID o escala"/);
 });

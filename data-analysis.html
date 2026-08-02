@@ -1,773 +1,308 @@
-<!DOCTYPE html>
-<html lang="ru">
+<!doctype html>
+<html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Research OS — Статистический модуль</title>
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research OS · Scientific Analysis Workbench</title>
   <style>
-    :root {
-      --bg-color: #0f172a;
-      --card-bg: #1e293b;
-      --accent-color: #38bdf8;
-      --accent-hover: #0ea5e9;
-      --text-color: #f8fafc;
-      --text-muted: #94a3b8;
-      --border-color: #334155;
-      --error-bg: rgba(239, 68, 68, 0.15);
-      --error-color: #f87171;
-      --warning-bg: rgba(245, 158, 11, 0.15);
-      --warning-color: #fbbf24;
-      --success-bg: rgba(16, 185, 129, 0.15);
-      --success-color: #34d399;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      margin: 0;
-      padding: 24px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
-      box-sizing: border-box;
-    }
-
-    .container {
-      max-width: 1350px;
-      width: 100%;
-      background: var(--card-bg);
-      border-radius: 12px;
-      border: 1px solid var(--border-color);
-      padding: 24px;
-      box-sizing: border-box;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--border-color);
-      padding-bottom: 16px;
-      margin-bottom: 20px;
-    }
-
-    .header-left { display: flex; align-items: center; gap: 16px; }
-
-    .hub-btn {
-      background: #334155;
-      color: var(--text-color);
-      padding: 6px 12px;
-      border-radius: 6px;
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
-      border: 1px solid var(--border-color);
-      cursor: pointer;
-    }
-    .hub-btn:hover { background: #475569; }
-
-    .lang-selector { display: flex; gap: 6px; }
-    .lang-selector button {
-      background: transparent;
-      border: 1px solid var(--border-color);
-      color: var(--text-muted);
-      padding: 6px 10px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 13px;
-    }
-    .lang-selector button.active { background: var(--accent-color); color: #0f172a; border-color: var(--accent-color); }
-
-    .workspace {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-    }
-
-    @media (max-width: 950px) {
-      .workspace { grid-template-columns: 1fr; }
-    }
-
-    .panel { display: flex; flex-direction: column; gap: 12px; }
-    .panel-header { display: flex; justify-content: space-between; align-items: center; }
-
-    label { font-weight: 600; font-size: 0.85rem; color: var(--text-muted); }
-
-    textarea, select, input {
-      width: 100%;
-      background: #0f172a;
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 10px 12px;
-      box-sizing: border-box;
-      font-size: 0.9rem;
-    }
-
-    textarea { height: 140px; font-family: monospace; font-size: 0.8rem; resize: vertical; }
-
-    .step-box {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .step-title {
-      font-size: 0.85rem;
-      font-weight: bold;
-      color: var(--accent-color);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .output-card-container {
-      background: #0f172a;
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      padding: 16px;
-      height: 480px;
-      overflow-y: auto;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .metric-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-    }
-
-    .metric-box {
-      background: #1e293b;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      padding: 12px;
-      text-align: center;
-    }
-
-    .metric-value {
-      font-size: 1.4rem;
-      font-weight: bold;
-      color: var(--accent-color);
-      margin-top: 4px;
-    }
-
-    .metric-title {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .trajectory-item {
-      background: #1e293b;
-      border-left: 4px solid var(--accent-color);
-      padding: 10px 14px;
-      border-radius: 4px;
-      font-size: 0.85rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .alert-box {
-      background: var(--error-bg);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: var(--error-color);
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-      line-height: 1.4;
-    }
-
-    .warning-box {
-      background: var(--warning-bg);
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      color: var(--warning-color);
-      padding: 12px;
-      border-radius: 8px;
-      font-size: 0.85rem;
-    }
-
-    .controls { display: flex; gap: 12px; margin-top: 16px; justify-content: flex-end; }
-
-    button.btn {
-      background-color: var(--accent-color);
-      color: #0f172a;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    button.btn:hover { background-color: var(--accent-hover); }
-    button.btn:disabled { background-color: #334155; color: #64748b; cursor: not-allowed; }
-
-    button.btn-secondary {
-      background-color: transparent;
-      color: var(--text-color);
-      border: 1px solid var(--border-color);
-    }
-    button.btn-secondary:hover { background-color: rgba(255, 255, 255, 0.05); }
-
-    .status-bar {
-      margin-top: 12px;
-      padding: 10px;
-      border-radius: 6px;
-      font-size: 0.85rem;
-      display: none;
-    }
-    .status-bar.error { display: block; background-color: var(--error-bg); color: var(--error-color); border: 1px solid rgba(239, 68, 68, 0.3); }
-    .status-bar.success { display: block; background-color: var(--success-bg); color: var(--success-color); border: 1px solid rgba(16, 185, 129, 0.3); }
+    :root{--bg:#0f172a;--panel:#1e293b;--inner:#111827;--line:#334155;--accent:#38bdf8;--text:#f8fafc;--muted:#94a3b8;--ok:#34d399;--bad:#f87171;--warn:#fbbf24}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif}header{position:sticky;top:0;z-index:3;background:var(--panel);border-bottom:1px solid var(--line);padding:12px 20px}.head,main{max-width:1480px;margin:auto}.head,.row,.actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.head{justify-content:space-between}.brand{font-weight:900;color:var(--accent)}a,button{border:1px solid var(--line);border-radius:8px;padding:9px 13px;background:var(--inner);color:var(--text);text-decoration:none;font-weight:750;cursor:pointer}button.primary{background:var(--accent);color:#031014;border-color:var(--accent)}button:disabled{opacity:.45;cursor:not-allowed}button.active{background:var(--accent);color:#031014;border-color:var(--accent)}main{padding:20px 16px 42px}.layout{display:grid;grid-template-columns:minmax(390px,.9fr) minmax(560px,1.1fr);gap:16px}.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}.card h1{font-size:22px;color:var(--accent);margin:0 0 6px}.card h2{font-size:16px;color:#bae6fd;margin:0 0 12px}.card h3{font-size:13px;color:#bae6fd;margin:14px 0 8px}.field{margin-bottom:11px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}label{display:block;color:var(--muted);font-size:12px;font-weight:700;margin-bottom:5px}select,input{width:100%;background:var(--inner);color:var(--text);border:1px solid var(--line);border-radius:7px;padding:9px;font:inherit}select[multiple]{min-height:112px;padding:5px}.status,.notice{border-radius:8px;padding:10px;line-height:1.5;white-space:pre-wrap}.status{background:var(--inner);color:var(--muted)}.status.ok{color:var(--ok);border:1px solid #065f46}.status.error{color:var(--bad);border:1px solid #7f1d1d}.notice{background:#172033;border:1px solid #31566c;color:#cdeffc}.warning{color:var(--warn);border-color:#854d0e}.hidden{display:none!important}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:12px}.metric{background:var(--inner);border:1px solid var(--line);border-radius:8px;padding:10px}.metric b{display:block;color:var(--accent);font-size:18px;margin-top:4px}.table-wrap{overflow:auto;max-height:340px;border:1px solid var(--line);border-radius:8px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}th{position:sticky;top:0;background:#172033;color:#bae6fd;z-index:1}.tag{display:inline-block;padding:2px 6px;border-radius:999px;background:#0c4a6e;color:#bae6fd;margin:1px;font-size:11px}.report{line-height:1.55}.report h3{color:#bae6fd;margin:14px 0 6px}.report ul{margin:6px 0;padding-left:20px}.json{background:#020617;border:1px solid var(--line);border-radius:8px;padding:12px;max-height:390px;overflow:auto;white-space:pre-wrap;font:11px ui-monospace,monospace;color:#cbd5e1}.method-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.method-group{background:var(--inner);border:1px solid var(--line);border-radius:8px;padding:9px}.method-group b{color:#bae6fd;font-size:12px}.method-group label{margin:6px 0 0;color:var(--text);font-weight:500}.method-group input{width:auto;margin-right:6px}.derived-group{background:#0b1220;border:1px solid #31566c;border-radius:9px;padding:10px;margin:9px 0}.derived-group-head{display:grid;grid-template-columns:1fr auto;gap:8px}.derived-rule{display:grid;grid-template-columns:1.35fr .8fr .75fr .65fr auto;gap:6px;margin-top:8px;align-items:end}.derived-rule button,.derived-group-head button{padding:7px 10px}.catalog-search{margin-bottom:8px}.chart{background:var(--inner);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:12px;overflow:auto}.chart svg{display:block;width:100%;min-width:520px;height:auto}footer{text-align:center;color:#64748b;padding:22px}@media(max-width:1050px){.layout,.grid2,.grid3{grid-template-columns:1fr}.metrics{grid-template-columns:1fr 1fr}.derived-rule{grid-template-columns:1fr 1fr}}@media(max-width:600px){.method-grid,.metrics,.derived-rule{grid-template-columns:1fr}}
   </style>
+  <style>.technical{margin-top:7px;color:var(--muted);font-size:11px}.technical summary{cursor:pointer;color:#64748b}.technical code{overflow-wrap:anywhere}.technical .field{margin-top:8px}.quiet{color:var(--muted);font-size:11px}</style>
 </head>
 <body>
+<header><div class="head"><div class="row"><a href="survey.html" id="back">← Gabinete</a><span class="brand">🔬 Research OS · <span id="title">Análisis científico</span></span></div><div class="row"><button type="button" data-lang="es">ES</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="ru">RU</button></div></div></header>
+<main>
+  <section class="card"><h1 id="heading">Banco de trabajo analítico</h1><div id="lead" class="notice">El análisis usa respuestas completadas y registradas. La formación de la muestra, los grupos, las variables, el tiempo y el método quedan en un plan reproducible.</div></section>
+  <div class="layout">
+    <div>
+      <section class="card">
+        <h2 id="sourceHeading">1. Investigación y versión de datos</h2>
+        <div class="field"><label id="studyLabel">Investigación registrada</label><div class="row"><select id="studySelect" style="flex:1"></select><button id="loadStudy">Cargar</button></div></div>
+        <div id="sourceStatus" class="status"></div>
+      </section>
 
-<div class="container">
-  <header>
-    <div class="header-left">
-      <a href="index.html" class="hub-btn" id="lbl-back">← Назад в Hub</a>
-      <span style="font-weight: 600; color: var(--text-muted);" id="lbl-title">Research OS — Статистический модуль</span>
-    </div>
-    <div class="lang-selector">
-      <button onclick="setLanguage('es')" id="lang-es">🇲🇽 ES</button>
-      <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
-      <button onclick="setLanguage('ru')" id="lang-ru" class="active">🇷🇺 RU</button>
-    </div>
-  </header>
-
-  <div class="workspace">
-    <!-- Левая панель -->
-    <div class="panel">
-      
-      <div class="step-box">
-        <div class="step-title" id="lbl-step1">📥 Шаг 1. Загрузка данных анкет (JSON)</div>
-        <input type="file" id="file-loader" accept=".json" style="display:none;" onchange="handleFile(event)">
-        <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" style="width: 100%;" id="lbl-upload">📂 Загрузить файл выгрузки</button>
-        <textarea id="input-data" oninput="validateAndParse()">[
-  { "participant_id": "P_01", "timestamp": "2026-06-01T10:00:00Z", "work_format": "remote", "work_load": 3, "stress_level": 4 },
-  { "participant_id": "P_01", "timestamp": "2026-06-15T14:30:00Z", "work_format": "remote", "work_load": 4, "stress_level": 2 },
-  { "participant_id": "P_02", "timestamp": "2026-06-01T11:15:00Z", "work_format": "office", "work_load": 5, "stress_level": 5 }
-]</textarea>
-      </div>
-
-      <div class="step-box">
-        <div class="step-title" id="lbl-step2">⚙️ Шаг 2. Выбор модели и привязка полей</div>
-        
-        <div>
-          <label id="lbl-analysistype">Тип научного анализа:</label>
-          <select id="analysisType" onchange="toggleAnalysisFields(); validateAndParse();">
-            <option value="longitudinal">Лонгитюдный трекинг (Динамика во времени)</option>
-            <option value="cohorts">Когортный срез (Сравнение групп)</option>
-            <option value="dependency">Анализ зависимостей (Корреляция X -> Y)</option>
-          </select>
+      <section class="card">
+        <h2 id="sampleHeading">2. Constructor de muestra y grupos</h2>
+        <div class="grid2">
+          <div class="field"><label id="populationGroupsLabel">Grupos incluidos</label><select id="populationGroups" multiple></select></div>
+          <div class="field"><label id="populationTimesLabel">Momentos incluidos</label><select id="populationTimes" multiple></select></div>
         </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div id="boxParticipant">
-            <label id="lbl-participant">ID участника (Субъект):</label>
-            <select id="keyParticipant" onchange="validateAndParse()"></select>
-          </div>
-          <div id="boxTimestamp">
-            <label id="lbl-timestamp">Время (Авто-фиксация):</label>
-            <select id="keyTimestamp" onchange="validateAndParse()"></select>
+        <div class="grid2">
+          <div class="field"><label id="populationQuestionnairesLabel">Cuestionarios incluidos</label><select id="populationQuestionnaires" multiple></select></div>
+          <div>
+            <div class="field"><label id="dateFromLabel">Respuesta desde</label><input id="dateFrom" type="datetime-local"></div>
+            <div class="field"><label id="dateToLabel">Respuesta hasta</label><input id="dateTo" type="datetime-local"></div>
           </div>
         </div>
+        <div class="field"><label id="groupDimensionLabel">Dimensión para comparar grupos</label><select id="groupDimension"><option value="derived_group">Grupos formados por respuestas</option><option value="group_code">Grupo registrado</option><option value="timepoint_code">Momento del estudio</option></select></div>
+        <details class="technical"><summary id="technicalSummary">Detalles técnicos</summary><div class="field"><label id="subjectLabel">Identificador longitudinal interno</label><select id="subjectKey"><option value="subject_link_id">subject_link_id</option><option value="participant_id">participant_id</option></select></div></details>
+        <h3 id="derivedHeading">Grupos analíticos formados por respuestas</h3>
+        <div id="derivedLead" class="notice">Cada grupo se forma por participantes que cumplen todas sus reglas. Cada regla usa una pregunta real, una temporalidad, un operador y un valor. Los solapamientos se muestran y bloquean las pruebas de grupos independientes.</div>
+        <div id="derivedGroups"></div>
+        <button id="addDerivedGroup">+ Añadir grupo por respuestas</button>
+        <div class="field"><label id="analysisLevelsLabel">Niveles usados en la comparación</label><select id="analysisLevels" multiple></select></div>
+        <div class="actions"><button id="selectAllFilters">Seleccionar todo</button><button class="primary" id="applySample">Aplicar muestra</button></div>
+      </section>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div id="wrapperSplit" style="display:none;">
-            <label id="lbl-split">Фактор группы (Когорта):</label>
-            <select id="keySplit" onchange="validateAndParse()"></select>
-          </div>
-          <div id="wrapperX" style="display:none;">
-            <label id="lbl-pred">Предиктор (Переменная X):</label>
-            <select id="keyX" onchange="validateAndParse()"></select>
-          </div>
-          <div id="boxTarget">
-            <label id="lbl-target">Целевая шкала / Метрика (Y):</label>
-            <select id="keyTarget" onchange="validateAndParse()"></select>
-          </div>
-        </div>
-      </div>
-
-      <!-- Контейнер для динамических предупреждений защиты от дурака -->
-      <div id="guard-warning-container"></div>
-
+      <section class="card">
+        <h2 id="variablesHeading">3. Variables científicas disponibles</h2>
+        <input id="variableSearch" class="catalog-search" type="search" placeholder="Buscar una pregunta o variable">
+        <div class="table-wrap"><table><thead><tr><th id="varNameHead">Variable</th><th id="varScaleHead">Escala</th><th>N</th><th id="varContextHead">Contexto</th></tr></thead><tbody id="variableCatalog"></tbody></table></div>
+      </section>
     </div>
 
-    <!-- Правая панель -->
-    <div class="panel">
-      <div class="panel-header">
-        <label style="font-weight: bold; color: var(--text-color);" id="lbl-results-title">📊 Результаты проверки и расчет:</label>
-      </div>
-      <div id="output-container" class="output-card-container"></div>
-      <div class="controls" style="margin-top: 0;">
-        <button class="btn btn-secondary" onclick="clearData()" id="lbl-clear">Сбросить</button>
-        <button class="btn" id="runAnalysisBtn" onclick="executeScientificAnalysis()">🚀 Запустить анализ</button>
-      </div>
+    <div>
+      <section class="card">
+        <h2 id="auditHeading">4. Auditoría de la muestra formada</h2>
+        <div class="metrics"><div class="metric"><span id="subjectsMetricLabel">Sujetos</span><b id="subjectsMetric">0</b></div><div class="metric"><span id="sessionsMetricLabel">Sesiones</span><b id="sessionsMetric">0</b></div><div class="metric"><span id="responsesMetricLabel">Respuestas</span><b id="responsesMetric">0</b></div><div class="metric"><span id="variablesMetricLabel">Variables</span><b id="variablesMetric">0</b></div></div>
+        <div class="table-wrap"><table><thead><tr><th id="levelHead">Grupo / nivel</th><th id="subjectsHead">Sujetos</th><th id="sessionsHead">Sesiones</th><th id="responsesHead">Respuestas</th></tr></thead><tbody id="groupAudit"></tbody></table></div>
+        <div id="sampleWarnings" class="notice" style="margin-top:10px"></div>
+      </section>
+
+      <section class="card">
+        <h2 id="designHeading">5. Diseño, variables y método</h2>
+        <div class="method-grid" id="methodGrid"></div>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field"><label id="outcomeLabel">Variable resultado Y</label><select id="outcomeVariable"></select></div>
+          <div class="field" id="predictorWrap"><label id="predictorLabel">Variable predictora X</label><select id="predictorVariable"></select></div>
+        </div>
+        <div id="timeControls" class="hidden">
+          <div class="grid2"><div class="field"><label id="timeALabel">Momento A</label><select id="timeA"></select></div><div class="field"><label id="timeBLabel">Momento B</label><select id="timeB"></select></div></div>
+          <div class="field hidden" id="repeatedTimesWrap"><label id="repeatedTimesLabel">Momentos repetidos, en orden</label><select id="repeatedTimes" multiple></select></div>
+        </div>
+        <div id="methodDiagnostics" class="notice"></div>
+        <div class="actions" style="margin-top:12px"><button id="validatePlan">Validar plan</button><button class="primary" id="run" disabled>Calcular</button><button id="export" disabled>Exportar JSON</button></div>
+      </section>
+
+      <section class="card"><h2 id="resultsHeading">6. Resultado científico reproducible</h2><div id="analysisChart" class="hidden"></div><div id="result" class="status">No se ha ejecutado ningún análisis.</div></section>
     </div>
   </div>
+</main>
+<footer>✨ CRM Sharks · Ray AI | Research OS Pilot</footer>
+<script src="auth.js"></script>
+<script type="module">
+let ScientificStats=null;
 
-  <div id="status-message" class="status-bar"></div>
-</div>
+const I18N={
+  es:{back:'← Gabinete',title:'Análisis científico',heading:'Banco de trabajo analítico',lead:'El análisis usa respuestas completadas y registradas. La formación de la muestra, los grupos, las variables, el tiempo y el método quedan en un plan reproducible.',source:'1. Investigación y versión de datos',study:'Investigación registrada',load:'Cargar',sample:'2. Constructor de muestra y grupos',populationGroups:'Grupos incluidos',populationTimes:'Momentos incluidos',populationQuestionnaires:'Cuestionarios incluidos',dateFrom:'Respuesta desde',dateTo:'Respuesta hasta',subject:'Identificador longitudinal',groupDimension:'Dimensión para comparar grupos',analysisLevels:'Niveles usados en la comparación',all:'Seleccionar todo',apply:'Aplicar muestra',variables:'3. Variables científicas disponibles',varName:'Variable',varScale:'Escala',varContext:'Contexto',audit:'4. Auditoría de la muestra formada',subjects:'Sujetos',sessions:'Sesiones',responses:'Respuestas',variablesMetric:'Variables',level:'Grupo / nivel',design:'5. Diseño, variables y método',outcome:'Variable resultado Y',predictor:'Variable predictora X',timeA:'Momento A',timeB:'Momento B',repeatedTimes:'Momentos repetidos, en orden',validate:'Validar plan',run:'Calcular',export:'Exportar JSON',results:'6. Resultado científico reproducible',none:'No se ha ejecutado ningún análisis.',empty:'No hay respuestas completadas para esta versión del estudio.',loaded:'respuestas completadas cargadas',planValid:'El plan es computable. Revise además los supuestos de diseño indicados.',pHelp:'El valor p no es la probabilidad de que la hipótesis sea verdadera. Debe interpretarse con el tamaño del efecto, el intervalo, el diseño, la calidad y la multiplicidad.',assumptions:'Supuestos que requieren revisión',notes:'Notas y límites',raw:'Registro reproducible'},
+  en:{back:'← Cabinet',title:'Scientific analysis',heading:'Scientific analysis workbench',lead:'Analysis uses registered completed responses. Sample formation, groups, variables, time and method are retained in a reproducible plan.',source:'1. Study and data version',study:'Registered study',load:'Load',sample:'2. Sample and group builder',populationGroups:'Included groups',populationTimes:'Included timepoints',populationQuestionnaires:'Included questionnaires',dateFrom:'Answered from',dateTo:'Answered until',subject:'Longitudinal subject identifier',groupDimension:'Group comparison dimension',analysisLevels:'Levels used in comparison',all:'Select all',apply:'Apply sample',variables:'3. Available scientific variables',varName:'Variable',varScale:'Scale',varContext:'Context',audit:'4. Formed-sample audit',subjects:'Subjects',sessions:'Sessions',responses:'Responses',variablesMetric:'Variables',level:'Group / level',design:'5. Design, variables and method',outcome:'Outcome variable Y',predictor:'Predictor variable X',timeA:'Timepoint A',timeB:'Timepoint B',repeatedTimes:'Repeated timepoints in order',validate:'Validate plan',run:'Calculate',export:'Export JSON',results:'6. Reproducible scientific result',none:'No analysis has been run.',empty:'This study version has no completed responses.',loaded:'completed responses loaded',planValid:'The plan is computationally valid. Review the listed design assumptions as well.',pHelp:'The p-value is not the probability that the hypothesis is true. Interpret it with effect size, interval, design, data quality and multiplicity.',assumptions:'Assumptions requiring review',notes:'Notes and limitations',raw:'Reproducible record'},
+  ru:{back:'← Кабинет',title:'Научный анализ',heading:'Рабочее место научного анализа',lead:'Анализ использует зарегистрированные завершённые ответы. Сформированная выборка, группы, переменные, время и метод сохраняются в воспроизводимом плане.',source:'1. Исследование и версия данных',study:'Зарегистрированное исследование',load:'Загрузить',sample:'2. Конструктор выборки и групп',populationGroups:'Включённые группы',populationTimes:'Включённые временные точки',populationQuestionnaires:'Включённые анкеты',dateFrom:'Ответы начиная с',dateTo:'Ответы до',subject:'Идентификатор участника в динамике',groupDimension:'Признак сравниваемых групп',analysisLevels:'Уровни, включённые в сравнение',all:'Выбрать всё',apply:'Сформировать выборку',variables:'3. Доступные научные переменные',varName:'Переменная',varScale:'Шкала',varContext:'Контекст',audit:'4. Аудит сформированной выборки',subjects:'Участники',sessions:'Сессии',responses:'Ответы',variablesMetric:'Переменные',level:'Группа / уровень',design:'5. Дизайн, переменные и метод',outcome:'Зависимая переменная Y',predictor:'Предиктор X',timeA:'Временная точка A',timeB:'Временная точка B',repeatedTimes:'Повторные временные точки по порядку',validate:'Проверить план',run:'Рассчитать',export:'Экспорт JSON',results:'6. Воспроизводимый научный результат',none:'Анализ ещё не запускался.',empty:'Для этой версии исследования нет завершённых ответов.',loaded:'завершённых ответов загружено',planValid:'План вычислим. Отдельно проверьте перечисленные предпосылки дизайна.',pHelp:'p-value не является вероятностью истинности гипотезы. Его интерпретируют вместе с размером эффекта, интервалом, дизайном, качеством данных и множественностью.',assumptions:'Предпосылки, требующие проверки',notes:'Примечания и ограничения',raw:'Воспроизводимая запись'}
+};
 
-<script>
-  let currentLang = 'ru';
+Object.assign(I18N.es,{derivedDimension:'Grupos formados por respuestas',storedDimension:'Grupo registrado',timeDimension:'Momento del estudio',derivedHeading:'Grupos analíticos formados por respuestas',derivedLead:'Cada grupo contiene participantes que cumplen todas sus reglas. Cada regla usa una pregunta real, un momento, un operador y un valor. Los solapamientos se muestran y bloquean las pruebas de grupos independientes.',addDerivedGroup:'+ Añadir grupo por respuestas',groupName:'Nombre del grupo',removeGroup:'Eliminar grupo',addRule:'+ Añadir condición AND',variableCriterion:'Pregunta / variable',timeCriterion:'Momento',operator:'Operador',value:'Valor',valueTo:'Hasta',removeRule:'Eliminar'});
+Object.assign(I18N.en,{derivedDimension:'Groups formed from answers',storedDimension:'Registered group',timeDimension:'Study timepoint',derivedHeading:'Analytical groups formed from answers',derivedLead:'Each group contains participants who satisfy all its rules. Each rule uses a real question, timepoint, operator and value. Overlaps are reported and block independent-group tests.',addDerivedGroup:'+ Add answer-defined group',groupName:'Group name',removeGroup:'Remove group',addRule:'+ Add AND condition',variableCriterion:'Question / variable',timeCriterion:'Timepoint',operator:'Operator',value:'Value',valueTo:'To',removeRule:'Remove'});
+Object.assign(I18N.ru,{derivedDimension:'Группы по ответам',storedDimension:'Зарегистрированная группа',timeDimension:'Временная точка исследования',derivedHeading:'Аналитические группы по результатам опросов',derivedLead:'В группу входят участники, удовлетворяющие всем её условиям. Условие использует реальный вопрос, временную точку, оператор и значение. Пересечения отображаются и блокируют тесты независимых групп.',addDerivedGroup:'+ Добавить группу по ответам',groupName:'Название группы',removeGroup:'Удалить группу',addRule:'+ Добавить условие И',variableCriterion:'Вопрос / переменная',timeCriterion:'Временная точка',operator:'Оператор',value:'Значение',valueTo:'До',removeRule:'Удалить'});
+Object.assign(I18N.es,{technicalSummary:'Detalles técnicos',technicalId:'Identidad técnica',variableSearch:'Buscar una pregunta o variable'});Object.assign(I18N.en,{technicalSummary:'Technical details',technicalId:'Technical identity',variableSearch:'Find a question or variable'});Object.assign(I18N.ru,{technicalSummary:'Технические детали',technicalId:'Техническая идентичность',variableSearch:'Найти вопрос или переменную'});
+const OPERATORS={equals:{es:'=',en:'=',ru:'='},not_equals:{es:'≠',en:'≠',ru:'≠'},greater:{es:'>',en:'>',ru:'>'},greater_equal:{es:'≥',en:'≥',ru:'≥'},less:{es:'<',en:'<',ru:'<'},less_equal:{es:'≤',en:'≤',ru:'≤'},between:{es:'Entre',en:'Between',ru:'Диапазон'},contains:{es:'Contiene',en:'Contains',ru:'Содержит'},is_missing:{es:'Sin respuesta',en:'Missing',ru:'Нет ответа'},is_not_missing:{es:'Con respuesta',en:'Not missing',ru:'Есть ответ'}};
 
-  const i18n = {
-    ru: {
-      back: "← Назад в Hub",
-      title: "Research OS — Статистический модуль",
-      step1: "📥 Шаг 1. Загрузка данных анкет (JSON)",
-      upload: "📂 Загрузить файл выгрузки",
-      step2: "⚙️ Шаг 2. Выбор модели и привязка полей",
-      analysisType: "Тип научного анализа:",
-      optLong: "Лонгитюдный трекинг (Динамика во времени)",
-      optCoh: "Когортный срез (Сравнение групп)",
-      optDep: "Анализ зависимостей (Корреляция X -> Y)",
-      participant: "ID участника (Субъект):",
-      timestamp: "Время (Авто-фиксация):",
-      split: "Фактор группы (Когорта):",
-      pred: "Предиктор (Переменная X):",
-      target: "Целевая шкала / Метрика (Y):",
-      resultsTitle: "📊 Результаты проверки и расчет:",
-      clear: "Сбросить",
-      run: "🚀 Запустить анализ",
-      statusSuccess: "Файл успешно загружен и прошел структурный аудит.",
-      statusRun: "Статистический анализ успешно выполнен.",
-      statusErr: "Ошибка чтения файла.",
-      emptyOutput: "Данные очищены. Загрузите файл выгрузки.",
-      auditOk: "✅ Структура данных прошла предварительный аудит. Условия применимости статистического метода соблюдены.",
-      errNotArray: "Корневой элемент JSON должен быть массивом объектов [...], а не единичным объектом.",
-      errEmpty: "Переданный массив данных пуст.",
-      errLong: "⚠️ Лонгитюдный анализ заблокирован: ни у одного участника нет двух и более временных волн (нужно минимум 2 записи на один ID).",
-      errDep: "⚠️ Анализ зависимостей заблокирован: найдено менее 3 пар валидных числовых значений для переменных X и Y (требуется n >= 3).",
-      errCoh: "⚠️ Когортный срез заблокирован: фактор группы содержит менее 2 уникальных категорий для сравнения.",
-      errJson: "Ошибка разбора JSON: проверьте синтаксис кавычек и запятых.",
-      blockedMsg: "Расчет заблокирован из-за несоответствия научным требованиям выборки. См. предупреждения слева.",
-      totalSubjects: "Всего субъектов",
-      meanShift: "Средний сдвиг",
-      trajectories: "Динамика индивидуальных треков:",
-      cohortResults: "Результаты межгруппового сравнения (Когорты):",
-      mean: "Среднее",
-      median: "Медиана",
-      stdDev: "Ст. отклонение",
-      pearson: "Коэффициент Пирсона (r)",
-      interpretation: "Интерпретация связи",
-      sampleSize: "Объем выборки парных наблюдений:",
-      strongLink: "Сильная связь",
-      modLink: "Умеренная связь",
-      weakLink: "Слабая / Отсутствует"
-    },
-    en: {
-      back: "← Back to Hub",
-      title: "Research OS — Statistical Module",
-      step1: "📥 Step 1. Load Questionnaire Data (JSON)",
-      upload: "📂 Upload Dataset File",
-      step2: "⚙️ Step 2. Model Selection & Field Mapping",
-      analysisType: "Scientific Analysis Type:",
-      optLong: "Longitudinal Tracking (Time Dynamics)",
-      optCoh: "Cohort Slice (Group Comparison)",
-      optDep: "Dependency Analysis (Correlation X -> Y)",
-      participant: "Participant ID (Subject):",
-      timestamp: "Timestamp (Auto-fixed):",
-      split: "Group Factor (Cohort):",
-      pred: "Predictor (Variable X):",
-      target: "Target Scale / Metric (Y):",
-      resultsTitle: "📊 Validation & Calculation Results:",
-      clear: "Reset",
-      run: "🚀 Run Analysis",
-      statusSuccess: "File successfully uploaded and passed structural audit.",
-      statusRun: "Statistical analysis successfully completed.",
-      statusErr: "File read error.",
-      emptyOutput: "Data cleared. Upload a dataset file.",
-      auditOk: "✅ Data structure passed preliminary audit. Statistical applicability conditions are met.",
-      errNotArray: "Root JSON element must be an array of objects [...], not a single object.",
-      errEmpty: "The provided dataset array is empty.",
-      errLong: "⚠️ Longitudinal analysis blocked: no participant has two or more waves (at least 2 records per ID required).",
-      errDep: "⚠️ Dependency analysis blocked: fewer than 3 valid numeric pairs found for variables X and Y (requires n >= 3).",
-      errCoh: "⚠️ Cohort slice blocked: group factor contains less than 2 unique categories for comparison.",
-      errJson: "JSON parse error: check quotes and commas syntax.",
-      blockedMsg: "Calculation blocked due to sample mismatch with scientific requirements. See warnings on the left.",
-      totalSubjects: "Total Subjects",
-      meanShift: "Mean Shift",
-      trajectories: "Individual Track Dynamics:",
-      cohortResults: "Intergroup Comparison Results (Cohorts):",
-      mean: "Mean",
-      median: "Median",
-      stdDev: "Std Dev",
-      pearson: "Pearson Coefficient (r)",
-      interpretation: "Relationship Interpretation",
-      sampleSize: "Paired observations sample size:",
-      strongLink: "Strong correlation",
-      modLink: "Moderate correlation",
-      weakLink: "Weak / None"
-    },
-    es: {
-      back: "← Volver al Hub",
-      title: "Research OS — Módulo Estadístico",
-      step1: "📥 Paso 1. Cargar Datos de Encuestas (JSON)",
-      upload: "📂 Cargar Archivo de Datos",
-      step2: "⚙️ Paso 2. Selección de Modelo y Mapeo de Campos",
-      analysisType: "Tipo de Análisis Científico:",
-      optLong: "Seguimiento Longitudinal (Dinámica Temporal)",
-      optCoh: "Corte de Cohortes (Comparación de Grupos)",
-      optDep: "Análisis de Dependencias (Correlación X -> Y)",
-      participant: "ID de Participante (Sujeto):",
-      timestamp: "Marca de tiempo (Auto-fijada):",
-      split: "Factor de Grupo (Cohorte):",
-      pred: "Predictor (Variable X):",
-      target: "Escala Objetivo / Métrica (Y):",
-      resultsTitle: "📊 Resultados de Validación y Cálculo:",
-      clear: "Reiniciar",
-      run: "🚀 Ejecutar Análisis",
-      statusSuccess: "Archivo cargado con éxito y auditado estructuralmente.",
-      statusRun: "Análisis estadístico completado con éxito.",
-      statusErr: "Error de lectura de archivo.",
-      emptyOutput: "Datos borrados. Cargue un archivo de datos.",
-      auditOk: "✅ La estructura de datos pasó la auditoría previa. Se cumplen las condiciones de aplicabilidad estadística.",
-      errNotArray: "El elemento raíz JSON debe ser un array de objetos [...], no un objeto único.",
-      errEmpty: "El array de datos proporcionado está vacío.",
-      errLong: "⚠️ Análisis longitudinal bloqueado: ningun participante tiene dos o más olas (se requieren al menos 2 registros por ID).",
-      errDep: "⚠️ Análisis de dependencias bloqueado: se encontraron menos de 3 pares numéricos válidos para X e Y (requiere n >= 3).",
-      errCoh: "⚠️ Corte de cohortes bloqueado: el factor de grupo contiene menos de 2 categorías únicas para comparar.",
-      errJson: "Error de análisis JSON: verifique la sintaxis de comillas y comas.",
-      blockedMsg: "Cálculo bloqueado debido a incumplimiento de requisitos científicos de la muestra. Ver advertencias a la izquierda.",
-      totalSubjects: "Sujetos Totales",
-      meanShift: "Cambio Medio",
-      trajectories: "Dinámica de Pistas Individuales:",
-      cohortResults: "Resultados de Comparación Intergrupal (Cohortes):",
-      mean: "Media",
-      median: "Mediana",
-      stdDev: "Desviación Est.",
-      pearson: "Coeficiente de Pearson (r)",
-      interpretation: "Interpretación de Relación",
-      sampleSize: "Tamaño de muestra de observaciones emparejadas:",
-      strongLink: "Correlación fuerte",
-      modLink: "Correlación moderada",
-      weakLink: "Débil / Ninguna"
-    }
-  };
+const GROUP_LABELS={description:{es:'Descripción',en:'Description',ru:'Описание'},association:{es:'Dependencias',en:'Associations',ru:'Зависимости'},independent:{es:'Grupos independientes',en:'Independent groups',ru:'Независимые группы'},categorical:{es:'Datos categóricos',en:'Categorical data',ru:'Категориальные данные'},repeated:{es:'Tiempo y medidas repetidas',en:'Time and repeated measures',ru:'Время и повторные измерения'},temporal:{es:'Dependencias temporales',en:'Temporal associations',ru:'Временные зависимости'}};
+const METHODS=[
+  {id:'descriptive',group:'description',label:{es:'Estadística descriptiva',en:'Descriptive statistics',ru:'Описательная статистика'},needs:['y']},
+  {id:'pearsonCorrelation',group:'association',label:{es:'Correlación de Pearson',en:'Pearson correlation',ru:'Корреляция Пирсона'},needs:['x','y']},
+  {id:'spearmanCorrelation',group:'association',label:{es:'Correlación de Spearman',en:'Spearman correlation',ru:'Корреляция Спирмена'},needs:['x','y']},
+  {id:'simpleLinearRegression',group:'association',label:{es:'Regresión lineal OLS',en:'OLS linear regression',ru:'Линейная регрессия OLS'},needs:['x','y']},
+  {id:'welchTTest',group:'independent',label:{es:'t de Welch',en:'Welch t-test',ru:'t-критерий Уэлча'},needs:['y','groups']},
+  {id:'mannWhitney',group:'independent',label:{es:'U de Mann–Whitney',en:'Mann–Whitney U',ru:'Манна–Уитни U'},needs:['y','groups']},
+  {id:'oneWayAnova',group:'independent',label:{es:'ANOVA de un factor',en:'One-way ANOVA',ru:'Однофакторный ANOVA'},needs:['y','groups']},
+  {id:'kruskalWallis',group:'independent',label:{es:'Kruskal–Wallis',en:'Kruskal–Wallis',ru:'Краскела–Уоллиса'},needs:['y','groups']},
+  {id:'pairwiseWelchHolm',group:'independent',label:{es:'Comparaciones Welch + Holm',en:'Pairwise Welch + Holm',ru:'Попарный Welch + Holm'},needs:['y','groups']},
+  {id:'dunnHolm',group:'independent',label:{es:'Comparaciones Dunn + Holm',en:'Dunn comparisons + Holm',ru:'Сравнения Dunn + Holm'},needs:['y','groups']},
+  {id:'fisherExact',group:'categorical',label:{es:'Fisher exacto 2×2',en:'Fisher exact 2×2',ru:'Точный Фишера 2×2'},needs:['x','y']},
+  {id:'chiSquareIndependence',group:'categorical',label:{es:'χ² de independencia',en:'χ² independence',ru:'χ² независимости'},needs:['x','y']},
+  {id:'pairedTTest',group:'repeated',label:{es:'t pareada',en:'Paired t-test',ru:'Парный t-критерий'},needs:['y','twoTimes']},
+  {id:'repeatedMeasuresAnova',group:'repeated',label:{es:'ANOVA de medidas repetidas',en:'Repeated-measures ANOVA',ru:'ANOVA повторных измерений'},needs:['y','manyTimes']},
+  {id:'friedmanTest',group:'repeated',label:{es:'Prueba de Friedman',en:'Friedman test',ru:'Критерий Фридмана'},needs:['y','manyTimes']},
+  {id:'laggedPearson',group:'temporal',label:{es:'Pearson X(A) → Y(B)',en:'Pearson X(A) → Y(B)',ru:'Пирсон X(A) → Y(B)'},needs:['x','y','twoTimes']},
+  {id:'laggedSpearman',group:'temporal',label:{es:'Spearman X(A) → Y(B)',en:'Spearman X(A) → Y(B)',ru:'Спирмен X(A) → Y(B)'},needs:['x','y','twoTimes']},
+  {id:'changePearson',group:'temporal',label:{es:'Pearson ΔX ↔ ΔY',en:'Pearson ΔX ↔ ΔY',ru:'Пирсон ΔX ↔ ΔY'},needs:['x','y','twoTimes']},
+  {id:'changeSpearman',group:'temporal',label:{es:'Spearman ΔX ↔ ΔY',en:'Spearman ΔX ↔ ΔY',ru:'Спирмен ΔX ↔ ΔY'},needs:['x','y','twoTimes']}
+];
 
-  function setLanguage(lang) {
-    currentLang = lang;
-    document.querySelectorAll('.lang-selector button').forEach(b => b.classList.remove('active'));
-    document.getElementById(`lang-${lang}`).classList.add('active');
+let lang='es',principal=null,studies=[],rawRecords=[],filteredRecords=[],sessionRows=[],variables=[],derivedGroups=[],sourceIdentity=null,lastSnapshot=null,selectedMethod='descriptive';
+const $=id=>document.getElementById(id);
+function esc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
+function headers(){return ResearchAuth.authHeaders('researcher');}
+async function request(url){const response=await fetch(url,{headers:headers()});const payload=await response.json();if(!response.ok)throw new Error(payload.error||String(response.status));return payload;}
+function selectedValues(select){return [...select.selectedOptions].map(option=>option.value);}
+function unique(values){return [...new Set(values.filter(value=>value!==null&&value!==undefined&&String(value)!==''))];}
+function variableKey(record){return `question:${record.question_id}:v${record.question_version}`;}
+function scalar(value){return Array.isArray(value)||value&&typeof value==='object'?JSON.stringify(value):value;}
+function finite(value){const number=Number(value);return Number.isFinite(number)?number:null;}
+function localizedText(value){if(value&&typeof value==='object'&&!Array.isArray(value))return value[lang]||value[`${lang}-MX`]||value[`${lang}-US`]||value.es||value.en||value.ru||Object.values(value)[0]||'';return value??'';}
+function orderedTimepoints(records){const map=new Map();records.forEach(record=>{if(record.timepoint_code!==null&&record.timepoint_code!==undefined)map.set(String(record.timepoint_code),Number(record.timepoint_ordinal));});return [...map.entries()].sort((a,b)=>(Number.isFinite(a[1])?a[1]:Infinity)-(Number.isFinite(b[1])?b[1]:Infinity)||a[0].localeCompare(b[0])).map(([code])=>code);}
+function timepointLabel(code){const row=(filteredRecords.length?filteredRecords:rawRecords).find(record=>String(record.timepoint_code)===String(code));return localizedText(row?.timepoint_title)||String(code);}
+function fillMulti(select,values,label=value=>value){const prior=new Set(selectedValues(select));select.innerHTML='';values.forEach(value=>{const option=new Option(label(value),String(value));option.selected=!prior.size||prior.has(String(value));select.add(option);});if(select.options.length&&![...select.options].some(option=>option.selected))[...select.options].forEach(option=>{option.selected=true;});}
+function fillSelect(select,items,label=item=>item.label,value=item=>item.key){const prior=select.value;select.innerHTML='';items.forEach(item=>select.add(new Option(label(item),value(item))));if([...select.options].some(option=>option.value===prior))select.value=prior;}
+function setStatus(message,error=false){$('sourceStatus').textContent=message;$('sourceStatus').className=`status ${error?'error':'ok'}`;}
+function storedLanguage(){try{return localStorage.getItem('app_language')||'es';}catch{return 'es';}}
+function rememberLanguage(value){try{localStorage.setItem('app_language',value);}catch{/* File previews may have opaque storage; the visible language still changes. */}}
 
-    // Обновляем тексты интерфейса
-    const t = i18n[lang];
-    document.getElementById('lbl-back').innerText = t.back;
-    document.getElementById('lbl-title').innerText = t.title;
-    document.getElementById('lbl-step1').innerText = t.step1;
-    document.getElementById('lbl-upload').innerText = t.upload;
-    document.getElementById('lbl-step2').innerText = t.step2;
-    document.getElementById('lbl-analysistype').innerText = t.analysisType;
-    
-    const sel = document.getElementById('analysisType');
-    sel.options[0].text = t.optLong;
-    sel.options[1].text = t.optCoh;
-    sel.options[2].text = t.optDep;
+function applyLanguage(value){
+  lang=I18N[value]?value:'es';rememberLanguage(lang);document.documentElement.lang=lang;const t=I18N[lang];
+  const map={back:'back',title:'title',heading:'heading',lead:'lead',sourceHeading:'source',studyLabel:'study',loadStudy:'load',sampleHeading:'sample',populationGroupsLabel:'populationGroups',populationTimesLabel:'populationTimes',populationQuestionnairesLabel:'populationQuestionnaires',dateFromLabel:'dateFrom',dateToLabel:'dateTo',subjectLabel:'subject',technicalSummary:'technicalSummary',groupDimensionLabel:'groupDimension',derivedHeading:'derivedHeading',derivedLead:'derivedLead',addDerivedGroup:'addDerivedGroup',analysisLevelsLabel:'analysisLevels',selectAllFilters:'all',applySample:'apply',variablesHeading:'variables',varNameHead:'varName',varScaleHead:'varScale',varContextHead:'varContext',auditHeading:'audit',subjectsMetricLabel:'subjects',sessionsMetricLabel:'sessions',responsesMetricLabel:'responses',variablesMetricLabel:'variablesMetric',levelHead:'level',subjectsHead:'subjects',sessionsHead:'sessions',responsesHead:'responses',designHeading:'design',outcomeLabel:'outcome',predictorLabel:'predictor',timeALabel:'timeA',timeBLabel:'timeB',repeatedTimesLabel:'repeatedTimes',validatePlan:'validate',run:'run',export:'export',resultsHeading:'results'};
+  Object.entries(map).forEach(([id,key])=>{$(id).textContent=t[key];});$('variableSearch').placeholder=t.variableSearch;document.querySelectorAll('[data-lang]').forEach(button=>button.classList.toggle('active',button.dataset.lang===lang));const dimensionOptions=$('groupDimension').options;dimensionOptions[0].textContent=t.derivedDimension;dimensionOptions[1].textContent=t.storedDimension;dimensionOptions[2].textContent=t.timeDimension;if(!lastSnapshot)$('result').textContent=t.none;renderMethods();renderVariableCatalog();renderDerivedGroups();
+}
 
-    document.getElementById('lbl-participant').innerText = t.participant;
-    document.getElementById('lbl-timestamp').innerText = t.timestamp;
-    document.getElementById('lbl-split').innerText = t.split;
-    document.getElementById('lbl-pred').innerText = t.pred;
-    document.getElementById('lbl-target').innerText = t.target;
-    document.getElementById('lbl-results-title').innerText = t.resultsTitle;
-    document.getElementById('lbl-clear').innerText = t.clear;
-    document.getElementById('runAnalysisBtn').innerText = t.run;
+function renderMethods(){
+  const groups=new Map();METHODS.forEach(method=>{if(!groups.has(method.group))groups.set(method.group,[]);groups.get(method.group).push(method);});
+  $('methodGrid').innerHTML=[...groups.entries()].map(([group,methods])=>`<div class="method-group"><b>${esc(GROUP_LABELS[group]?.[lang]||group)}</b>${methods.map(method=>`<label><input type="radio" name="method" value="${esc(method.id)}"${method.id===selectedMethod?' checked':''}>${esc(method.label[lang]||method.label.en)}</label>`).join('')}</div>`).join('');
+  document.querySelectorAll('input[name=method]').forEach(input=>input.addEventListener('change',()=>{selectedMethod=input.value;renderMethodControls();invalidatePlan();}));
+}
 
-    validateAndParse();
+function buildVariables(records){
+  const map=new Map();const sessionCounts=new Map();
+  records.forEach(record=>{
+    const key=variableKey(record);if(!map.has(key))map.set(key,{key,question_id:record.question_id,question_version:record.question_version,code:record.question_code||record.code,prompt:record.question_prompt||null,type:record.question_type||null,domain:record.question_domain??null,parameter:record.question_parameter??null,score_direction:record.score_direction??null,time:record.question_time??null,scale:record.scale_snapshot||null,n:0,numeric_n:0,contexts:new Set(),questionnaires:new Set()});
+    const variable=map.get(key);variable.n+=1;if(finite(record.value)!==null)variable.numeric_n+=1;variable.contexts.add(record.questionnaire_item_id);variable.questionnaires.add(record.questionnaire_id);
+    const subject=record[$('subjectKey').value]||record.participant_id||record.session_id;
+    const measurement=record.timepoint_id||record.timepoint_code||record.session_id;
+    const collisionKey=`${subject}|${measurement}|${key}`;sessionCounts.set(collisionKey,(sessionCounts.get(collisionKey)||0)+1);
+  });
+  return [...map.values()].map(variable=>({...variable,contexts:[...variable.contexts],questionnaires:[...variable.questionnaires],duplicate_sessions:[...sessionCounts.entries()].filter(([key,count])=>key.endsWith(`|${variable.key}`)&&count>1).length})).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+}
+
+function pivotRecords(records){
+  const rows=new Map();
+  records.forEach(record=>{
+    const subjectKey=$('subjectKey').value,subject=record[subjectKey]||record.participant_id||record.session_id,measurement=record.timepoint_id||record.timepoint_code||record.session_id,rowKey=`${subject}|${measurement}`;
+    if(!rows.has(rowKey))rows.set(rowKey,{measurement_row_id:rowKey,session_ids:new Set(),questionnaire_ids:new Set(),participant_id:record.participant_id,subject_link_id:record.subject_link_id,group_id:record.group_id,group_code:record.group_code,group_title:record.group_title,timepoint_id:record.timepoint_id,timepoint_code:record.timepoint_code,timepoint_title:record.timepoint_title,timepoint_ordinal:record.timepoint_ordinal,global_time_reference:record.global_time_reference,answered_at:record.answered_at,__collisions:new Set()});
+    const row=rows.get(rowKey),key=variableKey(record);row.session_ids.add(record.session_id);row.questionnaire_ids.add(record.questionnaire_id);if(Object.prototype.hasOwnProperty.call(row,key)){delete row[key];row.__collisions.add(key);}else if(!row.__collisions.has(key))row[key]=scalar(record.value);
+  });
+  return [...rows.values()].map(row=>({...row,session_ids:[...row.session_ids],questionnaire_ids:[...row.questionnaire_ids]}));
+}
+
+function newDerivedRule(){return {rule_id:crypto.randomUUID(),variable_key:variables[0]?.key||'',timepoint_code:orderedTimepoints(filteredRecords)[0]||'',operator:'equals',value:'',value_to:''};}
+function addDerivedGroup(){const labels={es:'Grupo',en:'Group',ru:'Группа'};derivedGroups.push({group_id:crypto.randomUUID(),name:`${labels[lang]} ${String.fromCharCode(65+derivedGroups.length)}`,rules:[newDerivedRule()]});renderDerivedGroups();synchronizeDerivedGroups();}
+function ensureDerivedGroups(){if(!derivedGroups.length&&variables.length){addDerivedGroup();addDerivedGroup();}}
+function isMissing(value){return value===null||value===undefined||value==='';}
+function comparablePair(actual,expected){const actualNumber=!isMissing(actual)&&finite(actual),expectedNumber=String(expected).trim()!==''&&finite(expected);return actualNumber!==null&&expectedNumber!==null?[actualNumber,expectedNumber]:[String(actual),String(expected)];}
+function ruleMatches(row,rule){const actual=row?.[rule.variable_key],missing=isMissing(actual);if(rule.operator==='is_missing')return missing;if(rule.operator==='is_not_missing')return !missing;if(missing||String(rule.value).trim()==='')return false;const [left,right]=comparablePair(actual,rule.value);if(rule.operator==='equals')return left===right;if(rule.operator==='not_equals')return left!==right;if(rule.operator==='greater')return left>right;if(rule.operator==='greater_equal')return left>=right;if(rule.operator==='less')return left<right;if(rule.operator==='less_equal')return left<=right;if(rule.operator==='contains')return String(actual).toLocaleLowerCase().includes(String(rule.value).toLocaleLowerCase());if(rule.operator==='between'){if(String(rule.value_to).trim()==='')return false;const [lowerActual,lower]=comparablePair(actual,rule.value),[upperActual,upper]=comparablePair(actual,rule.value_to);return lowerActual===upperActual&&lowerActual>=lower&&upperActual<=upper;}return false;}
+function applyDerivedGroupMemberships(){const subjectKey=$('subjectKey').value,bySubject=new Map();sessionRows.forEach(row=>{row.__derived_groups=[];row.derived_group=null;const subject=row[subjectKey];if(subject){if(!bySubject.has(subject))bySubject.set(subject,[]);bySubject.get(subject).push(row);}});for(const rows of bySubject.values()){const memberships=derivedGroups.filter(group=>group.rules.length&&group.rules.every(rule=>{const row=rows.find(candidate=>String(candidate.timepoint_code)===String(rule.timepoint_code));return ruleMatches(row,rule);})).map(group=>group.name.trim()).filter(Boolean);rows.forEach(row=>{row.__derived_groups=[...memberships];row.derived_group=memberships.length===1?memberships[0]:null;});}}
+function synchronizeDerivedGroups(){applyDerivedGroupMemberships();refreshAnalysisLevels();renderSampleAudit();invalidatePlan();}
+function renderDerivedGroups(){const t=I18N[lang],timepoints=orderedTimepoints(filteredRecords),container=$('derivedGroups');container.innerHTML=derivedGroups.map(group=>`<div class="derived-group" data-group-card="${esc(group.group_id)}"><div class="derived-group-head"><div class="field"><label>${esc(t.groupName)}</label><input data-group-name="${esc(group.group_id)}" value="${esc(group.name)}"></div><button type="button" data-remove-group="${esc(group.group_id)}">${esc(t.removeGroup)}</button></div>${group.rules.map(rule=>{const noValue=['is_missing','is_not_missing'].includes(rule.operator);return `<div class="derived-rule"><div class="field"><label>${esc(t.variableCriterion)}</label><select data-rule-field="variable_key" data-group="${esc(group.group_id)}" data-rule="${esc(rule.rule_id)}">${variables.map(variable=>`<option value="${esc(variable.key)}"${variable.key===rule.variable_key?' selected':''}>${esc(variableLabel(variable))}</option>`).join('')}</select></div><div class="field"><label>${esc(t.timeCriterion)}</label><select data-rule-field="timepoint_code" data-group="${esc(group.group_id)}" data-rule="${esc(rule.rule_id)}">${timepoints.map(time=>`<option value="${esc(time)}"${String(time)===String(rule.timepoint_code)?' selected':''}>${esc(timepointLabel(time))}</option>`).join('')}</select></div><div class="field"><label>${esc(t.operator)}</label><select data-rule-field="operator" data-group="${esc(group.group_id)}" data-rule="${esc(rule.rule_id)}">${Object.entries(OPERATORS).map(([key,label])=>`<option value="${key}"${key===rule.operator?' selected':''}>${esc(label[lang])}</option>`).join('')}</select></div><div class="field"><label>${esc(t.value)}</label><input data-rule-field="value" data-group="${esc(group.group_id)}" data-rule="${esc(rule.rule_id)}" value="${esc(rule.value)}"${noValue?' disabled':''}></div><div class="field${rule.operator==='between'?'':' hidden'}"><label>${esc(t.valueTo)}</label><input data-rule-field="value_to" data-group="${esc(group.group_id)}" data-rule="${esc(rule.rule_id)}" value="${esc(rule.value_to)}"></div><button type="button" data-remove-rule="${esc(rule.rule_id)}" data-group="${esc(group.group_id)}">${esc(t.removeRule)}</button></div>`;}).join('')}<button type="button" data-add-rule="${esc(group.group_id)}">${esc(t.addRule)}</button></div>`).join('');
+  container.querySelectorAll('[data-group-name]').forEach(input=>input.addEventListener('input',()=>{const group=derivedGroups.find(item=>item.group_id===input.dataset.groupName);if(group){group.name=input.value;synchronizeDerivedGroups();}}));
+  container.querySelectorAll('[data-rule-field]').forEach(control=>control.addEventListener('change',()=>{const group=derivedGroups.find(item=>item.group_id===control.dataset.group),rule=group?.rules.find(item=>item.rule_id===control.dataset.rule);if(rule){rule[control.dataset.ruleField]=control.value;if(control.dataset.ruleField==='operator')renderDerivedGroups();synchronizeDerivedGroups();}}));
+  container.querySelectorAll('[data-remove-group]').forEach(button=>button.addEventListener('click',()=>{derivedGroups=derivedGroups.filter(group=>group.group_id!==button.dataset.removeGroup);renderDerivedGroups();synchronizeDerivedGroups();}));
+  container.querySelectorAll('[data-add-rule]').forEach(button=>button.addEventListener('click',()=>{const group=derivedGroups.find(item=>item.group_id===button.dataset.addRule);if(group){group.rules.push(newDerivedRule());renderDerivedGroups();synchronizeDerivedGroups();}}));
+  container.querySelectorAll('[data-remove-rule]').forEach(button=>button.addEventListener('click',()=>{const group=derivedGroups.find(item=>item.group_id===button.dataset.group);if(group){group.rules=group.rules.filter(rule=>rule.rule_id!==button.dataset.removeRule);renderDerivedGroups();synchronizeDerivedGroups();}}));
+}
+
+function validateDerivedGroups(){if($('groupDimension').value!=='derived_group')return;const names=derivedGroups.map(group=>group.name.trim());if(derivedGroups.length<2)throw new Error('Define at least two answer-based groups.');if(names.some(name=>!name)||new Set(names).size!==names.length)throw new Error('Answer-based group names must be non-empty and unique.');for(const group of derivedGroups){if(!group.rules.length)throw new Error(`Group "${group.name}" has no inclusion rule.`);for(const rule of group.rules){if(!variables.some(variable=>variable.key===rule.variable_key)||!orderedTimepoints(filteredRecords).includes(String(rule.timepoint_code)))throw new Error(`Group "${group.name}" has an incomplete question or timepoint rule.`);if(!['is_missing','is_not_missing'].includes(rule.operator)&&String(rule.value).trim()==='')throw new Error(`Group "${group.name}" has a rule without a comparison value.`);if(rule.operator==='between'&&String(rule.value_to).trim()==='')throw new Error(`Group "${group.name}" has an incomplete range.`);}}const selected=selectedLevelSet(),overlaps=new Set(sessionRows.filter(row=>row.__derived_groups?.filter(name=>!selected.size||selected.has(name)).length>1).map(row=>row[$('subjectKey').value]).filter(Boolean));if(overlaps.size)throw new Error(`${overlaps.size} subject(s) satisfy more than one selected answer-based group. Independent groups must be mutually exclusive; refine the rules.`);}
+
+function populateSourceFilters(){
+  fillMulti($('populationGroups'),unique(rawRecords.map(r=>r.group_code)).sort(),value=>{const row=rawRecords.find(r=>String(r.group_code)===String(value));return localizedText(row?.group_title)||value;});
+  fillMulti($('populationTimes'),orderedTimepoints(rawRecords),timepointLabel);
+  fillMulti($('populationQuestionnaires'),unique(rawRecords.map(r=>r.questionnaire_id)).sort(),value=>{const row=rawRecords.find(r=>String(r.questionnaire_id)===String(value));return `${localizedText(row?.questionnaire_title)||I18N[lang].variables} · v${row?.questionnaire_version}`;});
+  refreshAnalysisLevels();
+}
+
+function refreshAnalysisLevels(){
+  const dimension=$('groupDimension').value,records=filteredRecords.length?filteredRecords:rawRecords,levels=dimension==='derived_group'?derivedGroups.map(group=>group.name.trim()).filter(Boolean):dimension==='timepoint_code'?orderedTimepoints(records):unique(records.map(r=>r[dimension])).map(String).sort();fillMulti($('analysisLevels'),levels);
+}
+
+function applySample(){
+  const groups=new Set(selectedValues($('populationGroups'))),times=new Set(selectedValues($('populationTimes'))),questionnaires=new Set(selectedValues($('populationQuestionnaires'))),from=$('dateFrom').value?new Date($('dateFrom').value).getTime():null,to=$('dateTo').value?new Date($('dateTo').value).getTime():null;
+  filteredRecords=rawRecords.filter(record=>{
+    const answered=new Date(record.answered_at).getTime();return (!groups.size||groups.has(String(record.group_code)))&&(!times.size||times.has(String(record.timepoint_code)))&&(!questionnaires.size||questionnaires.has(String(record.questionnaire_id)))&&(from===null||answered>=from)&&(to===null||answered<=to);
+  });
+  variables=buildVariables(filteredRecords);sessionRows=pivotRecords(filteredRecords);ensureDerivedGroups();applyDerivedGroupMemberships();refreshAnalysisLevels();refreshVariableSelects();renderDerivedGroups();renderVariableCatalog();renderSampleAudit();invalidatePlan();
+}
+
+function renderVariableCatalog(){
+  const query=$('variableSearch')?.value?.trim().toLowerCase()||'',technical=I18N[lang].technicalId;$('variableCatalog').innerHTML=variables.filter(variable=>!query||[variable.code,localizedText(variable.prompt),variable.question_id,variable.scale?.id,variable.scale?.psychometric_level,variable.domain,variable.parameter].some(value=>String(value||'').toLowerCase().includes(query))).map(variable=>`<tr><td><b>${esc(localizedText(variable.prompt)||variable.code)}</b><details class="technical"><summary>${esc(technical)}</summary><code>${esc(variable.code)} · ${esc(variable.question_id)} · v${esc(variable.question_version)}</code></details></td><td>${esc(variable.scale?.psychometric_level||'—')}${variable.domain?`<br><span class="quiet">${esc(localizedText(variable.domain))}</span>`:''}<details class="technical"><summary>${esc(technical)}</summary><code>${esc(variable.scale?.id||'—')}</code></details></td><td>${esc(variable.n)}<br><span class="quiet">${esc(variable.numeric_n)} numeric</span></td><td>${esc(localizedText(variable.parameter)||localizedText(variable.time)||'—')}<details class="technical"><summary>${esc(technical)}</summary>${esc(variable.contexts.length)} context(s) · ${esc(variable.questionnaires.length)} questionnaire(s)${variable.duplicate_sessions?`<br><span class="warning">${esc(variable.duplicate_sessions)} collision(s)</span>`:''}</details></td></tr>`).join('')||'<tr><td colspan="4">—</td></tr>';
+}
+
+function variableLabel(variable){return `${localizedText(variable.prompt)||variable.code} · ${variable.scale?.psychometric_level||localizedText(variable.domain)||'—'} · N=${variable.n}`;}
+function refreshVariableSelects(){fillSelect($('outcomeVariable'),variables,variableLabel);fillSelect($('predictorVariable'),variables,variableLabel);const timepoints=orderedTimepoints(filteredRecords);fillSelect($('timeA'),timepoints,timepointLabel,value=>value);fillSelect($('timeB'),timepoints,timepointLabel,value=>value);fillMulti($('repeatedTimes'),timepoints,timepointLabel);if(timepoints.length>1)$('timeB').value=timepoints[1];renderMethodControls();}
+
+function renderSampleAudit(){
+  const subjectKey=$('subjectKey').value,dimension=$('groupDimension').value,subjects=unique(sessionRows.map(row=>row[subjectKey])),allSessions=new Set(filteredRecords.map(record=>record.session_id));$('subjectsMetric').textContent=subjects.length;$('sessionsMetric').textContent=allSessions.size;$('responsesMetric').textContent=filteredRecords.length;$('variablesMetric').textContent=variables.length;
+  const levels=dimension==='derived_group'?derivedGroups.map(group=>group.name.trim()).filter(Boolean):unique(sessionRows.map(row=>row[dimension])).map(String);$('groupAudit').innerHTML=levels.map(level=>{const rows=sessionRows.filter(row=>dimension==='derived_group'?row.__derived_groups?.includes(level):String(row[dimension])===level),levelSessions=new Set(rows.flatMap(row=>row.session_ids)),levelSubjects=new Set(rows.map(row=>row[subjectKey]).filter(Boolean)),responses=filteredRecords.filter(record=>levelSessions.has(record.session_id)).length;return `<tr><td>${esc(level)}</td><td>${levelSubjects.size}</td><td>${levelSessions.size}</td><td>${responses}</td></tr>`;}).join('')||'<tr><td colspan="4">—</td></tr>';
+  const warnings=[];if(!filteredRecords.length)warnings.push(I18N[lang].empty);const missingSubject=sessionRows.filter(row=>!row[subjectKey]).length;if(missingSubject)warnings.push(`${missingSubject} session(s) lack ${subjectKey}.`);const collisions=variables.reduce((sum,v)=>sum+v.duplicate_sessions,0);if(collisions)warnings.push(`${collisions} canonical variable/session collision(s) are excluded rather than aggregated silently.`);if(dimension==='derived_group'){const subjectMemberships=new Map();sessionRows.forEach(row=>{const subject=row[subjectKey];if(subject&&!subjectMemberships.has(subject))subjectMemberships.set(subject,row.__derived_groups||[]);});const overlaps=[...subjectMemberships.values()].filter(groups=>groups.length>1).length,unmatched=[...subjectMemberships.values()].filter(groups=>!groups.length).length;if(overlaps)warnings.push(`${overlaps} subject(s) satisfy multiple answer-based groups; independent-group inference is blocked.`);if(unmatched)warnings.push(`${unmatched} subject(s) do not satisfy any answer-based group and are excluded from group comparisons.`);}$('sampleWarnings').textContent=warnings.join('\n')||'No structural sample warning was detected. Statistical assumptions still require method-specific review.';$('sampleWarnings').className=`notice ${warnings.length?'warning':''}`;
+}
+
+function methodDefinition(){return METHODS.find(method=>method.id===selectedMethod);}
+function renderMethodControls(){const needs=methodDefinition()?.needs||[];$('predictorWrap').classList.toggle('hidden',!needs.includes('x'));$('timeControls').classList.toggle('hidden',!needs.includes('twoTimes')&&!needs.includes('manyTimes'));$('repeatedTimesWrap').classList.toggle('hidden',!needs.includes('manyTimes'));$('methodDiagnostics').textContent='';}
+function invalidatePlan(){$('run').disabled=true;$('export').disabled=true;lastSnapshot=null;$('analysisChart').classList.add('hidden');}
+
+function selectedLevelSet(){return new Set(selectedValues($('analysisLevels')));}
+function analysisRows(){const dimension=$('groupDimension').value,levels=selectedLevelSet();return sessionRows.filter(row=>!levels.size||levels.has(String(row[dimension])));}
+function numericVariable(key){const variable=variables.find(item=>item.key===key);return variable&&variable.numeric_n>=3;}
+function assertNoCanonicalCollisions(keys){const collided=variables.filter(variable=>keys.includes(variable.key)&&variable.duplicate_sessions);if(collided.length)throw new Error(`Selected canonical variable is repeated within a session: ${collided.map(v=>v.code).join(', ')}. Select or create an administration context before analysis.`);}
+
+function independentGroups(rows,target){
+  const dimension=$('groupDimension').value,subjectKey=$('subjectKey').value,groups={};rows.forEach(row=>{const level=row[dimension];if(level===null||level===undefined)return;(groups[String(level)]??=[]).push(row[target]);});
+  const subjectLevels=new Map();rows.forEach(row=>{const subject=row[subjectKey],level=row[dimension];if(!subject||level===null||level===undefined)return;if(!subjectLevels.has(subject))subjectLevels.set(subject,new Set());subjectLevels.get(subject).add(String(level));});
+  if([...subjectLevels.values()].some(levels=>levels.size>1))throw new Error('The same longitudinal subject occurs in more than one selected group. Independent-group inference is invalid; use a repeated-measures method or redefine the groups.');
+  return groups;
+}
+
+function repeatedData(rows,keys,timepoints){
+  const subjectKey=$('subjectKey').value,bySubject=new Map();rows.forEach(row=>{const subject=row[subjectKey],time=String(row.timepoint_code);if(!subject||!timepoints.includes(time))return;if(!bySubject.has(subject))bySubject.set(subject,new Map());const subjectTimes=bySubject.get(subject);if(subjectTimes.has(time))subjectTimes.set(time,null);else subjectTimes.set(time,row);});
+  const complete=[];for(const [subject,times] of bySubject){if(timepoints.every(time=>times.get(time)&&keys.every(key=>finite(times.get(time)[key])!==null)))complete.push({subject,rows:timepoints.map(time=>times.get(time))});}return complete;
+}
+
+function contingency(rows,rowKey,columnKey){const rowLevels=unique(rows.map(row=>row[rowKey])).map(String),columnLevels=unique(rows.map(row=>row[columnKey])).map(String),table=rowLevels.map(()=>columnLevels.map(()=>0));rows.forEach(row=>{const r=rowLevels.indexOf(String(row[rowKey])),c=columnLevels.indexOf(String(row[columnKey]));if(r>=0&&c>=0)table[r][c]+=1;});return{rowLevels,columnLevels,table};}
+
+function validateAnalysisPlan(){
+  if(!filteredRecords.length)throw new Error('The formed sample is empty.');validateDerivedGroups();const method=methodDefinition(),needs=method.needs,y=$('outcomeVariable').value,x=$('predictorVariable').value,rows=analysisRows();if(!rows.length)throw new Error('No subject satisfies the selected analysis levels.');if(!y)throw new Error('Select an outcome variable.');if(needs.includes('x')&&!x)throw new Error('Select a predictor variable.');if(needs.includes('x')&&x===y)throw new Error('Predictor and outcome must be different variables.');assertNoCanonicalCollisions([y,...(needs.includes('x')?[x]:[])]);
+  const numericMethods=['descriptive','pearsonCorrelation','spearmanCorrelation','simpleLinearRegression','welchTTest','mannWhitney','oneWayAnova','kruskalWallis','pairwiseWelchHolm','dunnHolm','pairedTTest','repeatedMeasuresAnova','friedmanTest','laggedPearson','laggedSpearman','changePearson','changeSpearman'];if(numericMethods.includes(method.id)&&!numericVariable(y))throw new Error('The selected outcome has fewer than three numeric observations.');if(needs.includes('x')&&!['fisherExact','chiSquareIndependence'].includes(method.id)&&!numericVariable(x))throw new Error('The selected predictor has fewer than three numeric observations.');
+  if(needs.includes('groups')){const groups=independentGroups(rows,y),count=Object.keys(groups).length;if(['welchTTest','mannWhitney'].includes(method.id)&&count!==2)throw new Error('This method requires exactly two independent selected groups.');if(['oneWayAnova','kruskalWallis','pairwiseWelchHolm','dunnHolm'].includes(method.id)&&count<2)throw new Error('Select at least two independent groups.');}
+  if(needs.includes('twoTimes')){if(!$('timeA').value||!$('timeB').value||$('timeA').value===$('timeB').value)throw new Error('Select two different ordered timepoints.');const complete=repeatedData(rows,[y,...(needs.includes('x')?[x]:[])],[$('timeA').value,$('timeB').value]);if(complete.length<2)throw new Error('At least two subjects with unique complete observations at both timepoints are required.');}
+  if(needs.includes('manyTimes')){const times=selectedValues($('repeatedTimes'));if(times.length<2)throw new Error('Select at least two repeated timepoints.');const complete=repeatedData(rows,[y],times);if(complete.length<2)throw new Error('At least two subjects with unique complete observations at every selected timepoint are required.');}
+  return {method,needs,x,y,rows};
+}
+
+function planSnapshot(validated){
+  const variableIdentity=key=>{const variable=variables.find(item=>item.key===key);return variable?{question_id:variable.question_id,question_version:variable.question_version,code:variable.code,prompt:variable.prompt,type:variable.type,domain:variable.domain,parameter:variable.parameter,score_direction:variable.score_direction,question_time:variable.time,scale_snapshot:variable.scale}:null;};
+  return {study:sourceIdentity,filters:{included_group_codes:selectedValues($('populationGroups')),included_timepoint_codes:selectedValues($('populationTimes')),included_questionnaire_ids:selectedValues($('populationQuestionnaires')),answered_from:$('dateFrom').value||null,answered_until:$('dateTo').value||null},design:{subject_identifier:$('subjectKey').value,analysis_unit:'subject_by_study_timepoint',group_dimension:$('groupDimension').value,included_analysis_levels:selectedValues($('analysisLevels')),derived_group_definitions:derivedGroups.map(group=>({name:group.name.trim(),rules:group.rules.map(rule=>({variable:variableIdentity(rule.variable_key),timepoint_code:rule.timepoint_code,operator:rule.operator,value:['is_missing','is_not_missing'].includes(rule.operator)?null:rule.value,value_to:rule.operator==='between'?rule.value_to:null}))})),timepoint_a:$('timeA').value||null,timepoint_b:$('timeB').value||null,repeated_timepoints:selectedValues($('repeatedTimes'))},method:validated.method.id,outcome:variableIdentity(validated.y),predictor:validated.needs.includes('x')?variableIdentity(validated.x):null,sample_accounting:{responses:filteredRecords.length,sessions:new Set(filteredRecords.map(record=>record.session_id)).size,analysis_rows:validated.rows.length,subjects:unique(validated.rows.map(row=>row[$('subjectKey').value])).length}};
+}
+
+function numericExtent(values){const clean=values.map(Number).filter(Number.isFinite),minimum=Math.min(...clean),maximum=Math.max(...clean),padding=(maximum-minimum||1)*.08;return{minimum:minimum-padding,maximum:maximum+padding};}
+function chartScale(value,extent,start,end){return start+(Number(value)-extent.minimum)/(extent.maximum-extent.minimum)*(end-start);}
+function renderAnalysisChart(validated,result){
+  const box=$('analysisChart'),{method,x,y,rows}=validated,width=720,height=300,left=55,right=20,top=20,bottom=45,plotWidth=width-left-right,plotHeight=height-top-bottom,axis=`<line x1="${left}" y1="${height-bottom}" x2="${width-right}" y2="${height-bottom}" stroke="#64748b"/><line x1="${left}" y1="${top}" x2="${left}" y2="${height-bottom}" stroke="#64748b"/>`;let content='';
+  if(['pearsonCorrelation','spearmanCorrelation','simpleLinearRegression'].includes(method.id)){
+    const pairs=rows.map(row=>[finite(row[x]),finite(row[y])]).filter(pair=>pair[0]!==null&&pair[1]!==null),xExtent=numericExtent(pairs.map(pair=>pair[0])),yExtent=numericExtent(pairs.map(pair=>pair[1]));content=pairs.map(pair=>`<circle cx="${chartScale(pair[0],xExtent,left,width-right)}" cy="${chartScale(pair[1],yExtent,height-bottom,top)}" r="4" fill="#38bdf8" fill-opacity=".75"/>`).join('');if(method.id==='simpleLinearRegression'){const x1=xExtent.minimum,x2=xExtent.maximum,y1=result.intercept+result.slope*x1,y2=result.intercept+result.slope*x2;content+=`<line x1="${chartScale(x1,xExtent,left,width-right)}" y1="${chartScale(y1,yExtent,height-bottom,top)}" x2="${chartScale(x2,xExtent,left,width-right)}" y2="${chartScale(y2,yExtent,height-bottom,top)}" stroke="#fbbf24" stroke-width="2"/>`;}
+  }else if(method.needs.includes('groups')){
+    const dimension=$('groupDimension').value,groups=Object.entries(independentGroups(rows,y)),all=groups.flatMap(([,values])=>values).map(Number).filter(Number.isFinite),extent=numericExtent(all);content=groups.map(([label,values],groupIndex)=>{const center=left+(groupIndex+.5)*plotWidth/groups.length,dots=values.map(Number).filter(Number.isFinite).map((value,index)=>`<circle cx="${center+((index%7)-3)*3}" cy="${chartScale(value,extent,height-bottom,top)}" r="3.5" fill="#38bdf8" fill-opacity=".72"/>`).join('');return `${dots}<text x="${center}" y="${height-18}" fill="#cbd5e1" font-size="11" text-anchor="middle">${esc(label)}</text>`;}).join('');
+  }else if(method.needs.includes('twoTimes')||method.needs.includes('manyTimes')){
+    const times=method.needs.includes('manyTimes')?selectedValues($('repeatedTimes')):[$('timeA').value,$('timeB').value],complete=repeatedData(rows,[y],times),all=complete.flatMap(item=>item.rows.map(row=>Number(row[y]))),extent=numericExtent(all);content=complete.map((item,index)=>{const points=item.rows.map((row,timeIndex)=>`${left+(timeIndex+.5)*plotWidth/times.length},${chartScale(row[y],extent,height-bottom,top)}`).join(' ');return `<polyline points="${points}" fill="none" stroke="hsl(${(index*47)%360} 75% 65%)" stroke-width="1.5" stroke-opacity=".65"/>`;}).join('')+times.map((time,index)=>`<text x="${left+(index+.5)*plotWidth/times.length}" y="${height-18}" fill="#cbd5e1" font-size="11" text-anchor="middle">${esc(time)}</text>`).join('');
+  }else if(method.id==='descriptive'){
+    const values=rows.map(row=>finite(row[y])).filter(value=>value!==null),extent=numericExtent(values),bins=Math.max(4,Math.min(12,Math.ceil(Math.sqrt(values.length)))),counts=new Array(bins).fill(0);values.forEach(value=>{const index=Math.min(bins-1,Math.floor((value-extent.minimum)/(extent.maximum-extent.minimum)*bins));counts[index]+=1;});const max=Math.max(...counts);content=counts.map((count,index)=>{const barWidth=plotWidth/bins-2,xPosition=left+index*plotWidth/bins+1,barHeight=max?count/max*plotHeight:0;return `<rect x="${xPosition}" y="${height-bottom-barHeight}" width="${barWidth}" height="${barHeight}" fill="#38bdf8" fill-opacity=".75"/>`;}).join('');
+  }else{
+    const built=contingency(rows,x,y);box.className='chart';box.innerHTML=`<div class="table-wrap"><table><thead><tr><th></th>${built.columnLevels.map(level=>`<th>${esc(level)}</th>`).join('')}</tr></thead><tbody>${built.table.map((row,index)=>`<tr><th>${esc(built.rowLevels[index])}</th>${row.map(value=>`<td>${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;return;
   }
+  box.className='chart';box.innerHTML=`<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="analysis visualization">${axis}${content}</svg>`;
+}
 
-  function showStatus(msg, isErr = false) {
-    const bar = document.getElementById('status-message');
-    bar.className = `status-bar ${isErr ? 'error' : 'success'}`;
-    bar.innerText = msg;
-  }
+function execute(){
+  try{const validated=validateAnalysisPlan(),{method,needs,x,y,rows}=validated;let result,configuration=planSnapshot(validated);
+    if(method.id==='descriptive')result=ScientificStats.descriptive(rows.map(row=>row[y]));
+    else if(['pearsonCorrelation','spearmanCorrelation','simpleLinearRegression'].includes(method.id))result=ScientificStats[method.id](rows.map(row=>row[x]),rows.map(row=>row[y]));
+    else if(['welchTTest','mannWhitney','oneWayAnova','kruskalWallis','pairwiseWelchHolm','dunnHolm'].includes(method.id)){const groups=independentGroups(rows,y);result=ScientificStats[method.id](...(method.id==='welchTTest'||method.id==='mannWhitney'?Object.values(groups):[groups]));configuration.design.group_labels=Object.keys(groups);}
+    else if(['fisherExact','chiSquareIndependence'].includes(method.id)){const built=contingency(rows,x,y);if(method.id==='fisherExact'&&(built.table.length!==2||built.table[0]?.length!==2))throw new Error('Fisher exact requires a 2×2 observed table.');result=ScientificStats[method.id](built.table);configuration.design.row_levels=built.rowLevels;configuration.design.column_levels=built.columnLevels;}
+    else if(method.id==='pairedTTest'){const times=[$('timeA').value,$('timeB').value],complete=repeatedData(rows,[y],times);result=ScientificStats.pairedTTest(complete.map(item=>item.rows[0][y]),complete.map(item=>item.rows[1][y]));}
+    else if(['repeatedMeasuresAnova','friedmanTest'].includes(method.id)){const times=selectedValues($('repeatedTimes')),complete=repeatedData(rows,[y],times),matrix=complete.map(item=>item.rows.map(row=>row[y]));result=ScientificStats[method.id](matrix);}
+    else {const times=[$('timeA').value,$('timeB').value],complete=repeatedData(rows,[x,y],times),spearman=method.id.endsWith('Spearman');let first,second;if(method.id.startsWith('lagged')){first=complete.map(item=>item.rows[0][x]);second=complete.map(item=>item.rows[1][y]);configuration.temporal_estimand='predictor at A associated with outcome at B';}else{first=complete.map(item=>Number(item.rows[1][x])-Number(item.rows[0][x]));second=complete.map(item=>Number(item.rows[1][y])-Number(item.rows[0][y]));configuration.temporal_estimand='within-subject change in X associated with within-subject change in Y';}result=ScientificStats[spearman?'spearmanCorrelation':'pearsonCorrelation'](first,second);result.temporal_order=[times[0],times[1]];result.causal_interpretation=false;}
+    lastSnapshot={schema:'research_os.statistical_result',schema_version:1,analysis_id:crypto.randomUUID(),generated_at:new Date().toISOString(),global_time_reference:rawRecords[0]?.global_time_reference||null,analysis_plan:configuration,result};renderAnalysisChart(validated,result);renderResult(lastSnapshot);$('export').disabled=false;
+  }catch(error){$('result').className='status error';$('result').textContent=error.message;lastSnapshot=null;$('export').disabled=true;}
+}
 
-  function toggleAnalysisFields() {
-    const mode = document.getElementById('analysisType').value;
-    document.getElementById('boxParticipant').style.display = (mode === 'longitudinal') ? 'block' : 'none';
-    document.getElementById('boxTimestamp').style.display = (mode === 'longitudinal') ? 'block' : 'none';
-    document.getElementById('wrapperSplit').style.display = (mode === 'cohorts') ? 'block' : 'none';
-    document.getElementById('wrapperX').style.display = (mode === 'dependency') ? 'block' : 'none';
-  }
+function number(value){return typeof value==='number'&&Number.isFinite(value)?Number(value.toPrecision(7)):value;}
+function renderResult(snapshot){const t=I18N[lang],result=snapshot.result,p=result.p_value_two_sided??result.p_value,effect=result.effect_size||result.effect_sizes,comparisons=Array.isArray(result.comparisons)?`<h3>Multiplicity-controlled comparisons</h3><div class="table-wrap"><table><thead><tr><th>A</th><th>B</th><th>Statistic</th><th>p raw</th><th>p Holm</th></tr></thead><tbody>${result.comparisons.map(item=>`<tr><td>${esc(item.group_a)}</td><td>${esc(item.group_b)}</td><td>${esc(number(item.statistic))}</td><td>${esc(number(item.p_value_two_sided))}</td><td>${esc(number(item.p_value_holm))}</td></tr>`).join('')}</tbody></table></div>`:'';$('result').className='report';$('result').innerHTML=`<div class="metrics"><div class="metric">Method<b>${esc(result.method)}</b></div><div class="metric">p-value<b>${p===undefined?'—':esc(number(p))}</b></div><div class="metric">N<b>${esc(result.n??result.total_n??result.pairs??result.participants??'—')}</b></div><div class="metric">df<b>${esc(JSON.stringify(result.degrees_of_freedom??'—'))}</b></div></div><div class="notice">${esc(t.pHelp)}</div>${comparisons}<h3>Effect / interval</h3><div class="json">${esc(JSON.stringify({effect,confidence_interval:result.confidence_interval??null,confidence_level:result.confidence_level??null},null,2))}</div><h3>${esc(t.assumptions)}</h3><ul>${(result.assumptions||[]).map(item=>`<li>${esc(item)}</li>`).join('')||'<li>—</li>'}</ul><h3>${esc(t.notes)}</h3><ul>${(result.notes||[]).map(item=>`<li>${esc(item)}</li>`).join('')||'<li>—</li>'}</ul><h3>${esc(t.raw)}</h3><div class="json">${esc(JSON.stringify(snapshot,null,2))}</div>`;}
+function exportResult(){if(!lastSnapshot)return;const blob=new Blob([JSON.stringify(lastSnapshot,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`statistical-result-${lastSnapshot.analysis_id}.json`;link.click();URL.revokeObjectURL(url);}
 
-  async function handleFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-    try {
-      document.getElementById('input-data').value = await file.text();
-      validateAndParse();
-      showStatus(i18n[currentLang].statusSuccess, false);
-    } catch (e) {
-      showStatus(i18n[currentLang].statusErr, true);
-    }
-  }
+async function loadStudies(){const data=await request('/studies?status=all');studies=data.studies||[];$('studySelect').innerHTML='';studies.forEach((study,index)=>$('studySelect').add(new Option(`${localizedText(study.title)} · v${study.version}`,String(index))));if(!studies.length)setStatus('No registered studies are available.',true);}
+async function loadStudy(){try{const study=studies[Number($('studySelect').value)];if(!study)throw new Error('Select a registered study.');const data=await request(`/analysis/studies/${encodeURIComponent(study.study_id)}/records?version=${encodeURIComponent(study.version)}`);rawRecords=data.records||[];derivedGroups=[];sourceIdentity={source:'registered_completed_study',study_id:study.study_id,study_version:study.version,study_code:study.code,study_title:study.title,loaded_record_count:rawRecords.length};populateSourceFilters();applySample();setStatus(rawRecords.length?`${rawRecords.length} ${I18N[lang].loaded}`:I18N[lang].empty,!rawRecords.length);}catch(error){setStatus(error.message,true);}}
 
-  function clearData() {
-    document.getElementById('input-data').value = '';
-    document.getElementById('output-container').innerHTML = `<div style="color: var(--text-muted); text-align: center; margin-top: 150px;">${i18n[currentLang].emptyOutput}</div>`;
-    document.getElementById('guard-warning-container').innerHTML = '';
-    document.getElementById('status-message').style.display = 'none';
-  }
+document.querySelectorAll('[data-lang]').forEach(button=>button.addEventListener('click',()=>applyLanguage(button.dataset.lang)));
+$('loadStudy').addEventListener('click',loadStudy);$('applySample').addEventListener('click',applySample);$('addDerivedGroup').addEventListener('click',addDerivedGroup);$('selectAllFilters').addEventListener('click',()=>{[$('populationGroups'),$('populationTimes'),$('populationQuestionnaires'),$('analysisLevels')].forEach(select=>[...select.options].forEach(option=>{option.selected=true;}));});$('groupDimension').addEventListener('change',()=>{refreshAnalysisLevels();renderSampleAudit();invalidatePlan();});$('subjectKey').addEventListener('change',applySample);$('analysisLevels').addEventListener('change',()=>{renderSampleAudit();invalidatePlan();});$('variableSearch').addEventListener('input',renderVariableCatalog);$('outcomeVariable').addEventListener('change',invalidatePlan);$('predictorVariable').addEventListener('change',invalidatePlan);$('timeA').addEventListener('change',invalidatePlan);$('timeB').addEventListener('change',invalidatePlan);$('repeatedTimes').addEventListener('change',invalidatePlan);$('validatePlan').addEventListener('click',()=>{try{validateAnalysisPlan();$('methodDiagnostics').textContent=I18N[lang].planValid;$('methodDiagnostics').className='notice';$('run').disabled=false;}catch(error){$('methodDiagnostics').textContent=error.message;$('methodDiagnostics').className='notice warning';$('run').disabled=true;}});$('run').addEventListener('click',execute);$('export').addEventListener('click',exportResult);
 
-  // ЗАЩИТА ОТ ДУРАКА С УЧЕТОМ ЯЗЫКА
-  function validateAndParse() {
-    const warningContainer = document.getElementById('guard-warning-container');
-    const runBtn = document.getElementById('runAnalysisBtn');
-    const t = i18n[currentLang];
-    warningContainer.innerHTML = '';
-
-    try {
-      const text = document.getElementById('input-data').value.trim();
-      const dataset = JSON.parse(text);
-
-      if (!Array.isArray(dataset)) throw new Error(t.errNotArray);
-      if (dataset.length === 0) throw new Error(t.errEmpty);
-
-      const keys = Object.keys(dataset[0]);
-      ['keyParticipant', 'keyTimestamp', 'keySplit', 'keyX', 'keyTarget'].forEach(id => {
-        const select = document.getElementById(id);
-        const currentVal = select.value;
-        select.innerHTML = '';
-        keys.forEach(k => {
-          const opt = document.createElement('option');
-          opt.value = k;
-          opt.textContent = k;
-          select.appendChild(opt);
-        });
-        if (keys.includes(currentVal)) select.value = currentVal;
-      });
-
-      if (keys.includes('participant_id') && !document.getElementById('keyParticipant').value) document.getElementById('keyParticipant').value = 'participant_id';
-      if (keys.includes('timestamp') && !document.getElementById('keyTimestamp').value) document.getElementById('keyTimestamp').value = 'timestamp';
-      if (keys.includes('work_format') && !document.getElementById('keySplit').value) document.getElementById('keySplit').value = 'work_format';
-      if (keys.includes('work_load') && !document.getElementById('keyX').value) document.getElementById('keyX').value = 'work_load';
-      if (keys.includes('stress_level') && !document.getElementById('keyTarget').value) document.getElementById('keyTarget').value = 'stress_level';
-
-      const mode = document.getElementById('analysisType').value;
-      let issues = [];
-
-      if (mode === 'longitudinal') {
-        const idKey = document.getElementById('keyParticipant').value;
-        const counts = {};
-        dataset.forEach(row => {
-          const id = row[idKey];
-          if (id !== undefined) counts[id] = (counts[id] || 0) + 1;
-        });
-        const multiWaveCount = Object.values(counts).filter(c => c >= 2).length;
-        if (multiWaveCount === 0) issues.push(t.errLong);
-      } else if (mode === 'dependency') {
-        const xKey = document.getElementById('keyX').value;
-        const targetKey = document.getElementById('keyTarget').value;
-        let validPairs = 0;
-        dataset.forEach(row => {
-          if (!isNaN(Number(row[xKey])) && !isNaN(Number(row[targetKey]))) validPairs++;
-        });
-        if (validPairs < 3) issues.push(t.errDep);
-      } else if (mode === 'cohorts') {
-        const splitKey = document.getElementById('keySplit').value;
-        const groups = new Set(dataset.map(r => r[splitKey]));
-        if (groups.size < 2) issues.push(t.errCoh);
-      }
-
-      if (issues.length > 0) {
-        runBtn.disabled = true;
-        warningContainer.innerHTML = `<div class="alert-box">${issues.join('<br>')}<br></div>`;
-        document.getElementById('output-container').innerHTML = `<div style="color: var(--error-color); padding: 20px; text-align: center;">${t.blockedMsg}</div>`;
-      } else {
-        runBtn.disabled = false;
-        warningContainer.innerHTML = `<div class="warning-box">${t.auditOk}</div>`;
-      }
-
-    } catch (e) {
-      runBtn.disabled = true;
-      warningContainer.innerHTML = `<div class="alert-box">❌ ${e.message || t.errJson}</div>`;
-    }
-  }
-
-  // НАУЧНЫЙ ДВИЖОК
-  class ScientificEngine {
-    mean(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
-    median(arr) {
-      if (!arr.length) return 0;
-      const s = [...arr].sort((a, b) => a - b);
-      const m = Math.floor(s.length / 2);
-      return s.length % 2 !== 0 ? s[m] : (s[m - 1] + s[m]) / 2;
-    }
-    stdDev(arr, m) {
-      if (arr.length <= 1) return 0;
-      const meanVal = m !== undefined ? m : this.mean(arr);
-      return Math.sqrt(arr.reduce((acc, val) => acc + Math.pow(val - meanVal, 2), 0) / (arr.length - 1));
-    }
-
-    trackLongitudinal(data, cfg) {
-      const timelines = {};
-      data.forEach(row => {
-        const id = row[cfg.idKey];
-        const time = row[cfg.timeKey];
-        const val = Number(row[cfg.targetKey]);
-        if (id !== undefined && time !== undefined && !isNaN(val)) {
-          if (!timelines[id]) timelines[id] = [];
-          timelines[id].push({ time: new Date(time).getTime() || time, value: val });
-        }
-      });
-      let trajectories = {}, deltas = [];
-      for (const [id, points] of Object.entries(timelines)) {
-        points.sort((a, b) => a.time - b.time);
-        if (points.length >= 2) {
-          const init = points[0].value, latest = points[points.length - 1].value;
-          const delta = latest - init;
-          deltas.push(delta);
-          trajectories[id] = { waves: points.length, initial: init, latest: latest, delta: Number(delta.toFixed(2)) };
-        }
-      }
-      return { type: 'longitudinal', sample: Object.keys(timelines).length, meanDelta: Number(this.mean(deltas).toFixed(2)), trajectories };
-    }
-
-    analyzeCohorts(data, cfg) {
-      const groups = {};
-      data.forEach(row => {
-        const g = row[cfg.splitKey] !== undefined ? String(row[cfg.splitKey]) : 'N/A';
-        const val = Number(row[cfg.targetKey]);
-        if (!isNaN(val)) { if (!groups[g]) groups[g] = []; groups[g].push(val); }
-      });
-      const cohorts = {};
-      for (const [g, vals] of Object.entries(groups)) {
-        const m = this.mean(vals);
-        cohorts[g] = { n: vals.length, mean: Number(m.toFixed(2)), median: Number(this.median(vals).toFixed(2)), stdDev: Number(this.stdDev(vals, m).toFixed(2)) };
-      }
-      return { type: 'cohorts', cohorts };
-    }
-
-    calculateDependency(data, cfg) {
-      const t = i18n[currentLang];
-      const pairs = [];
-      data.forEach(row => {
-        const x = Number(row[cfg.xKey]), y = Number(row[cfg.targetKey]);
-        if (!isNaN(x) && !isNaN(y)) pairs.push({ x, y });
-      });
-      const mx = this.mean(pairs.map(p => p.x)), my = this.mean(pairs.map(p => p.y));
-      let num = 0, dx = 0, dy = 0;
-      pairs.forEach(p => { num += (p.x - mx) * (p.y - my); dx += Math.pow(p.x - mx, 2); dy += Math.pow(p.y - my, 2); });
-      const r = (dx * dy === 0) ? 0 : num / Math.sqrt(dx * dy);
-      const absR = Math.abs(r);
-      const strength = absR > 0.5 ? t.strongLink : (absR > 0.3 ? t.modLink : t.weakLink);
-      return { type: 'dependency', n: pairs.length, r: Number(r.toFixed(2)), strength };
-    }
-  }
-
-  function executeScientificAnalysis() {
-    const rawText = document.getElementById('input-data').value.trim();
-    try {
-      const dataset = JSON.parse(rawText);
-      const mode = document.getElementById('analysisType').value;
-      const engine = new ScientificEngine();
-      let res = {};
-
-      if (mode === 'longitudinal') {
-        res = engine.trackLongitudinal(dataset, {
-          idKey: document.getElementById('keyParticipant').value,
-          timeKey: document.getElementById('keyTimestamp').value,
-          targetKey: document.getElementById('keyTarget').value
-        });
-      } else if (mode === 'cohorts') {
-        res = engine.analyzeCohorts(dataset, {
-          splitKey: document.getElementById('keySplit').value,
-          targetKey: document.getElementById('keyTarget').value
-        });
-      } else if (mode === 'dependency') {
-        res = engine.calculateDependency(dataset, {
-          xKey: document.getElementById('keyX').value,
-          targetKey: document.getElementById('keyTarget').value
-        });
-      }
-
-      renderHtmlOutput(res);
-      showStatus(i18n[currentLang].statusRun, false);
-    } catch (e) {
-      document.getElementById('output-container').innerHTML = `<div style="color: var(--error-color); padding: 20px; text-align: center;">Ошибка расчета.</div>`;
-    }
-  }
-
-  function renderHtmlOutput(res) {
-    const container = document.getElementById('output-container');
-    const t = i18n[currentLang];
-    container.innerHTML = '';
-
-    if (res.type === 'longitudinal') {
-      container.innerHTML = `
-        <div class="metric-grid">
-          <div class="metric-box">
-            <div class="metric-title">${t.totalSubjects}</div>
-            <div class="metric-value">${res.sample}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-title">${t.meanShift}</div>
-            <div class="metric-value">${res.meanDelta}</div>
-          </div>
-        </div>
-        <div style="font-weight: 600; font-size: 0.85rem; margin-top: 5px; color: var(--text-muted);">${t.trajectories}</div>
-      `;
-      for (const [id, data] of Object.entries(res.trajectories)) {
-        container.innerHTML += `
-          <div class="trajectory-item">
-            <span>👤 ${id} (${data.waves} waves)</span>
-            <span>${data.initial} → ${data.latest} (<b style="color: ${data.delta <= 0 ? '#34d399' : '#f87171'}">${data.delta > 0 ? '+' + data.delta : data.delta}</b>)</span>
-          </div>
-        `;
-      }
-    } else if (res.type === 'cohorts') {
-      container.innerHTML = `<div style="font-weight: 600; font-size: 0.85rem; color: var(--text-muted);">${t.cohortResults}</div>`;
-      for (const [g, data] of Object.entries(res.cohorts)) {
-        container.innerHTML += `
-          <div class="trajectory-item" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-            <div>🏷️ ${g} (n = ${data.n})</div>
-            <div style="display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-muted);">
-              <span>${t.mean}: <b style="color: var(--accent-color);">${data.mean}</b></span>
-              <span>${t.median}: <b>${data.median}</b></span>
-              <span>${t.stdDev}: <b>${data.stdDev}</b></span>
-            </div>
-          </div>
-        `;
-      }
-    } else if (res.type === 'dependency') {
-      container.innerHTML = `
-        <div class="metric-grid">
-          <div class="metric-box">
-            <div class="metric-title">${t.pearson}</div>
-            <div class="metric-value">${res.r}</div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-title">${t.interpretation}</div>
-            <div class="metric-value" style="font-size: 1rem; line-height: 1.4rem;">${res.strength}</div>
-          </div>
-        </div>
-        <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 15px; text-align: center;">
-          ${t.sampleSize} <b>${res.n}</b>
-        </div>
-      `;
-    }
-  }
-
-  window.onload = function() {
-    toggleAnalysisFields();
-    validateAndParse();
-    executeScientificAnalysis();
-  };
+applyLanguage(storedLanguage().replace('-MX','').replace('-US',''));renderMethodControls();
+try{({ScientificStats}=await import('./analyticsCore.js'));}catch(error){setStatus(`Analysis engine could not load: ${error.message}`,true);}
+if(typeof ResearchAuth==='undefined')setStatus('Authentication module could not load.',true);else{principal=await ResearchAuth.requireRole('researcher','data-analysis.html');if(principal&&ScientificStats){try{await loadStudies();}catch(error){setStatus(error.message,true);}}}
 </script>
 </body>
 </html>

@@ -215,6 +215,152 @@ function descriptive(values) {
   };
 }
 
+function simpleLinearRegression(xValues, yValues, confidenceLevel = 0.95) {
+  if (!Array.isArray(xValues) || !Array.isArray(yValues) || xValues.length !== yValues.length) {
+    throw new Error('Simple linear regression requires two equally sized aligned arrays');
+  }
+  const x = [];
+  const y = [];
+  let excluded = 0;
+  for (let index = 0; index < xValues.length; index += 1) {
+    const predictor = Number(xValues[index]);
+    const outcome = Number(yValues[index]);
+    if (Number.isFinite(predictor) && Number.isFinite(outcome)) {
+      x.push(predictor);
+      y.push(outcome);
+    } else excluded += 1;
+  }
+  if (x.length < 3) throw new Error('Simple linear regression requires at least three complete numeric pairs');
+  const xMean = mean(x);
+  const yMean = mean(y);
+  const sxx = x.reduce((sum, value) => sum + (value - xMean) ** 2, 0);
+  if (!(sxx > 0)) throw new Error('Simple linear regression is not estimable because the predictor has zero variance');
+  const sxy = x.reduce((sum, value, index) => sum + (value - xMean) * (y[index] - yMean), 0);
+  const slope = sxy / sxx;
+  const intercept = yMean - slope * xMean;
+  const residuals = y.map((value, index) => value - (intercept + slope * x[index]));
+  const residualSumSquares = residuals.reduce((sum, value) => sum + value ** 2, 0);
+  const totalSumSquares = y.reduce((sum, value) => sum + (value - yMean) ** 2, 0);
+  if (!(totalSumSquares > 0)) throw new Error('Simple linear regression is not estimable because the outcome has zero variance');
+  const df = x.length - 2;
+  const meanSquareError = residualSumSquares / df;
+  const slopeStandardError = Math.sqrt(meanSquareError / sxx);
+  if (!(slopeStandardError > 0)) throw new Error('Simple linear regression has zero residual variance; ordinary inference is not estimable');
+  const statistic = slope / slopeStandardError;
+  const pValue = Math.min(1, 2 * (1 - studentTCdf(Math.abs(statistic), df)));
+  const critical = inverseStudentT(0.5 + confidenceLevel / 2, df);
+  const rSquared = 1 - residualSumSquares / totalSumSquares;
+  return {
+    method: 'ordinary_least_squares_simple_linear_regression',
+    distribution: 'Student t for the slope; equivalent F test with 1 numerator degree of freedom',
+    n: x.length,
+    excluded_pairs: excluded,
+    intercept,
+    slope,
+    slope_standard_error: slopeStandardError,
+    statistic,
+    degrees_of_freedom: df,
+    p_value_two_sided: pValue,
+    confidence_level: confidenceLevel,
+    confidence_interval: [slope - critical * slopeStandardError, slope + critical * slopeStandardError],
+    f_statistic: statistic ** 2,
+    f_degrees_of_freedom: [1, df],
+    r_squared: rSquared,
+    adjusted_r_squared: 1 - (1 - rSquared) * (x.length - 1) / df,
+    root_mean_square_error: Math.sqrt(meanSquareError),
+    assumptions: ['correct linear functional form', 'independent observations', 'mean-zero errors conditional on the predictor', 'homoscedastic errors for the reported conventional standard error', 'approximately normal errors for exact small-sample inference'],
+    notes: ['An observational regression coefficient is an association and is not a causal effect without an appropriate design and identification argument.']
+  };
+}
+
+function validateRepeatedMatrix(matrix, methodName) {
+  if (!Array.isArray(matrix) || matrix.length < 2 || matrix.some(row => !Array.isArray(row))) {
+    throw new Error(`${methodName} requires at least two complete participants`);
+  }
+  const conditions = matrix[0].length;
+  if (conditions < 2 || matrix.some(row => row.length !== conditions)) {
+    throw new Error(`${methodName} requires the same two or more timepoints for every participant`);
+  }
+  const numeric = matrix.map(row => row.map(Number));
+  if (numeric.flat().some(value => !Number.isFinite(value))) {
+    throw new Error(`${methodName} requires a complete finite numeric repeated-measures matrix`);
+  }
+  return numeric;
+}
+
+function repeatedMeasuresAnova(matrix) {
+  const values = validateRepeatedMatrix(matrix, 'Repeated-measures ANOVA');
+  const participants = values.length;
+  const conditions = values[0].length;
+  const flat = values.flat();
+  const grandMean = mean(flat);
+  const participantMeans = values.map(row => mean(row));
+  const conditionMeans = values[0].map((_, column) => mean(values.map(row => row[column])));
+  const totalSumSquares = flat.reduce((sum, value) => sum + (value - grandMean) ** 2, 0);
+  const participantSumSquares = conditions * participantMeans.reduce((sum, value) => sum + (value - grandMean) ** 2, 0);
+  const conditionSumSquares = participants * conditionMeans.reduce((sum, value) => sum + (value - grandMean) ** 2, 0);
+  const errorSumSquares = totalSumSquares - participantSumSquares - conditionSumSquares;
+  const conditionDf = conditions - 1;
+  const errorDf = (participants - 1) * (conditions - 1);
+  const conditionMeanSquare = conditionSumSquares / conditionDf;
+  const errorMeanSquare = Math.max(0, errorSumSquares) / errorDf;
+  if (!(errorMeanSquare > 0)) throw new Error('Repeated-measures ANOVA is not estimable because residual variance is zero');
+  const statistic = conditionMeanSquare / errorMeanSquare;
+  return {
+    method: 'one_factor_repeated_measures_anova',
+    distribution: 'F under the uncorrected sphericity model',
+    participants,
+    conditions,
+    condition_means: conditionMeans,
+    statistic,
+    degrees_of_freedom: [conditionDf, errorDf],
+    p_value: Math.max(0, 1 - fCdf(statistic, conditionDf, errorDf)),
+    anova_table: {
+      condition: { sum_of_squares: conditionSumSquares, df: conditionDf, mean_square: conditionMeanSquare },
+      participants: { sum_of_squares: participantSumSquares, df: participants - 1 },
+      error: { sum_of_squares: Math.max(0, errorSumSquares), df: errorDf, mean_square: errorMeanSquare },
+      total: { sum_of_squares: totalSumSquares, df: participants * conditions - 1 }
+    },
+    effect_size: { name: 'partial eta squared', value: conditionSumSquares / (conditionSumSquares + Math.max(0, errorSumSquares)) },
+    assumptions: ['the same participants are measured at every selected timepoint', 'independent participants', 'approximately normal within-participant errors', 'sphericity for the uncorrected F inference when more than two timepoints are selected'],
+    notes: ['No sphericity correction is silently applied. With more than two timepoints, inspect sphericity or use the Friedman alternative when the parametric model is not justified.']
+  };
+}
+
+function friedmanTest(matrix) {
+  const values = validateRepeatedMatrix(matrix, 'Friedman test');
+  const participants = values.length;
+  const conditions = values[0].length;
+  const rankSums = new Array(conditions).fill(0);
+  let tieTerm = 0;
+  values.forEach(row => {
+    const ranked = ranks(row);
+    ranked.ranks.forEach((rank, condition) => { rankSums[condition] += rank; });
+    tieTerm += ranked.tieSizes.reduce((sum, size) => sum + size ** 3 - size, 0);
+  });
+  const uncorrected = 12 / (participants * conditions * (conditions + 1)) *
+    rankSums.reduce((sum, value) => sum + value ** 2, 0) - 3 * participants * (conditions + 1);
+  const tieCorrection = 1 - tieTerm / (participants * (conditions ** 3 - conditions));
+  if (!(tieCorrection > 0)) throw new Error('Friedman test is not estimable because all repeated observations are tied');
+  const statistic = uncorrected / tieCorrection;
+  const df = conditions - 1;
+  return {
+    method: 'friedman_repeated_measures_rank_test',
+    distribution: 'chi-square asymptotic reference distribution',
+    participants,
+    conditions,
+    rank_sums: rankSums,
+    statistic,
+    degrees_of_freedom: df,
+    p_value: chiSquareSurvival(statistic, df),
+    ties_present: tieTerm > 0,
+    tie_correction: tieCorrection,
+    effect_size: { name: "Kendall's W", value: statistic / (participants * (conditions - 1)) },
+    assumptions: ['the same participants are measured at every selected timepoint', 'independent participants', 'at least ordinal outcomes'],
+    notes: ['The chi-square reference distribution is asymptotic; the result is labeled accordingly. A significant omnibus result does not identify which timepoints differ.']
+  };
+}
+
 function welchTTest(firstValues, secondValues, confidenceLevel = 0.95) {
   const first = finiteNumbers(firstValues);
   const second = finiteNumbers(secondValues);
@@ -537,6 +683,87 @@ function kruskalWallis(groupObject) {
   };
 }
 
+function holmAdjustedPValues(pValues) {
+  const ordered = pValues.map((value, index) => ({ value, index })).sort((a, b) => a.value - b.value);
+  const adjusted = new Array(pValues.length);
+  let runningMaximum = 0;
+  ordered.forEach((entry, rank) => {
+    runningMaximum = Math.max(runningMaximum, Math.min(1, entry.value * (ordered.length - rank)));
+    adjusted[entry.index] = runningMaximum;
+  });
+  return adjusted;
+}
+
+function pairwiseWelchHolm(groupObject, confidenceLevel = 0.95) {
+  const entries = Object.entries(groupObject || {}).map(([name, values]) => [name, finiteNumbers(values)]);
+  if (entries.length < 2 || entries.some(([, values]) => values.length < 2)) {
+    throw new Error('Pairwise Welch comparisons require at least two groups with two observations each');
+  }
+  const comparisons = [];
+  for (let first = 0; first < entries.length; first += 1) {
+    for (let second = first + 1; second < entries.length; second += 1) {
+      const result = welchTTest(entries[first][1], entries[second][1], confidenceLevel);
+      comparisons.push({ group_a: entries[first][0], group_b: entries[second][0], ...result });
+    }
+  }
+  const adjusted = holmAdjustedPValues(comparisons.map(comparison => comparison.p_value_two_sided));
+  comparisons.forEach((comparison, index) => { comparison.p_value_holm = adjusted[index]; });
+  return {
+    method: 'pairwise_welch_t_tests_with_holm_correction',
+    family_size: comparisons.length,
+    multiplicity_correction: 'Holm step-down family-wise error rate control',
+    comparisons,
+    assumptions: ['each pair contains independent observations', 'approximately normal sampling distributions within groups or adequate sample sizes'],
+    notes: ['Welch comparisons do not assume equal population variances. The Holm-adjusted p-values belong to the complete reported comparison family.']
+  };
+}
+
+function dunnHolm(groupObject) {
+  const entries = Object.entries(groupObject || {}).map(([name, values]) => [name, finiteNumbers(values)]);
+  if (entries.length < 2 || entries.some(([, values]) => values.length === 0)) {
+    throw new Error('Dunn comparisons require at least two non-empty groups');
+  }
+  const combined = entries.flatMap(([, values]) => values);
+  const ranked = ranks(combined);
+  const total = combined.length;
+  const tieTerm = ranked.tieSizes.reduce((sum, size) => sum + size ** 3 - size, 0);
+  const baseVariance = total * (total + 1) / 12 - tieTerm / (12 * (total - 1));
+  if (!(baseVariance > 0)) throw new Error('Dunn comparisons are not estimable because all observations are tied');
+  let offset = 0;
+  const summaries = entries.map(([name, values]) => {
+    const meanRank = mean(ranked.ranks.slice(offset, offset + values.length));
+    offset += values.length;
+    return { name, n: values.length, mean_rank: meanRank };
+  });
+  const comparisons = [];
+  for (let first = 0; first < summaries.length; first += 1) {
+    for (let second = first + 1; second < summaries.length; second += 1) {
+      const standardError = Math.sqrt(baseVariance * (1 / summaries[first].n + 1 / summaries[second].n));
+      const z = (summaries[first].mean_rank - summaries[second].mean_rank) / standardError;
+      comparisons.push({
+        group_a: summaries[first].name,
+        group_b: summaries[second].name,
+        n: [summaries[first].n, summaries[second].n],
+        mean_rank_difference: summaries[first].mean_rank - summaries[second].mean_rank,
+        statistic: z,
+        p_value_two_sided: Math.min(1, 2 * (1 - normalCdf(Math.abs(z))))
+      });
+    }
+  }
+  const adjusted = holmAdjustedPValues(comparisons.map(comparison => comparison.p_value_two_sided));
+  comparisons.forEach((comparison, index) => { comparison.p_value_holm = adjusted[index]; });
+  return {
+    method: 'dunn_rank_comparisons_with_holm_correction',
+    distribution: 'tie-corrected normal approximation',
+    family_size: comparisons.length,
+    multiplicity_correction: 'Holm step-down family-wise error rate control',
+    ties_present: ranked.tieSizes.length > 0,
+    comparisons,
+    assumptions: ['independent observations', 'at least ordinal outcomes'],
+    notes: ['These are rank comparisons with an asymptotic reference distribution. The Holm-adjusted p-values belong to the complete reported comparison family.']
+  };
+}
+
 function fisherExact(table) {
   if (!Array.isArray(table) || table.length !== 2 || table.some(row => !Array.isArray(row) || row.length !== 2)) {
     throw new Error('Fisher exact test requires a 2×2 contingency table');
@@ -606,13 +833,18 @@ function chiSquareIndependence(table) {
 
 export const ScientificStats = Object.freeze({
   descriptive,
+  simpleLinearRegression,
   welchTTest,
   pairedTTest,
+  repeatedMeasuresAnova,
+  friedmanTest,
   oneWayAnova,
   pearsonCorrelation,
   spearmanCorrelation,
   mannWhitney,
   kruskalWallis,
+  pairwiseWelchHolm,
+  dunnHolm,
   fisherExact,
   chiSquareIndependence,
   distributions: Object.freeze({ studentTCdf, fCdf, chiSquareSurvival })

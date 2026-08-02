@@ -74,8 +74,71 @@ test('paired t-test uses complete aligned pairs and Student t inference', () => 
   assert.equal(result.degrees_of_freedom, 4);
 });
 
+test('simple OLS regression reports slope inference, interval, and model fit', () => {
+  const result = ScientificStats.simpleLinearRegression(
+    [1, 2, 3, 4, 5],
+    [2, 3, 5, 4, 6]
+  );
+  close(result.slope, 0.9);
+  close(result.statistic, 3.5762373640756184);
+  close(result.p_value_two_sided, 0.03738607346849854, 1e-10);
+  close(result.r_squared, 0.81);
+  assert.deepEqual(result.f_degrees_of_freedom, [1, 3]);
+  assert.match(result.distribution, /Student t/);
+});
+
+test('repeated-measures ANOVA separates participant and timepoint variation', () => {
+  const result = ScientificStats.repeatedMeasuresAnova([
+    [1, 2, 3],
+    [2, 4, 6],
+    [3, 4, 5],
+    [4, 5, 7]
+  ]);
+  close(result.statistic, 30.33333333333326, 1e-10);
+  close(result.p_value, 0.0007289999999999797, 1e-12);
+  assert.deepEqual(result.degrees_of_freedom, [2, 6]);
+  close(result.anova_table.participants.sum_of_squares, 17);
+});
+
+test('Friedman repeated-measures test reports tie correction and Kendall W', () => {
+  const result = ScientificStats.friedmanTest([
+    [1, 2, 3],
+    [2, 4, 6],
+    [3, 4, 5],
+    [4, 5, 7]
+  ]);
+  close(result.statistic, 8);
+  close(result.p_value, 0.01831563888873422, 1e-12);
+  close(result.effect_size.value, 1);
+  assert.equal(result.tie_correction, 1);
+});
+
+test('pairwise Welch and Dunn comparisons control the complete family with Holm', () => {
+  const groups = {
+    a: [1, 2, 3, 4],
+    b: [3, 4, 5, 6],
+    c: [8, 9, 10, 11]
+  };
+  const welch = ScientificStats.pairwiseWelchHolm(groups);
+  const dunn = ScientificStats.dunnHolm(groups);
+  assert.equal(welch.comparisons.length, 3);
+  assert.equal(dunn.comparisons.length, 3);
+  welch.comparisons.forEach(comparison => {
+    assert.ok(comparison.p_value_holm >= comparison.p_value_two_sided);
+    assert.ok(comparison.p_value_holm <= 1);
+  });
+  dunn.comparisons.forEach(comparison => {
+    assert.ok(comparison.p_value_holm >= comparison.p_value_two_sided);
+    assert.ok(comparison.p_value_holm <= 1);
+  });
+  assert.match(welch.multiplicity_correction, /Holm/);
+  assert.match(dunn.distribution, /normal approximation/);
+});
+
 test('invalid or non-estimable inputs are blocked instead of returning null success', () => {
   assert.throws(() => ScientificStats.welchTTest([1], [2, 3]), /at least two/);
   assert.throws(() => ScientificStats.pearsonCorrelation([1, 1, 1], [1, 2, 3]), /zero variance/);
   assert.throws(() => ScientificStats.chiSquareIndependence([[0, 0], [1, 2]]), /empty marginal/);
+  assert.throws(() => ScientificStats.simpleLinearRegression([1, 1, 1], [1, 2, 3]), /zero variance/);
+  assert.throws(() => ScientificStats.repeatedMeasuresAnova([[1, 2], [3]]), /same two or more/);
 });
