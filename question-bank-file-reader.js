@@ -2,7 +2,7 @@
   'use strict';
 
   const ACCEPTED_EXTENSIONS = Object.freeze([
-    'docx', 'pdf', 'xlsx', 'xls', 'csv', 'yml', 'yaml', 'txt', 'json', 'py', 'js', 'pages'
+    'docx', 'pdf', 'xlsx', 'xls', 'xml', 'csv', 'yml', 'yaml', 'txt', 'json', 'py', 'js', 'pages'
   ]);
   const localLibraryPromises = {};
   let pdfWorkerObjectUrl = null;
@@ -115,6 +115,14 @@
     } else if (extension === 'xlsx' || extension === 'xls') {
       await ensureXlsxLibrary();
       const workbook = global.XLSX.read(await file.arrayBuffer(), { type: 'array' });
+      const extracted = workbookRows(workbook);
+      parsedValue = extracted.rows;
+      sheetNames = extracted.sheet_names;
+      content = JSON.stringify(parsedValue, null, 2);
+    } else if (extension === 'xml') {
+      await ensureXlsxLibrary();
+      const decoded = global.QuestionBankImport.decodeTextBytes(await file.arrayBuffer());
+      const workbook = global.XLSX.read(decoded, { type: 'string' });
       const extracted = workbookRows(workbook);
       parsedValue = extracted.rows;
       sheetNames = extracted.sheet_names;
