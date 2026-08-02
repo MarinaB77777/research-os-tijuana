@@ -1767,8 +1767,10 @@ export default async function handler(req, res) {
         if (!uuidV4.test(packageData.bank_id || '')) {
             return res.status(400).json({ ok: false, error: 'Valid bank_id UUID is required' });
         }
-        if (!packageData.code || !packageData.title || !Number.isInteger(packageData.version) || packageData.version < 1) {
-            return res.status(400).json({ ok: false, error: 'Bank code, title, and positive integer version are required' });
+        if (!packageData.code || !packageData.title || !packageData.primary_language ||
+            !packageData.global_time_reference || Number.isNaN(Date.parse(packageData.global_time_reference)) ||
+            !Number.isInteger(packageData.version) || packageData.version < 1) {
+            return res.status(400).json({ ok: false, error: 'Bank code, title, language, Global Time Reference, and positive integer version are required' });
         }
         if (!['draft', 'trial', 'active'].includes(packageData.status)) {
             return res.status(400).json({ ok: false, error: 'Bank status must be draft, trial, or active' });
@@ -1781,16 +1783,34 @@ export default async function handler(req, res) {
         if (entries.length === 0) {
             return res.status(400).json({ ok: false, error: 'Question bank is empty' });
         }
+        if (!Array.isArray(packageData.question_order) || packageData.question_order.length !== entries.length ||
+            new Set(packageData.question_order).size !== packageData.question_order.length ||
+            packageData.question_order.some(entryCode => !Object.prototype.hasOwnProperty.call(questionMap, entryCode))) {
+            return res.status(400).json({
+                ok: false,
+                error: 'question_order and questions must contain the same questions exactly once'
+            });
+        }
 
         for (const [entryCode, question] of entries) {
+            const selectionType = ['single_select', 'multiple_select'].includes(question?.type);
+            const validOptions = Array.isArray(question?.options) &&
+                (!selectionType || question.options.length >= 2) &&
+                question.options.every(option => option && typeof option === 'object' &&
+                    String(option.text || '').trim() &&
+                    Object.prototype.hasOwnProperty.call(option, 'value') &&
+                    option.value !== null && option.value !== undefined) &&
+                new Set(question.options.map(option => JSON.stringify(option.value))).size === question.options.length;
             if (!uuidV4.test(question?.question_id || '') ||
                 question?.code !== entryCode ||
                 !question?.prompt ||
                 !Number.isInteger(question?.version) ||
                 question.version < 1 ||
-                !question?.type ||
-                !question?.scale ||
-                !Array.isArray(question?.options) ||
+                !['single_select', 'multiple_select', 'numeric_input', 'text_input'].includes(question?.type) ||
+                !question?.scale || !String(question.scale.id || '').trim() ||
+                !['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(question.scale.psychometric_level) ||
+                !validOptions ||
+                !['draft', 'trial', 'active'].includes(question?.status) ||
                 Object.prototype.hasOwnProperty.call(question, 'routing') ||
                 question.options.some(option =>
                     option && typeof option === 'object' &&

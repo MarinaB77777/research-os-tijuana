@@ -815,7 +815,7 @@
     let blocksSet = new Set();
     let typesSet = new Set();
 
-    const packageRequiredFields = ['schema', 'schema_version', 'bank_id', 'code', 'title', 'version', 'status', 'global_time_reference', 'question_order'];
+    const packageRequiredFields = ['schema', 'schema_version', 'bank_id', 'code', 'title', 'version', 'status', 'primary_language', 'global_time_reference', 'question_order'];
     packageRequiredFields.forEach(function(field) {
       if (packageData[field] === undefined || packageData[field] === null || packageData[field] === '') {
         errors.push('❌ Банк вопросов: отсутствует обязательное поле \'' + field + '\'.');
@@ -831,6 +831,9 @@
       errors.push('❌ Банк вопросов: question_order должен быть массивом кодов.');
     } else {
       const ordered = packageData.question_order;
+      if (ordered.length === 0) {
+        errors.push('❌ Банк вопросов: question_order не может быть пустым.');
+      }
       if (new Set(ordered).size !== ordered.length) {
         errors.push('❌ Банк вопросов: question_order содержит дубликаты.');
       }
@@ -844,6 +847,9 @@
     const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (!uuidV4.test(packageData.bank_id || '')) {
       errors.push('❌ Банк вопросов: bank_id должен быть UUID v4.');
+    }
+    if (!packageData.global_time_reference || Number.isNaN(Date.parse(packageData.global_time_reference))) {
+      errors.push('❌ Банк вопросов: требуется корректная Global Time Reference.');
     }
 
     const requiredFields = ['question_id', 'code', 'version', 'prompt', 'type', 'scale', 'status'];
@@ -871,6 +877,13 @@
         errors.push('❌ Вопрос [' + key + ']: question_id должен быть UUID v4; валидатор не создаёт идентичность автоматически.');
       }
       if (q.type) typesSet.add(q.type);
+      if (q.type && ['single_select', 'multiple_select', 'numeric_input', 'text_input'].indexOf(q.type) === -1) {
+        errors.push('❌ Вопрос [' + key + ']: тип ответа не поддерживается модулем проведения анкет.');
+      }
+      if (!q.scale || typeof q.scale !== 'object' ||
+          ['nominal', 'ordinal', 'interval_ratio', 'textual'].indexOf(q.scale.psychometric_level) === -1) {
+        errors.push('❌ Вопрос [' + key + ']: отсутствует корректный психометрический уровень шкалы.');
+      }
       if (Object.prototype.hasOwnProperty.call(q, 'routing')) {
         errors.push('❌ Вопрос [' + key + ']: routing не принадлежит независимому определению вопроса; переходы должны находиться в research_os.questionnaire.');
       }
@@ -882,15 +895,32 @@
         errors.push('❌ Вопрос [' + key + ']: переход внутри option не допускается; маршрутизация принадлежит конкретной анкете.');
       }
 
-      const needOptions = ['single_select', 'multi_select', 'dropdown'];
+      const needOptions = ['single_select', 'multiple_select'];
       if (needOptions.indexOf(q.type) !== -1) {
-        if (!q.options || q.options.length === 0) {
-          warnings.push('⚠️ Вопрос [' + key + ']: Массив \'options\' пуст.');
+        if (!Array.isArray(q.options) || q.options.length < 2) {
+          errors.push('❌ Вопрос [' + key + ']: для выбора нужны как минимум два варианта ответа.');
         }
       } else if (q.type === 'matrix') {
         if (!q.rows || (Array.isArray(q.rows) && q.rows.length === 0)) {
           warnings.push('⚠️ Вопрос [' + key + ']: Массив \'rows\' для матрицы пуст.');
         }
+      }
+      if (Array.isArray(q.options)) {
+        const optionValues = new Set();
+        q.options.forEach(function(option, optionIndex) {
+          if (!option || typeof option !== 'object' || !String(option.text || '').trim()) {
+            errors.push('❌ Вопрос [' + key + ']: вариант ' + (optionIndex + 1) + ' не содержит текста.');
+            return;
+          }
+          if (!Object.prototype.hasOwnProperty.call(option, 'value') || option.value === null || option.value === undefined) {
+            errors.push('❌ Вопрос [' + key + ']: вариант ' + (optionIndex + 1) + ' не содержит стабильного значения.');
+          }
+          const valueKey = JSON.stringify(option.value);
+          if (optionValues.has(valueKey)) {
+            errors.push('❌ Вопрос [' + key + ']: значения вариантов ответа должны быть уникальными.');
+          }
+          optionValues.add(valueKey);
+        });
       }
     });
 

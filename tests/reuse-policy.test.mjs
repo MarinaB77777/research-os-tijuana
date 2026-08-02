@@ -58,10 +58,10 @@ function canonicalBank(reusePermission) {
         code: 'Q_1',
         version: 1,
         status: 'draft',
-        type: 'ordinal',
+        type: 'single_select',
         prompt: 'Question',
-        scale: { id: 'likert_5' },
-        options: []
+        scale: { id: 'binary', psychometric_level: 'nominal' },
+        options: [{ value: 0, text: 'No' }, { value: 1, text: 'Yes' }]
       }
     }
   };

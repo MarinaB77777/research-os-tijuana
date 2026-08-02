@@ -82,10 +82,71 @@
   }
 
   function workbookRows(workbook) {
-    const sheets = workbook.SheetNames.map(sheetName => ({
-      sheet_name: sheetName,
-      rows: global.XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null })
-    }));
+    const headerAliases = Object.freeze({
+      code: 'code', codigo: 'code', question_code: 'question_code', codigo_pregunta: 'question_code',
+      kod: 'code', kod_voprosa: 'question_code', question_id: 'question_id', id_pregunta: 'question_id',
+      id_voprosa: 'question_id', prompt: 'prompt', question_prompt: 'question_prompt', question: 'question',
+      question_text: 'prompt', pregunta: 'question', texto_pregunta: 'prompt', text: 'text', texto: 'text', vopros: 'question',
+      tekst_voprosa: 'prompt', type: 'type', response_type: 'response_type', question_type: 'question_type',
+      tipo: 'type', tipo_respuesta: 'response_type', tip: 'type', tip_otveta: 'response_type',
+      options: 'options', choices: 'choices', answer_options: 'options', answers: 'options',
+      opciones: 'options', respuestas: 'options', varianty: 'options', otvety: 'options',
+      option_text: 'option_text', texto_opcion: 'option_text', opcion: 'option_text',
+      tekst_varianta: 'option_text', variant: 'option_text', option_value: 'option_value',
+      valor_opcion: 'option_value', valor: 'option_value', znachenie_varianta: 'option_value',
+      znachenie: 'option_value', scale: 'scale', escala: 'scale', shkala: 'scale',
+      scale_id: 'scale_id', id_escala: 'scale_id', id_shkaly: 'scale_id',
+      scale_type: 'scale_type', tipo_escala: 'scale_type', tip_shkaly: 'scale_type',
+      psychometric_level: 'psychometric_level', nivel_psicometrico: 'psychometric_level',
+      uroven_izmereniya: 'psychometric_level'
+    });
+    function normalizedHeader(value) {
+      return String(value || '')
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9а-яё]+/gi, '_')
+        .replace(/^_+|_+$/g, '')
+        .replace(/[а-яё]/gi, character => ({
+          а:'a',б:'b',в:'v',г:'g',д:'d',е:'e',ё:'e',ж:'zh',з:'z',и:'i',й:'i',к:'k',л:'l',м:'m',
+          н:'n',о:'o',п:'p',р:'r',с:'s',т:'t',у:'u',ф:'f',х:'h',ц:'c',ч:'ch',ш:'sh',щ:'sh',
+          ъ:'',ы:'y',ь:'',э:'e',ю:'yu',я:'ya'
+        })[character.toLowerCase()]);
+    }
+    function canonicalRows(sheet) {
+      return global.XLSX.utils.sheet_to_json(sheet, { defval: null }).map(row =>
+        Object.fromEntries(Object.entries(row).map(([key, value]) => [
+          headerAliases[normalizedHeader(key)] || key,
+          value
+        ]))
+      );
+    }
+    const sheets = workbook.SheetNames.map(sheetName => {
+      const sheet = workbook.Sheets[sheetName];
+      const matrix = global.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const firstRow = Array.isArray(matrix[0]) ? matrix[0] : [];
+      const hasSemanticHeader = firstRow.some(value =>
+        Object.prototype.hasOwnProperty.call(headerAliases, normalizedHeader(value))
+      );
+      return {
+        sheet_name: sheetName,
+        rows: hasSemanticHeader
+          ? canonicalRows(sheet)
+          : [],
+        plain_lines: hasSemanticHeader
+          ? []
+          : matrix.map(row => row.filter(value => value !== null && value !== '').join(' ').trim()).filter(Boolean),
+        has_semantic_header: hasSemanticHeader
+      };
+    });
+    if (sheets.some(sheet => !sheet.has_semantic_header)) {
+      return {
+        rows: null,
+        plain_text: sheets.flatMap(sheet => sheet.plain_lines).join('\n'),
+        sheet_names: sheets.map(sheet => sheet.sheet_name),
+        headerless: true
+      };
+    }
     if (sheets.length === 1) return { rows: sheets[0].rows, sheet_names: [sheets[0].sheet_name] };
     return {
       rows: sheets.flatMap(sheet => sheet.rows.map(row => ({ ...row, __source_sheet: sheet.sheet_name }))),
@@ -116,25 +177,28 @@
       await ensureXlsxLibrary();
       const workbook = global.XLSX.read(await file.arrayBuffer(), { type: 'array' });
       const extracted = workbookRows(workbook);
-      parsedValue = extracted.rows;
+      parsedValue = extracted.headerless ? null : extracted.rows;
       sheetNames = extracted.sheet_names;
-      content = JSON.stringify(parsedValue, null, 2);
+      content = extracted.headerless ? extracted.plain_text : JSON.stringify(parsedValue, null, 2);
+      if (extracted.headerless) inputKind = 'plain';
     } else if (extension === 'xml') {
       await ensureXlsxLibrary();
       const decoded = global.QuestionBankImport.decodeTextBytes(await file.arrayBuffer());
       const workbook = global.XLSX.read(decoded, { type: 'string' });
       const extracted = workbookRows(workbook);
-      parsedValue = extracted.rows;
+      parsedValue = extracted.headerless ? null : extracted.rows;
       sheetNames = extracted.sheet_names;
-      content = JSON.stringify(parsedValue, null, 2);
+      content = extracted.headerless ? extracted.plain_text : JSON.stringify(parsedValue, null, 2);
+      if (extracted.headerless) inputKind = 'plain';
     } else if (extension === 'csv') {
       await ensureXlsxLibrary();
       const decoded = global.QuestionBankImport.decodeTextBytes(await file.arrayBuffer());
       const workbook = global.XLSX.read(decoded, { type: 'string', codepage: 65001 });
       const extracted = workbookRows(workbook);
-      parsedValue = extracted.rows;
+      parsedValue = extracted.headerless ? null : extracted.rows;
       sheetNames = extracted.sheet_names;
-      content = JSON.stringify(parsedValue, null, 2);
+      content = extracted.headerless ? extracted.plain_text : JSON.stringify(parsedValue, null, 2);
+      if (extracted.headerless) inputKind = 'plain';
     } else if (extension === 'pages') {
       if (typeof global.JSZip === 'undefined') throw new Error('Local PAGES/ZIP library is not loaded.');
       const archive = await global.JSZip.loadAsync(await file.arrayBuffer());

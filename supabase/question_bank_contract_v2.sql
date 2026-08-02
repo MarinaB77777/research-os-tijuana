@@ -197,6 +197,41 @@ begin
         if v_question ->> 'code' is distinct from v_code then
             raise exception 'Question key % does not match its code', v_code;
         end if;
+        if v_question ->> 'type' is null
+           or v_question ->> 'type' not in
+              ('single_select', 'multiple_select', 'numeric_input', 'text_input') then
+            raise exception 'Question % has an unsupported response type', v_code;
+        end if;
+        if jsonb_typeof(v_question -> 'scale') is distinct from 'object'
+           or nullif(btrim(v_question #>> '{scale,id}'), '') is null
+           or v_question #>> '{scale,psychometric_level}' is null
+           or v_question #>> '{scale,psychometric_level}' not in
+              ('nominal', 'ordinal', 'interval_ratio', 'textual') then
+            raise exception 'Question % has an incomplete measurement contract', v_code;
+        end if;
+        if jsonb_typeof(v_question -> 'options') is distinct from 'array'
+           or (
+             v_question ->> 'type' in ('single_select', 'multiple_select')
+             and jsonb_array_length(v_question -> 'options') < 2
+           ) then
+            raise exception 'Question % has invalid answer options', v_code;
+        end if;
+        if exists (
+             select 1
+              from jsonb_array_elements(v_question -> 'options') option_value
+              where jsonb_typeof(option_value) is distinct from 'object'
+                 or nullif(btrim(option_value ->> 'text'), '') is null
+                 or not (option_value ? 'value')
+                 or option_value -> 'value' = 'null'::jsonb
+           )
+           or exists (
+             select 1
+               from jsonb_array_elements(v_question -> 'options') option_value
+              group by option_value -> 'value'
+             having count(*) > 1
+           ) then
+            raise exception 'Question % has empty or duplicate answer options', v_code;
+        end if;
         if v_question ? 'routing'
            or exists (
                select 1

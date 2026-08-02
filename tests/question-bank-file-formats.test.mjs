@@ -36,6 +36,16 @@ const xlsxSource = (await Promise.all([
 vm.runInNewContext(xlsxSource, xlsxContext);
 const XLSX = xlsxContext.XLSX;
 
+const readerSource = await fs.readFile(new URL('question-bank-file-reader.js', root), 'utf8');
+const readerContext = {
+  console, Uint8Array, ArrayBuffer, TextDecoder, Blob, URL, XLSX,
+  QuestionBankImport: importer
+};
+readerContext.globalThis = readerContext;
+readerContext.window = readerContext;
+vm.runInNewContext(readerSource, readerContext);
+const fileReader = readerContext.QuestionBankFileReader;
+
 const questionnaireText = [
   '1. ¿Cómo está hoy?',
   '1) Mal',
@@ -224,6 +234,49 @@ test('real UTF-8 CSV and binary XLSX preserve Spanish text and ordered options',
       { defval: null }
     )
   ));
+});
+
+test('headerless CSV keeps its first question and enters editable plain-questionnaire parsing', async () => {
+  const bytes = new TextEncoder().encode('1. Age\n2. Gender\n3. Country');
+  const result = await fileReader.readQuestionnaireFile({
+    name: 'demographics.csv',
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  });
+  const bank = importer.plainTextToQuestionBank(result.content, { title: result.source_title });
+
+  assert.equal(result.input_kind, 'plain');
+  assert.match(result.content, /^1\. Age/m);
+  assert.deepEqual(JSON.parse(JSON.stringify(bank.question_order)), ['Q_1', 'Q_2', 'Q_3']);
+});
+
+test('Spanish spreadsheet headers map to the same canonical row contract', async () => {
+  const csv = [
+    'código pregunta,pregunta,valor opción,opción,tipo,escala,nivel psicométrico',
+    'Q_1,¿Cómo está?,1,Mal,single_select,single_choice,nominal',
+    'Q_1,¿Cómo está?,2,Bien,single_select,single_choice,nominal'
+  ].join('\n');
+  const bytes = new TextEncoder().encode(csv);
+  const result = await fileReader.readQuestionnaireFile({
+    name: 'preguntas.csv',
+    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
+  });
+  const bank = importer.canonicalOrConverted(result.parsed_value, { title: result.source_title });
+
+  assert.equal(result.input_kind, 'structured');
+  assert.equal(bank.questions.Q_1.prompt, '¿Cómo está?');
+  assert.deepEqual(JSON.parse(JSON.stringify(bank.questions.Q_1.options.map(option => option.text))), ['Mal', 'Bien']);
+  assert.equal(importer.summarize(bank, 'csv').can_use, true);
+});
+
+test('equal generated codes on separate workbook sheets remain separate questions', () => {
+  const bank = rowsBank([
+    { __source_sheet: 'Wave 1', code: 'Q_1', prompt: 'First wave?', type: 'text_input', scale: { id: 'text', psychometric_level: 'textual' } },
+    { __source_sheet: 'Wave 2', code: 'Q_1', prompt: 'Second wave?', type: 'text_input', scale: { id: 'text', psychometric_level: 'textual' } }
+  ]);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(bank.question_order)), ['Q_1', 'Q_1_2']);
+  assert.equal(bank.questions.Q_1.prompt, 'First wave?');
+  assert.equal(bank.questions.Q_1_2.prompt, 'Second wave?');
 });
 
 test('the constructor own Excel XML export reopens as the same ordered bank rows', async () => {

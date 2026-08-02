@@ -121,13 +121,13 @@ test('legacy question_prompt, answer_options, and scale id are normalized withou
   assert.equal(imported.questions.Q_1.prompt, 'Actual research question?');
   assert.deepEqual(
     JSON.parse(JSON.stringify(imported.questions.Q_1.options)),
-    [{ value: 0, text: 'No' }, { value: 1, text: 'Yes' }]
+    [{ value: 1, text: 'No' }, { value: 2, text: 'Yes' }]
   );
   assert.equal(imported.questions.Q_1.scale.id, 'binary');
   assert.equal(importer.summarize(imported, 'py').can_use, true);
 });
 
-test('synthetic Strict Cyan Protocol fixture preserves all variables, scales, routing, and unfinished prompts', async () => {
+test('synthetic Strict Cyan Protocol preserves measurement data and keeps routing as source context', async () => {
   const text = await fs.readFile(
     new URL('./fixtures/synthetic_strict_cyan_protocol.json', import.meta.url),
     'utf8'
@@ -167,7 +167,8 @@ test('synthetic Strict Cyan Protocol fixture preserves all variables, scales, ro
   assert.equal(contextGroup.options.length, 3);
   assert.equal(contextGroup.options[0].value, 'alpha');
   assert.equal(contextGroup.options[0].target_transition, 'next');
-  assert.equal(contextGroup.routing.default_next, 'next');
+  assert.equal(contextGroup.routing, undefined);
+  assert.equal(contextGroup.source_context.imported_routing.default_next, 'next');
 
   const load = imported.questions.SYNTHETIC_LOAD_T1;
   assert.equal(load.scale.id, 'likert_7');
@@ -176,7 +177,7 @@ test('synthetic Strict Cyan Protocol fixture preserves all variables, scales, ro
   assert.equal(load.time.lag, 'days_7');
 
   const numeric = imported.questions.SYNTHETIC_METRIC;
-  assert.equal(numeric.type, 'number');
+  assert.equal(numeric.type, 'numeric_input');
   assert.equal(numeric.scale.id, 'currency_metric');
   assert.equal(numeric.scale.min, 1);
   assert.equal(numeric.scale.max, 5);
@@ -372,6 +373,154 @@ test('missing content remains empty while generated service identity stays valid
   assert.equal(result.can_use, false);
 });
 
+test('a JSON array of question strings is preserved as editable questions, never an empty usable bank', () => {
+  const imported = importer.canonicalOrConverted(['Age', 'Gender', 'Country'], {
+    title: 'Demographics'
+  });
+  const result = importer.summarize(imported, 'json');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(imported.question_order)), ['Q_1', 'Q_2', 'Q_3']);
+  assert.equal(imported.questions.Q_2.prompt, 'Gender');
+  assert.equal(result.counts.questions, 3);
+  assert.equal(result.can_use, false);
+  assert.ok(result.diagnostics.some(item => item.code === 'UNRESOLVED_TYPE'));
+});
+
+test('a standalone model question becomes one canonical question without changing its scale coding', () => {
+  const source = {
+    type: 'single_select',
+    prompt: 'Когда в уже понятной для вас ситуации появляется новая важная информация:',
+    options: [
+      {
+        value: 0,
+        text: 'Обычно сначала стараюсь понять, насколько эта информация надёжна, а затем решаю, меняет ли она моё понимание ситуации'
+      },
+      {
+        value: 1,
+        text: 'Обычно стараюсь понять, как эта информация меняет общую картину происходящего'
+      },
+      {
+        value: 2,
+        text: 'Обычно учитываю новую информацию и при необходимости уточняю своё понимание ситуации'
+      },
+      {
+        value: 3,
+        text: 'Новую информацию замечаю, но не всегда понимаю, насколько она важна'
+      },
+      {
+        value: 4,
+        text: 'Чаще рассматриваю новую информацию отдельно, не связывая её с общей картиной'
+      },
+      {
+        value: 5,
+        text: 'Обычно новая информация не приводит к изменениям моего понимания ситуации'
+      }
+    ],
+    score_direction: 'higher_is_more_risk',
+    active: true,
+    scale_type: 'ordinal'
+  };
+
+  const imported = importer.canonicalOrConverted(source, {
+    title: 'Проверка вопроса модели',
+    primary_language: 'ru',
+    interface_language: 'ru'
+  });
+  const result = importer.summarize(imported, 'py');
+  const question = imported.questions.Q_1;
+
+  assert.equal(result.can_use, true);
+  assert.deepEqual(JSON.parse(JSON.stringify(imported.question_order)), ['Q_1']);
+  assert.equal(question.prompt, source.prompt);
+  assert.equal(question.type, 'single_select');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(question.options.map(option => option.value))),
+    [0, 1, 2, 3, 4, 5]
+  );
+  assert.equal(question.scale.id, 'ordinal');
+  assert.equal(question.scale.psychometric_level, 'ordinal');
+  assert.equal(question.score_direction, 'higher_is_more_risk');
+  assert.equal(question.active, true);
+  assert.match(question.question_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.match(imported.bank_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  const independentlyImported = importer.canonicalOrConverted(source, {
+    title: 'Проверка вопроса модели',
+    primary_language: 'ru',
+    interface_language: 'ru'
+  });
+  assert.notEqual(imported.code, independentlyImported.code);
+  assert.ok(Number.isFinite(Date.parse(imported.global_time_reference)));
+});
+
+test('an actually empty bank is rejected before server registration', () => {
+  const empty = {
+    schema: 'research_os.question_bank', schema_version: 2,
+    bank_id: '177ced8e-6b08-4df3-9d84-40735890640b', code: 'EMPTY', title: 'Empty',
+    version: 1, status: 'draft', primary_language: 'en-US', interface_language: 'en',
+    global_mode: 'dynamic', global_time_reference: '2026-08-02T12:00:00.000Z',
+    generated_at: '2026-08-02T12:00:00.000Z', question_order: [], questions: {}
+  };
+  const result = importer.summarize(empty, 'json');
+  assert.equal(result.can_use, false);
+  assert.ok(result.diagnostics.some(item => item.code === 'EMPTY_QUESTION_BANK'));
+});
+
+test('normalized code collisions retain every question under a unique visible code', () => {
+  const imported = importer.canonicalOrConverted({ title: 'Collision bank', questions: {
+    first: { code: 'Q-1', prompt: 'First?', type: 'text', status: 'draft' },
+    second: { code: 'Q 1', prompt: 'Second?', type: 'text', status: 'draft' }
+  } });
+  const result = importer.summarize(imported, 'json');
+
+  assert.deepEqual(JSON.parse(JSON.stringify(imported.question_order)), ['Q_1', 'Q_1_2']);
+  assert.equal(imported.questions.Q_1.prompt, 'First?');
+  assert.equal(imported.questions.Q_1_2.prompt, 'Second?');
+  assert.equal(result.can_use, true);
+  assert.ok(result.diagnostics.some(item => item.code === 'NORMALIZED_CODE_COLLISION'));
+});
+
+test('numbered questions without question marks remain separate questions', () => {
+  const imported = importer.plainTextToQuestionBank([
+    '1. Age',
+    '2. Gender',
+    '3. Country'
+  ].join('\n'), { title: 'Simple list' });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(imported.question_order)), ['Q_1', 'Q_2', 'Q_3']);
+  assert.equal(imported.questions.Q_1.prompt, 'Age');
+  assert.equal(imported.questions.Q_2.prompt, 'Gender');
+  assert.equal(imported.questions.Q_3.prompt, 'Country');
+});
+
+test('numeric category codes do not turn nominal labels into an ordinal scale', () => {
+  const imported = importer.plainTextToQuestionBank([
+    '1. Género?',
+    '1) Mujer',
+    '2) Hombre'
+  ].join('\n'), { title: 'Categories' });
+  assert.equal(imported.questions.Q_1.scale.psychometric_level, 'nominal');
+  assert.equal(imported.questions.Q_1.scale.id, 'single_choice');
+});
+
+test('question routing from a non-canonical source is retained only as provenance', () => {
+  const imported = importer.canonicalOrConverted({ title: 'Routed source', questions: {
+    Q_1: {
+      prompt: 'Continue?', type: 'single_select', options: [
+        { value: 1, text: 'Yes', next: 'Q_2' },
+        { value: 2, text: 'No', target: 'end' }
+      ], scale: { id: 'binary', psychometric_level: 'nominal' },
+      routing: { default_next: 'Q_2' }, status: 'draft'
+    }
+  } });
+  const question = imported.questions.Q_1;
+
+  assert.equal(question.routing, undefined);
+  assert.equal(question.source_context.imported_routing.default_next, 'Q_2');
+  assert.equal(question.options[0].next, undefined);
+  assert.equal(question.options[0].source_next, 'Q_2');
+  assert.equal(importer.summarize(imported, 'json').can_use, true);
+});
+
 test('constructor routes all file imports through preview and consumes only validated banks', async () => {
   const [constructor, page] = await Promise.all([
     fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8'),
@@ -385,9 +534,14 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.match(page, /renameImportedQuestion/);
   assert.match(page, /parseEditedOptions/);
   assert.match(page, /currentImportResult\.bank/);
+  assert.match(page, /function invalidateConvertedState\(\)[\s\S]*output-json'[\s\S]*value = ''[\s\S]*renderImportPreview\(null\)/);
+  assert.match(page, /currentInputKind = 'auto';[\s\S]*invalidateConvertedState\(\)/);
+  assert.match(page, /await navigator\.clipboard\.writeText/);
+  assert.doesNotMatch(page, /title:\s*currentSourceTitle\s*\|\|\s*'Imported question bank'/);
+  assert.match(page, /detailsSection\(t\.advancedFields/);
   assert.match(page, /ResearchContracts\.requestJson\('\/question-banks\/save'/);
   assert.match(page, /research_os\.imported_question_bank\.v1/);
-  assert.match(page, /Designed and built in collaboration with Ray AI/);
+  assert.match(page, /CRM Sharks · Ray \| Research OS Pilot/);
   assert.doesNotMatch(page, /Gemini AI/);
 });
 

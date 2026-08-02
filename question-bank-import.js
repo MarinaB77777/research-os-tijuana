@@ -243,16 +243,36 @@
   function normalizeOptions(value) {
     return optionRows(value).map((item, index) => {
       if (item && typeof item === 'object') {
+        const extra = Object.fromEntries(
+          Object.entries(item).filter(([key]) => !['value', 'text', 'label', 'next', 'target'].includes(key))
+        );
+        if (Object.prototype.hasOwnProperty.call(item, 'next')) extra.source_next = item.next;
+        if (Object.prototype.hasOwnProperty.call(item, 'target')) extra.source_target = item.target;
         return {
-          value: Object.prototype.hasOwnProperty.call(item, 'value') ? item.value : index,
+          value: Object.prototype.hasOwnProperty.call(item, 'value') ? item.value : index + 1,
           text: String(item.text ?? item.label ?? ''),
-          ...Object.fromEntries(
-            Object.entries(item).filter(([key]) => !['value', 'text', 'label'].includes(key))
-          )
+          ...extra
         };
       }
-      return { value: index, text: String(item) };
+      return { value: index + 1, text: String(item) };
     });
+  }
+
+  function normalizeResponseType(value) {
+    const normalized = String(value || '').trim().toLowerCase();
+    const aliases = {
+      number: 'numeric_input',
+      numeric: 'numeric_input',
+      integer: 'numeric_input',
+      float: 'numeric_input',
+      text: 'text_input',
+      string: 'text_input',
+      single_choice: 'single_select',
+      radio: 'single_select',
+      multiple_choice: 'multiple_select',
+      checkbox: 'multiple_select'
+    };
+    return aliases[normalized] || valueOrNull(value);
   }
 
   function valueOrNull(value) {
@@ -309,6 +329,7 @@
 
   function inferQuestionContract(question) {
     const result = clone(question || {});
+    result.type = normalizeResponseType(result.type);
     result.options = normalizeOptions(result.options);
     const labels = result.options.map(option => normalizedWords(option.text));
     const prompt = normalizedWords(result.prompt);
@@ -325,7 +346,17 @@
       result.type = multipleInstruction ? 'multiple_select' : 'single_select';
     }
 
-    if (!result.scale && hasOptions) {
+    if (!result.scale && result.type === 'text_input') {
+      result.scale = {
+        id: 'text', psychometric_level: 'textual', min: null, max: null,
+        step: null, unit: null, direction: null
+      };
+    } else if (!result.scale && result.type === 'numeric_input') {
+      result.scale = {
+        id: 'numeric', psychometric_level: 'interval_ratio', min: null, max: null,
+        step: null, unit: null, direction: null
+      };
+    } else if (!result.scale && hasOptions) {
       const yesNo = labels.length === 2 &&
         includesAny(joined, ['yes', 'si', 'да']) &&
         includesAny(joined, ['no', 'нет']);
@@ -378,7 +409,10 @@
           unit: null,
           direction: null
         };
-      } else if (sequence) {
+      } else if (sequence && result.options.every(option => {
+        const numericText = numericOrNull(String(option.text || '').replace(',', '.'));
+        return numericText !== null && numericText === numericOrNull(option.value);
+      })) {
         result.scale = {
           id: `ordinal_${sequence.min}_${sequence.max}`,
           psychometric_level: 'ordinal',
@@ -398,6 +432,18 @@
           unit: null,
           direction: null
         };
+      }
+    }
+    if (result.scale && typeof result.scale === 'object' && !result.scale.psychometric_level) {
+      const scaleId = normalizedWords(result.scale.id);
+      if (result.type === 'text_input') {
+        result.scale.psychometric_level = 'textual';
+      } else if (result.type === 'numeric_input') {
+        result.scale.psychometric_level = 'interval_ratio';
+      } else if (/(?:likert|frequency|ordinal|nps)/.test(scaleId)) {
+        result.scale.psychometric_level = 'ordinal';
+      } else if (['single_select', 'multiple_select'].includes(result.type) && hasOptions) {
+        result.scale.psychometric_level = 'nominal';
       }
     }
     return result;
@@ -494,7 +540,7 @@
     const options = rows
       .filter(row => valueOrNull(row.option_text) !== null || valueOrNull(row.option_value) !== null)
       .map((row, optionIndex) => ({
-        value: valueOrNull(row.option_value) ?? optionIndex,
+        value: valueOrNull(row.option_value) ?? optionIndex + 1,
         text: String(valueOrNull(row.option_text) ?? '')
       }));
     const explicitOptions = options.length ? options : normalizeOptions(first.options || first.choices);
@@ -523,9 +569,13 @@
   function rowsToQuestionBank(rows, metadata) {
     if (!Array.isArray(rows) || !rows.length) throw new Error('The spreadsheet contains no data rows.');
     const normalizedRows = rows.filter(row => row && typeof row === 'object');
+    if (!normalizedRows.length) throw new Error('The imported list contains no structured question rows.');
     const grouped = new Map();
     normalizedRows.forEach((row, index) => {
-      const key = String(row.question_id || row.code || row.question_code || `ROW_${index + 1}`);
+      const stableQuestionId = UUID_V4.test(String(row.question_id || '')) ? row.question_id : '';
+      const sourceSheet = String(row.__source_sheet || '');
+      const sourceCode = String(row.code || row.question_code || `ROW_${index + 1}`);
+      const key = stableQuestionId || `${sourceSheet}::${sourceCode}`;
       if (!grouped.has(key)) grouped.set(key, []);
       grouped.get(key).push(row);
     });
@@ -535,7 +585,12 @@
       let uniqueCode = question.code;
       let suffix = 2;
       while (questions[uniqueCode]) uniqueCode = `${question.code}_${suffix++}`;
+      if (uniqueCode !== question.code) {
+        question.source_code = question.code;
+        question.normalized_code_collision = true;
+      }
       question.code = uniqueCode;
+      question.source_sheet = valueOrNull(questionRows[0].__source_sheet);
       questions[uniqueCode] = question;
     });
     const first = normalizedRows[0] || {};
@@ -612,7 +667,7 @@
     const variablesHeading = /^(?:переменные|variables|variables del modelo)\s*:/i;
     const optionsHeading = /^(?:варианты(?:\s+ответов)?|answers?|options?|opciones(?:\s+de\s+respuesta)?)\s*:/i;
     const domainHeading = /^([A-ZА-Я])\s*[-–—]\s+(.+)$/;
-    const numberedLine = /^(?:q(?:uestion)?\s*)?(\d+)\s*[\.)]\s+(.+)$/i;
+    const numberedLine = /^(?:q(?:uestion)?\s*)?(\d+)\s*([\.)])\s+(.+)$/i;
 
     function startQuestion(prompt, sourceNumber) {
       current = {
@@ -735,7 +790,7 @@
       }
       if (awaitingQuestion) {
         const numbered = line.match(numberedLine);
-        startQuestion(numbered ? numbered[2] : line, numbered?.[1] || null);
+        startQuestion(numbered ? numbered[3] : line, numbered?.[1] || null);
         blankBefore = false;
         return;
       }
@@ -745,12 +800,14 @@
       const rangeOptions = current ? numericRangeOptions(line) : null;
       const mustStartQuestion = numbered && (
         !current ||
-        /[?？]\s*$/.test(numbered[2]) ||
-        (blankBefore && current.options.length >= 2)
+        /[?？]\s*$/.test(numbered[3]) ||
+        (blankBefore && current.options.length >= 2) ||
+        (numbered[2] === '.' && current.options.length === 0 &&
+          Number(numbered[1]) === Number(current.source_question_number || 0) + 1)
       );
 
       if (mustStartQuestion) {
-        startQuestion(numbered[2], numbered[1]);
+        startQuestion(numbered[3], numbered[1]);
       } else if (current && rangeOptions) {
         current.options.push(...rangeOptions);
         collectingQuestion = false;
@@ -831,9 +888,17 @@
     const questions = {};
     Object.entries(source).forEach(([key, raw], index) => {
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
-      const qCode = code(raw.code || key, `Q_${index + 1}`);
-      questions[qCode] = inferQuestionContract({
-        ...clone(raw),
+      const baseCode = code(raw.code || key, `Q_${index + 1}`);
+      let qCode = baseCode;
+      let suffix = 2;
+      while (questions[qCode]) qCode = `${baseCode}_${suffix++}`;
+      const source = clone(raw);
+      const importedRouting = source.routing && typeof source.routing === 'object'
+        ? clone(source.routing)
+        : null;
+      delete source.routing;
+      const question = inferQuestionContract({
+        ...source,
         question_id: UUID_V4.test(String(raw.question_id || '')) ? raw.question_id : uuid(),
         code: qCode,
         version: Math.max(1, Number(raw.version) || 1),
@@ -851,6 +916,19 @@
           : { tracking_mode: null, wave: null, lag: null },
         status: STATUS.has(raw.status) ? raw.status : 'draft'
       });
+      if (importedRouting) {
+        question.source_context = {
+          ...(question.source_context && typeof question.source_context === 'object'
+            ? question.source_context
+            : {}),
+          imported_routing: importedRouting
+        };
+      }
+      if (qCode !== baseCode) {
+        question.source_code = baseCode;
+        question.normalized_code_collision = true;
+      }
+      questions[qCode] = question;
     });
     if (!Object.keys(questions).length) throw new Error('The imported structure contains no question definitions.');
     return questions;
@@ -859,7 +937,7 @@
   function responseTypeFromPsychometrics(properties) {
     const codingSchema = Array.isArray(properties?.coding_schema) ? properties.coding_schema : [];
     if (codingSchema.length) return 'single_select';
-    if (properties?.bounds && typeof properties.bounds === 'object') return 'number';
+    if (properties?.bounds && typeof properties.bounds === 'object') return 'numeric_input';
     return null;
   }
 
@@ -887,7 +965,7 @@
       let qCode = baseCode;
       let suffix = 2;
       while (questions[qCode]) qCode = `${baseCode}_${suffix++}`;
-      questions[qCode] = inferQuestionContract({
+      const question = inferQuestionContract({
         question_id: UUID_V4.test(String(raw.question_id || '')) ? raw.question_id : uuid(),
         code: qCode,
         version: Math.max(1, Number(raw.version) || 1),
@@ -920,7 +998,6 @@
           wave: valueOrNull(properties.wave),
           lag: valueOrNull(properties.time_lag)
         },
-        routing: raw.routing && typeof raw.routing === 'object' ? clone(raw.routing) : null,
         inversion_metadata: properties.inversion_metadata &&
           typeof properties.inversion_metadata === 'object'
           ? clone(properties.inversion_metadata)
@@ -931,6 +1008,15 @@
           : valueOrNull(properties.text_constraints),
         status: STATUS.has(raw.status) ? raw.status : 'draft'
       });
+      if (raw.routing && typeof raw.routing === 'object') {
+        question.source_context = {
+          ...(question.source_context && typeof question.source_context === 'object'
+            ? question.source_context
+            : {}),
+          imported_routing: clone(raw.routing)
+        };
+      }
+      questions[qCode] = question;
     });
     if (!Object.keys(questions).length) {
       throw new Error('The Strict Cyan Protocol contains no usable variable definitions.');
@@ -957,11 +1043,15 @@
   function newQuestionBank(questions, metadata) {
     const now = new Date().toISOString();
     const title = String(metadata?.title || '').trim();
+    const bankId = UUID_V4.test(String(metadata?.bank_id || '')) ? metadata.bank_id : uuid();
+    const explicitCode = code(metadata?.code, '');
+    const titleCode = code(title, '');
+    const generatedCode = `${titleCode || 'BANK'}_${bankId.slice(0, 8).toUpperCase()}`;
     return {
       schema: 'research_os.question_bank',
       schema_version: 2,
-      bank_id: UUID_V4.test(String(metadata?.bank_id || '')) ? metadata.bank_id : uuid(),
-      code: code(metadata?.code || title, 'IMPORTED_BANK'),
+      bank_id: bankId,
+      code: explicitCode || generatedCode,
       title,
       version: Math.max(1, Number(metadata?.version) || 1),
       status: STATUS.has(metadata?.status) ? metadata.status : 'draft',
@@ -980,18 +1070,46 @@
     if (Array.isArray(value?.variables) && value?.engine) {
       return strictCyanProtocolToQuestionBank(value, metadata);
     }
-    if (Array.isArray(value)) return rowsToQuestionBank(value, metadata);
-    return newQuestionBank(normalizeQuestionMap(value), {
+    if (Array.isArray(value)) {
+      if (value.every(item => typeof item === 'string')) {
+        const questions = {};
+        value.forEach((prompt, index) => {
+          const qCode = `Q_${index + 1}`;
+          questions[qCode] = inferQuestionContract({
+            question_id: uuid(), code: qCode, version: 1, block: null, family: null,
+            domain: null, parameter: null, type: null, prompt: String(prompt).trim(),
+            options: [], scale: null, score_direction: null,
+            time: { tracking_mode: null, wave: null, lag: null }, status: 'draft'
+          });
+        });
+        return newQuestionBank(questions, metadata);
+      }
+      return rowsToQuestionBank(value, metadata);
+    }
+    const isSingleQuestion = value && typeof value === 'object' && !Array.isArray(value) &&
+      ['prompt', 'question_prompt', 'question', 'text'].some(key =>
+        Object.prototype.hasOwnProperty.call(value, key)
+      );
+    const questionSource = isSingleQuestion
+      ? { [String(value.code || 'Q_1')]: value }
+      : value;
+    return newQuestionBank(normalizeQuestionMap(questionSource), {
       ...metadata,
-      title: value?.title || metadata?.title,
-      code: value?.code || metadata?.code,
-      bank_id: value?.bank_id,
-      version: value?.version,
-      status: value?.status,
-      primary_language: value?.primary_language || metadata?.primary_language,
-      interface_language: value?.interface_language || metadata?.interface_language,
-      global_mode: value?.global_mode,
-      global_time_reference: value?.global_time_reference
+      title: isSingleQuestion ? metadata?.title : value?.title || metadata?.title,
+      code: isSingleQuestion ? metadata?.code : value?.code || metadata?.code,
+      bank_id: isSingleQuestion ? metadata?.bank_id : value?.bank_id,
+      version: isSingleQuestion ? metadata?.version : value?.version,
+      status: isSingleQuestion ? metadata?.status : value?.status,
+      primary_language: isSingleQuestion
+        ? metadata?.primary_language
+        : value?.primary_language || metadata?.primary_language,
+      interface_language: isSingleQuestion
+        ? metadata?.interface_language
+        : value?.interface_language || metadata?.interface_language,
+      global_mode: isSingleQuestion ? metadata?.global_mode : value?.global_mode,
+      global_time_reference: isSingleQuestion
+        ? metadata?.global_time_reference
+        : value?.global_time_reference
     });
   }
 
@@ -1007,9 +1125,16 @@
     if (!UUID_V4.test(String(bank.bank_id || ''))) issue('error', 'INVALID_BANK_ID', 'A valid bank UUID is required.');
     if (!bank.title) issue('error', 'MISSING_BANK_TITLE', 'The imported bank needs a title.');
     if (!bank.code) issue('error', 'MISSING_BANK_CODE', 'The imported bank needs a code.');
+    if (!String(bank.primary_language || '').trim()) issue('error', 'MISSING_PRIMARY_LANGUAGE', 'The primary content language is required.');
+    if (!bank.global_time_reference || Number.isNaN(Date.parse(bank.global_time_reference))) {
+      issue('error', 'INVALID_GLOBAL_TIME_REFERENCE', 'A valid Global Time Reference timestamp is required.');
+    }
     if (!Array.isArray(bank.question_order) || !bank.questions || typeof bank.questions !== 'object') {
       issue('error', 'INVALID_QUESTION_COLLECTION', 'questions and question_order are required.');
       return diagnostics;
+    }
+    if (bank.question_order.length === 0 || Object.keys(bank.questions).length === 0) {
+      issue('error', 'EMPTY_QUESTION_BANK', 'The question bank must contain at least one question.');
     }
     const seen = new Set();
     bank.question_order.forEach((questionCode, index) => {
@@ -1027,10 +1152,46 @@
         issue('error', 'PLACEHOLDER_PROMPT', 'The question still contains an unfinished placeholder prompt.', questionCode);
       }
       if (!question.type) issue('error', 'UNRESOLVED_TYPE', 'Response type must be selected before this question can be registered.', questionCode);
+      if (question.type && !['single_select', 'multiple_select', 'numeric_input', 'text_input'].includes(question.type)) {
+        issue('error', 'INVALID_TYPE', 'The response type is not supported by the questionnaire runtime.', questionCode);
+      }
       const scaleResolved = question.scale && typeof question.scale === 'object' &&
         String(question.scale.id || '').trim();
       if (!scaleResolved) issue('error', 'UNRESOLVED_SCALE', 'A scale contract must be selected before this question can be registered.', questionCode);
+      if (scaleResolved && !String(question.scale.psychometric_level || '').trim()) {
+        issue('error', 'UNRESOLVED_PSYCHOMETRIC_LEVEL', 'The psychometric level must be selected before this question can be registered.', questionCode);
+      }
+      if (scaleResolved && !['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(question.scale.psychometric_level)) {
+        issue('error', 'INVALID_PSYCHOMETRIC_LEVEL', 'The psychometric level is not supported by the analysis contract.', questionCode);
+      }
       if (!Array.isArray(question.options)) issue('error', 'INVALID_OPTIONS', 'Question options must be an array.', questionCode);
+      if (['single_select', 'multiple_select'].includes(question.type) && (!Array.isArray(question.options) || question.options.length < 2)) {
+        issue('error', 'MISSING_OPTIONS', 'A selection question needs at least two answer options.', questionCode);
+      }
+      if (Array.isArray(question.options)) {
+        const optionValues = new Set();
+        question.options.forEach((option, optionIndex) => {
+          if (!option || typeof option !== 'object' || !String(option.text || '').trim()) {
+            issue('error', 'INVALID_OPTION', `Option ${optionIndex + 1} needs text.`, questionCode);
+            return;
+          }
+          if (!Object.prototype.hasOwnProperty.call(option, 'value') || option.value === null || option.value === undefined) {
+            issue('error', 'MISSING_OPTION_VALUE', `Option ${optionIndex + 1} needs a stable value.`, questionCode);
+          }
+          const optionKey = JSON.stringify(option.value);
+          if (optionValues.has(optionKey)) issue('error', 'DUPLICATE_OPTION_VALUE', 'Answer option values must be unique.', questionCode);
+          optionValues.add(optionKey);
+          if (Object.prototype.hasOwnProperty.call(option, 'next') || Object.prototype.hasOwnProperty.call(option, 'target')) {
+            issue('error', 'QUESTION_ROUTING', 'Questionnaire routing must be configured in the questionnaire constructor.', questionCode);
+          }
+        });
+      }
+      if (Object.prototype.hasOwnProperty.call(question, 'routing')) {
+        issue('error', 'QUESTION_ROUTING', 'Questionnaire routing must be configured in the questionnaire constructor.', questionCode);
+      }
+      if (question.normalized_code_collision) {
+        issue('warning', 'NORMALIZED_CODE_COLLISION', `Imported code ${question.source_code} was made unique as ${questionCode}.`, questionCode);
+      }
       if (!STATUS.has(question.status)) issue('error', 'INVALID_STATUS', 'Question status must be draft, trial, or active.', questionCode);
     });
     Object.keys(bank.questions).forEach(questionCode => {

@@ -428,7 +428,7 @@
   </div>
 
   <div class="app-signature">
-    <span>✨ Designed and built in collaboration with Ray AI | Research OS Pilot</span>
+    <span>✨ CRM Sharks · Ray | Research OS Pilot</span>
   </div>
 </div>
 
@@ -452,6 +452,8 @@
       errors: "campos obligatorios pendientes",
       bankTitle: "Nombre del banco",
       bankCode: "Código del banco",
+      primaryLanguage: "Idioma principal del contenido",
+      advancedFields: "Detalles técnicos y opcionales",
       prompt: "Texto exacto de la pregunta",
       questionCode: "Código de la pregunta",
       responseType: "Tipo de respuesta",
@@ -494,6 +496,8 @@
       errors: "required fields pending",
       bankTitle: "Bank title",
       bankCode: "Bank code",
+      primaryLanguage: "Primary content language",
+      advancedFields: "Technical and optional details",
       prompt: "Exact question wording",
       questionCode: "Question code",
       responseType: "Response type",
@@ -536,6 +540,8 @@
       errors: "обязательных полей не заполнено",
       bankTitle: "Название банка",
       bankCode: "Код банка",
+      primaryLanguage: "Основной язык содержания",
+      advancedFields: "Технические и необязательные сведения",
       prompt: "Точная формулировка вопроса",
       questionCode: "Код вопроса",
       responseType: "Тип ответа",
@@ -571,6 +577,7 @@
     emptyExtracted: "El contenido extraído está vacío.",
     conversionError: "Error de conversión",
     duplicateCode: "Ya existe una pregunta con el código {code}.",
+    copyFailed: "El navegador no permitió copiar el resultado.",
     pdfLibraryMissing: "La biblioteca PDF.js no está cargada.",
     zipLibraryMissing: "La biblioteca JSZip no está cargada.",
     diagnostics: {
@@ -578,7 +585,10 @@
       INVALID_BANK_ID: "Se requiere un UUID válido para el banco.",
       MISSING_BANK_TITLE: "El banco importado necesita un nombre.",
       MISSING_BANK_CODE: "El banco importado necesita un código.",
+      MISSING_PRIMARY_LANGUAGE: "Seleccione el idioma principal del contenido.",
+      INVALID_GLOBAL_TIME_REFERENCE: "Se requiere una referencia temporal global válida.",
       INVALID_QUESTION_COLLECTION: "Se requieren questions y question_order.",
+      EMPTY_QUESTION_BANK: "El banco debe contener al menos una pregunta.",
       MISSING_QUESTION: "La pregunta no está presente en questions.",
       DUPLICATE_ORDER: "La pregunta aparece más de una vez en question_order.",
       INVALID_QUESTION_ID: "Se requiere un UUID válido para la pregunta.",
@@ -586,8 +596,17 @@
       MISSING_PROMPT: "Falta el texto de la pregunta.",
       PLACEHOLDER_PROMPT: "La pregunta aún contiene un texto provisional sin completar.",
       UNRESOLVED_TYPE: "Seleccione el tipo de respuesta antes de registrar esta pregunta.",
+      INVALID_TYPE: "El tipo de respuesta no es compatible con la ejecución del cuestionario.",
       UNRESOLVED_SCALE: "Seleccione el contrato de escala antes de registrar esta pregunta.",
+      UNRESOLVED_PSYCHOMETRIC_LEVEL: "Seleccione el nivel psicométrico antes de registrar esta pregunta.",
+      INVALID_PSYCHOMETRIC_LEVEL: "El nivel psicométrico no es compatible con el contrato de análisis.",
       INVALID_OPTIONS: "Las opciones de la pregunta deben ser una lista.",
+      MISSING_OPTIONS: "Una pregunta de selección necesita al menos dos opciones.",
+      INVALID_OPTION: "Cada opción necesita texto.",
+      MISSING_OPTION_VALUE: "Cada opción necesita un valor estable y único.",
+      DUPLICATE_OPTION_VALUE: "Los valores de las opciones deben ser únicos.",
+      QUESTION_ROUTING: "Configure las transiciones en el constructor del cuestionario.",
+      NORMALIZED_CODE_COLLISION: "Se conservó la pregunta con un código único porque dos códigos importados coincidían después de la normalización.",
       INVALID_STATUS: "El estado debe ser draft, trial o active.",
       UNORDERED_QUESTION: "La pregunta no está incluida en question_order."
     }
@@ -601,6 +620,7 @@
     emptyExtracted: "The extracted content is empty.",
     conversionError: "Conversion error",
     duplicateCode: "Question code {code} already exists.",
+    copyFailed: "The browser did not allow the result to be copied.",
     pdfLibraryMissing: "The PDF.js library is not loaded.",
     zipLibraryMissing: "The JSZip library is not loaded.",
     diagnostics: {}
@@ -614,6 +634,7 @@
     emptyExtracted: "Извлечённое содержимое пусто.",
     conversionError: "Ошибка преобразования",
     duplicateCode: "Вопрос с кодом {code} уже существует.",
+    copyFailed: "Браузер не разрешил скопировать результат.",
     pdfLibraryMissing: "Библиотека PDF.js не загружена.",
     zipLibraryMissing: "Библиотека JSZip не загружена.",
     diagnostics: {
@@ -621,7 +642,10 @@
       INVALID_BANK_ID: "Требуется корректный UUID банка.",
       MISSING_BANK_TITLE: "Импортированному банку нужно название.",
       MISSING_BANK_CODE: "Импортированному банку нужен код.",
+      MISSING_PRIMARY_LANGUAGE: "Выберите основной язык содержания.",
+      INVALID_GLOBAL_TIME_REFERENCE: "Требуется корректная глобальная временная привязка.",
       INVALID_QUESTION_COLLECTION: "Необходимы questions и question_order.",
+      EMPTY_QUESTION_BANK: "Банк должен содержать хотя бы один вопрос.",
       MISSING_QUESTION: "Вопрос отсутствует в questions.",
       DUPLICATE_ORDER: "Вопрос повторяется в question_order.",
       INVALID_QUESTION_ID: "Требуется корректный UUID вопроса.",
@@ -629,8 +653,17 @@
       MISSING_PROMPT: "Отсутствует текст вопроса.",
       PLACEHOLDER_PROMPT: "Вопрос всё ещё содержит незавершённый временный текст.",
       UNRESOLVED_TYPE: "Перед регистрацией вопроса выберите тип ответа.",
+      INVALID_TYPE: "Этот тип ответа не поддерживается модулем проведения анкет.",
       UNRESOLVED_SCALE: "Перед регистрацией вопроса выберите контракт шкалы.",
+      UNRESOLVED_PSYCHOMETRIC_LEVEL: "Перед регистрацией вопроса выберите психометрический уровень.",
+      INVALID_PSYCHOMETRIC_LEVEL: "Этот психометрический уровень не поддерживается контрактом анализа.",
       INVALID_OPTIONS: "Варианты ответа должны быть массивом.",
+      MISSING_OPTIONS: "Для вопроса с выбором нужны как минимум два варианта ответа.",
+      INVALID_OPTION: "У каждого варианта должен быть текст.",
+      MISSING_OPTION_VALUE: "У каждого варианта должно быть стабильное уникальное значение.",
+      DUPLICATE_OPTION_VALUE: "Значения вариантов ответа должны быть уникальными.",
+      QUESTION_ROUTING: "Настройте переходы в конструкторе анкеты.",
+      NORMALIZED_CODE_COLLISION: "Вопрос сохранён под уникальным кодом: два исходных кода совпали после нормализации.",
       INVALID_STATUS: "Статус должен быть draft, trial или active.",
       UNORDERED_QUESTION: "Вопрос не включён в question_order."
     }
@@ -645,10 +678,13 @@
 
   function setLanguage(lang) {
     currentLang = lang;
+    localStorage.setItem('app_language', lang);
+    document.documentElement.lang = lang === 'es' ? 'es-MX' : lang === 'en' ? 'en-US' : 'ru-RU';
     document.querySelectorAll('.lang-selector button').forEach(btn => btn.classList.remove('active'));
     document.getElementById(`lang-${lang}`).classList.add('active');
 
     const t = i18n[lang];
+    document.title = `${t.title} | Research OS`;
     document.getElementById('ui-title').innerText = t.title;
     document.getElementById('ui-back-hub').innerText = t.backHub;
     document.getElementById('ui-input-label').innerText = t.inputLabel;
@@ -662,588 +698,23 @@
     document.querySelectorAll('[data-placeholder-key]').forEach(element => {
       element.placeholder = t[element.dataset.placeholderKey];
     });
-    if (currentImportResult) renderImportPreview(currentImportResult);
+    if (currentImportResult) {
+      renderImportPreview(currentImportResult);
+      showStatus(
+        currentImportResult.can_use ? t.msgSuccess : t.needsResolution,
+        !currentImportResult.can_use
+      );
+    }
   }
 
-  function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
-
-  async function parsePdfWithLib(arrayBuffer) {
-    if (typeof pdfjsLib === 'undefined') {
-      throw new Error(i18n[currentLang].pdfLibraryMissing);
+  function primaryLanguageFrom(text) {
+    const value = String(text || '');
+    if (/[А-Яа-яЁё]/.test(value)) return 'ru-RU';
+    if (/[¿¡ñÑáéíóúüÁÉÍÓÚÜ]/.test(value) || /\b(?:que|cu[aá]l|c[oó]mo|d[oó]nde|usted|respuesta)\b/i.test(value)) {
+      return 'es-MX';
     }
-    const loadingTask = pdfjsLib.getDocument({
-      data: arrayBuffer,
-      standardFontDataUrl: 'vendor/pdfjs/standard_fonts/'
-    });
-    const pdfDoc = await loadingTask.promise;
-    let extractedText = '';
-
-    for (let i = 1; i <= pdfDoc.numPages; i++) {
-      const page = await pdfDoc.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = QuestionBankImport.pdfItemsToText(textContent.items);
-      extractedText += pageText + '\n';
-    }
-    return extractedText;
-  }
-
-  window.parsePythonDictionary = function(rawText) {
-    if (!rawText || typeof rawText !== 'string') return null;
-
-    let text = rawText
-      .replace(/#.*$/gm, '')
-      .replace(/^\s*[a-zA-Z_]\w*\s*=\s*/gm, '')
-      .trim();
-
-    const firstBrace = text.indexOf('{');
-    if (firstBrace === -1) return null;
-
-    let questions = {};
-    let i = firstBrace + 1;
-
-    while (i < text.length) {
-      while (i < text.length && /[\s,\r\n]/.test(text[i])) i++;
-      if (i >= text.length || text[i] === '}') break;
-
-      let questionCode = '';
-      if (text[i] === '"' || text[i] === "'") {
-        let quoteChar = text[i];
-        i++;
-        let keyStart = i;
-        while (i < text.length && text[i] !== quoteChar) i++;
-        questionCode = text.substring(keyStart, i);
-        i++;
-      } else {
-        let keyStart = i;
-        while (i < text.length && !/[\s:]/.test(text[i])) i++;
-        questionCode = text.substring(keyStart, i);
-      }
-
-      if (!questionCode) break;
-
-      while (i < text.length && text[i] !== ':') i++;
-      i++;
-
-      while (i < text.length && text[i] !== '{') {
-        if (text[i] === '}') break;
-        i++;
-      }
-      if (i >= text.length || text[i] === '}') break;
-
-      let blockStart = i;
-      let braceCount = 1;
-      i++;
-      let inStr = false;
-      let strChar = '';
-      let escaped = false;
-
-      while (i < text.length && braceCount > 0) {
-        let char = text[i];
-        if (escaped) {
-          escaped = false;
-        } else if (char === '\\') {
-          escaped = true;
-        } else if (!inStr && (char === '"' || char === "'")) {
-          inStr = true;
-          strChar = char;
-        } else if (inStr && char === strChar) {
-          inStr = false;
-        } else if (!inStr) {
-          if (char === '{') braceCount++;
-          if (char === '}') braceCount--;
-        }
-        i++;
-      }
-
-      let blockContent = text.substring(blockStart, i);
-      let parsedQuestion = extractQuestionData(questionCode, blockContent);
-      
-      let finalKey = parsedQuestion.code || questionCode;
-      questions[finalKey] = parsedQuestion;
-    }
-
-    return Object.keys(questions).length > 0 ? questions : null;
-  };
-
-  function extractValueByKey(text, key) {
-    let escapedKey = key.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-    let regex = new RegExp(`['"]?${escapedKey}['"]?\\s*:\\s*`, 'g');
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-      let startIdx = match.index + match[0].length;
-      let valResult = parsePythonValue(text, startIdx);
-      if (valResult !== undefined) {
-        return valResult;
-      }
-    }
-    return null;
-  }
-
-  function parsePythonValue(text, idx) {
-    while (idx < text.length && /\s/.test(text[idx])) idx++;
-    if (idx >= text.length) return undefined;
-
-    let char = text[idx];
-
-    if (char === '"' || char === "'") {
-      let fullStr = '';
-      while (idx < text.length) {
-        while (idx < text.length && /\s/.test(text[idx])) idx++;
-        if (idx >= text.length) break;
-        char = text[idx];
-        if (char !== '"' && char !== "'") break;
-
-        let quote = char;
-        idx++;
-        let strVal = '';
-        let escaped = false;
-        while (idx < text.length) {
-          let c = text[idx];
-          if (escaped) {
-            strVal += c;
-            escaped = false;
-            idx++;
-          } else if (c === '\\') {
-            escaped = true;
-            idx++;
-          } else if (c === quote) {
-            idx++;
-            break;
-          } else {
-            strVal += c;
-            idx++;
-          }
-        }
-        fullStr += strVal;
-
-        while (idx < text.length && /\s/.test(text[idx])) idx++;
-        if (idx < text.length && text[idx] === '+') {
-          idx++;
-          while (idx < text.length && /\s/.test(text[idx])) idx++;
-        } else {
-          break;
-        }
-      }
-      return fullStr.replace(/\\n/g, '\n');
-    }
-
-    let valEnd = idx;
-    while (valEnd < text.length && !/[,\r\n}]/.test(text[valEnd])) {
-      valEnd++;
-    }
-    let rawVal = text.substring(idx, valEnd).trim();
-    if (rawVal === 'True' || rawVal === 'true') return true;
-    if (rawVal === 'False' || rawVal === 'false') return false;
-    if (rawVal === 'None' || rawVal === 'none') return null;
-    if (!isNaN(rawVal) && rawVal !== '') return Number(rawVal);
-    return rawVal.replace(/^["']|["']$/g, '');
-  }
-
-  function extractQuestionData(code, block) {
-    let headerEndIdx = -1;
-    ['options', 'rows', 'columns'].forEach(key => {
-      let idx = block.search(new RegExp(`["']?${key}["']?\\s*:\\s*\\[`));
-      if (idx !== -1 && (headerEndIdx === -1 || idx < headerEndIdx)) {
-        headerEndIdx = idx;
-      }
-    });
-    
-    let headerBlock = headerEndIdx !== -1 ? block.substring(0, headerEndIdx) : block;
-
-    const getField = (fieldNames) => {
-      if (!Array.isArray(fieldNames)) fieldNames = [fieldNames];
-      for (let fieldName of fieldNames) {
-        let val = extractValueByKey(headerBlock, fieldName);
-        if (val !== null) return val;
-      }
-      return null;
-    };
-
-    let internalCode = getField('code') || String(code);
-    let promptText = getField(['prompt', 'text', 'title']) || '';
-    let respType = getField(['response_type', 'type', 'question_type']) || 'single_select';
-    let qType = getField(['question_type', 'type']) || respType;
-
-    let scoreDir = getField(['score_direction']);
-    if (scoreDir === null) scoreDir = 'neutral';
-
-    let statusVal = getField(['status', 'active']);
-    let isActive = true;
-    if (statusVal !== null) {
-      if (typeof statusVal === 'boolean') isActive = statusVal;
-      else if (statusVal === 'active') isActive = true;
-      else if (statusVal === 'inactive' || statusVal === false) isActive = false;
-    }
-
-    let parseArrayOfObjects = (arrayName) => {
-      let items = [];
-      let matchIdx = block.search(new RegExp(`["']?${arrayName}["']?\\s*:\\s*\\[`));
-      if (matchIdx === -1) return items;
-
-      let startIdx = block.indexOf('[', matchIdx);
-      let bracketCount = 1;
-      let j = startIdx + 1;
-      let inStr = false;
-      let strChar = '';
-      let escaped = false;
-
-      while (j < block.length && bracketCount > 0) {
-        let char = block[j];
-        if (escaped) {
-          escaped = false;
-        } else if (char === '\\') {
-          escaped = true;
-        } else if (!inStr && (char === '"' || char === "'")) {
-          inStr = true;
-          strChar = char;
-        } else if (inStr && char === strChar) {
-          inStr = false;
-        } else if (!inStr) {
-          if (char === '[') bracketCount++;
-          if (char === ']') bracketCount--;
-        }
-        j++;
-      }
-
-      let arrayContent = block.substring(startIdx + 1, j - 1);
-      let i = 0;
-      let idx = 0;
-
-      while (i < arrayContent.length) {
-        while (i < arrayContent.length && arrayContent[i] !== '{') i++;
-        if (i >= arrayContent.length) break;
-
-        let objStart = i;
-        let objBraces = 1;
-        i++;
-        let objInStr = false;
-        let objStrChar = '';
-        let objEscaped = false;
-
-        while (i < arrayContent.length && objBraces > 0) {
-          let c = arrayContent[i];
-          if (objEscaped) {
-            objEscaped = false;
-          } else if (c === '\\') {
-            objEscaped = true;
-          } else if (!objInStr && (c === '"' || c === "'")) {
-            objInStr = true;
-            objStrChar = c;
-          } else if (objInStr && c === objStrChar) {
-            objInStr = false;
-          } else if (!objInStr) {
-            if (c === '{') objBraces++;
-            if (c === '}') objBraces--;
-          }
-          i++;
-        }
-
-        let itemContent = arrayContent.substring(objStart, i);
-        
-        let val = extractValueByKey(itemContent, 'value');
-        if (val === null) val = extractValueByKey(itemContent, 'val');
-        if (val === null) val = extractValueByKey(itemContent, 'code');
-        if (val === null) val = idx;
-
-        let text = extractValueByKey(itemContent, 'text');
-        if (text === null) text = extractValueByKey(itemContent, 'label');
-
-        if (text !== null && text !== undefined) {
-          items.push({
-            value: val,
-            text: String(text).replace(/\\n/g, '\n')
-          });
-        }
-        idx++;
-      }
-      return items;
-    };
-
-    let options = parseArrayOfObjects('options');
-    let rows = parseArrayOfObjects('rows');
-    let columns = parseArrayOfObjects('columns');
-
-    if (options.length === 0 && headerEndIdx === -1 && respType !== 'open_text') {
-      let lines = block.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      let candidateLines = lines.filter(l => !l.startsWith(code) && l !== promptText && !l.includes(':'));
-      if (candidateLines.length > 0) {
-        options = candidateLines.map((txt, idx) => ({
-          value: idx + 1,
-          text: txt.replace(/^["']|["']$/g, '')
-        }));
-      }
-    }
-
-    let resultData = {
-      question_id: getField('question_id') || generateUUID(),
-      code: internalCode,
-      version: Number(getField('version')) || 1,
-      block: getField('block') || internalCode.replace(/[0-9]/g, '') || 'general',
-      family: getField('family') || 'standard',
-      domain: getField('domain') || 'general',
-      question_type: qType,
-      response_type: respType,
-      presentation_type: getField('presentation_type') || (respType.includes('multi') ? 'checkbox' : (respType === 'matrix' ? 'matrix' : 'radio')),
-      scale_type: getField('scale_type') || 'ordinal',
-      prompt: promptText,
-      score_direction: scoreDir,
-      active: isActive
-    };
-
-    if (respType === 'matrix' || rows.length > 0 || columns.length > 0) {
-      if (rows.length > 0) resultData.rows = rows;
-      if (columns.length > 0) resultData.columns = columns;
-      resultData.options = [];
-    } else {
-      resultData.options = options;
-    }
-
-    return resultData;
-  }
-
-  function parsePlainTextFallback(text) {
-    const cleanText = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
-    const lines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    const questions = {};
-    let currentQ = null;
-    let counter = 1;
-
-    lines.forEach((line) => {
-      const isQuestion = line.match(/^(\d+[\.\)]|[Qq]\d+|Вопрос|Question)/i) || line.includes('?');
-      if (isQuestion) {
-        const code = `Q_${counter++}`;
-        currentQ = {
-          code: code,
-          prompt: line.replace(/^.*?[\.\)]\s*/, ''),
-          options: []
-        };
-        questions[code] = currentQ;
-      } else if (currentQ) {
-        const isOption = line.match(/^[-*a-zA-D\d+][\.\)]/) || line.match(/^\[[ x]\]/i);
-        if (isOption) {
-          currentQ.options.push({
-            value: currentQ.options.length,
-            text: line.replace(/^.*?[\.\)]\s*/, '').replace(/^\[[ x]\]\s*/i, '')
-          });
-        }
-      }
-    });
-
-    return Object.keys(questions).length > 0 ? questions : null;
-  }
-
-  function parseInputData(rawText) {
-    try {
-      if (typeof jsyaml !== 'undefined') {
-        const yamlData = jsyaml.load(rawText);
-        if (yamlData && typeof yamlData === 'object') {
-          if (Array.isArray(yamlData)) {
-            const dict = {};
-            yamlData.forEach((item, index) => {
-              const code = item.code || item.question_code || `Q_${index + 1}`;
-              dict[code] = item;
-            });
-            return dict;
-          }
-          return yamlData;
-        }
-      }
-    } catch (e) {}
-
-    try {
-      const parsed = JSON.parse(rawText);
-      if (Array.isArray(parsed)) {
-        const dict = {};
-        parsed.forEach((item, index) => {
-          const code = item.code || item.question_code || `Q_${index + 1}`;
-          dict[code] = item;
-        });
-        return dict;
-      }
-      return parsed;
-    } catch (e) {}
-
-    const pyDict = parsePythonDictionary(rawText);
-    if (pyDict) return pyDict;
-
-    const textParsed = parsePlainTextFallback(rawText);
-    if (textParsed) return textParsed;
-
-    throw new Error("No se pudo analizar la estructura de datos. Verifique la sintaxis.");
-  }
-
-  function convertToCanonicalSchema(parsedInput) {
-    const isCanonicalPackage = parsedInput?.schema === 'research_os.question_bank';
-    if (isCanonicalPackage) {
-      if (!parsedInput.questions || typeof parsedInput.questions !== 'object' || Array.isArray(parsedInput.questions)) {
-        throw new Error('El paquete research_os.question_bank no contiene un objeto questions válido.');
-      }
-      /*
-       * A canonical package already owns its identity. Import must not repair,
-       * regenerate, normalize, reorder, or silently upgrade it. The validator
-       * is responsible for reporting contract violations without mutation.
-       */
-      return JSON.parse(JSON.stringify(parsedInput));
-    }
-
-    const sourceQuestions = parsedInput?.questions && typeof parsedInput.questions === 'object'
-      ? parsedInput.questions
-      : parsedInput;
-    if (!sourceQuestions || typeof sourceQuestions !== 'object' || Array.isArray(sourceQuestions)) {
-      throw new Error('El objeto de preguntas no existe o no es válido.');
-    }
-
-    const questions = {};
-    Object.entries(sourceQuestions).forEach(([key, item]) => {
-      if (!item || typeof item !== 'object') return;
-
-      const code = String(item.code || key).trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-      const questionId = item.question_id || generateUUID();
-      const qType = item.type || item.response_type || item.question_type || "single_select";
-
-      let options = [];
-      if (Array.isArray(item.options)) {
-        options = item.options.map((opt, idx) => {
-          if (typeof opt === 'object' && opt !== null) {
-            return {
-              value: opt.value !== undefined ? opt.value : idx,
-              text: String(opt.text ?? opt.label ?? '')
-            };
-          }
-          return { value: idx, text: String(opt) };
-        });
-      }
-
-      questions[code] = {
-        ...item,
-        question_id: questionId,
-        code,
-        version: Number.isInteger(Number(item.version)) && Number(item.version) > 0 ? Number(item.version) : 1,
-        block: item.block ?? null,
-        family: item.family ?? null,
-        domain: item.domain ?? null,
-        parameter: item.parameter ?? null,
-        type: qType,
-        prompt: item.prompt || "",
-        options,
-        scale: item.scale && typeof item.scale === 'object'
-          ? item.scale
-          : {
-              id: item.scale_type ?? null,
-              psychometric_level: item.psychometric_level ?? null,
-              min: item.min ?? null,
-              max: item.max ?? null,
-              step: item.step ?? null,
-              unit: item.unit ?? null,
-              direction: item.direction ?? null
-            },
-        score_direction: item.score_direction ?? null,
-        time: item.time && typeof item.time === 'object'
-          ? item.time
-          : {
-              tracking_mode: item.tracking_mode ?? 'time_invariant',
-              wave: item.wave ?? null,
-              lag: item.lag ?? null
-            },
-        status: ['draft', 'trial', 'active'].includes(item.status) ? item.status : 'draft'
-      };
-    });
-
-    const now = new Date().toISOString();
-    const title = window.prompt('Nombre del banco importado / Imported bank name');
-    if (!title || !title.trim()) {
-      throw new Error('El nombre del banco es obligatorio para crear una identidad estable.');
-    }
-    const bankCode = title.normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toUpperCase()
-      .replace(/[^A-Z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    return {
-      schema: 'research_os.question_bank',
-      schema_version: 2,
-      bank_id: generateUUID(),
-      code: bankCode,
-      title: title.trim(),
-      version: 1,
-      status: 'draft',
-      primary_language: 'es-MX',
-      interface_language: currentLang,
-      global_mode: 'dynamic',
-      global_time_reference: now,
-      generated_at: now,
-      question_order: Object.keys(questions),
-      questions
-    };
-  }
-
-  function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.onerror = () => reject(new Error(i18n[currentLang].textReadError));
-      reader.readAsText(file);
-    });
-  }
-
-  const localLibraryPromises = {};
-  let pdfWorkerObjectUrl = null;
-
-  async function loadLocalTextParts(paths) {
-    const responses = await Promise.all(paths.map(path => fetch(path)));
-    const failed = responses.find(response => !response.ok);
-    if (failed) throw new Error(`No se pudo cargar la biblioteca local: ${failed.url}`);
-    return (await Promise.all(responses.map(response => response.text()))).join('');
-  }
-
-  function ensureXlsxLibrary() {
-    if (typeof XLSX !== 'undefined') return Promise.resolve();
-    if (!localLibraryPromises.xlsx) {
-      localLibraryPromises.xlsx = loadLocalTextParts([
-        'vendor/xlsx.full.min.js.part-00',
-        'vendor/xlsx.full.min.js.part-01'
-      ]).then(source => new Promise((resolve, reject) => {
-        const script = document.createElement('script');
-        const objectUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
-        script.src = objectUrl;
-        script.onload = () => {
-          URL.revokeObjectURL(objectUrl);
-          typeof XLSX !== 'undefined'
-            ? resolve()
-            : reject(new Error('La biblioteca XLSX local no se inició.'));
-        };
-        script.onerror = () => {
-          URL.revokeObjectURL(objectUrl);
-          reject(new Error('No se pudo iniciar la biblioteca XLSX local.'));
-        };
-        document.head.appendChild(script);
-      }));
-    }
-    return localLibraryPromises.xlsx;
-  }
-
-  function ensurePdfWorker() {
-    if (typeof pdfjsLib === 'undefined') {
-      return Promise.reject(new Error(i18n[currentLang].pdfLibraryMissing));
-    }
-    if (pdfWorkerObjectUrl) return Promise.resolve();
-    if (!localLibraryPromises.pdfWorker) {
-      localLibraryPromises.pdfWorker = loadLocalTextParts([
-        'vendor/pdf.worker.min.js.part-00',
-        'vendor/pdf.worker.min.js.part-01'
-      ]).then(source => {
-        pdfWorkerObjectUrl = URL.createObjectURL(
-          new Blob([source], { type: 'text/javascript' })
-        );
-        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerObjectUrl;
-      });
-    }
-    return localLibraryPromises.pdfWorker;
+    if (/\b(?:what|which|how|where|when|answer|select|choose)\b/i.test(value)) return 'en-US';
+    return currentLang === 'ru' ? 'ru-RU' : currentLang === 'en' ? 'en-US' : 'es-MX';
   }
 
   async function handleFileSelect(event) {
@@ -1253,6 +724,7 @@
 
     showStatus(i18n[currentLang].readingFile, false);
     const inputArea = document.getElementById('input-json');
+    invalidateConvertedState();
     currentParsedValue = null;
     currentInputKind = 'structured';
 
@@ -1268,6 +740,7 @@
       processConversion();
 
     } catch (err) {
+      invalidateConvertedState();
       showStatus(`⚠️ ${err.message}`, true);
       fileInput.value = "";
     }
@@ -1284,6 +757,7 @@
     const outputArea = document.getElementById('output-json');
 
     let rawText = (inputArea.value || "").trim();
+    invalidateConvertedState();
 
     if (!rawText) {
       showStatus(i18n[currentLang].errEmpty, true);
@@ -1292,7 +766,8 @@
 
     try {
       const metadata = {
-        title: currentSourceTitle || 'Imported question bank',
+        title: currentSourceTitle || '',
+        primary_language: primaryLanguageFrom(rawText),
         interface_language: currentLang
       };
       let canonicalResult;
@@ -1305,7 +780,7 @@
             );
           canonicalResult = QuestionBankImport.canonicalOrConverted(parsedData, metadata);
         } catch (structuredError) {
-          if (!QuestionBankImport.mayFallbackToPlainText(currentSourceFormat)) {
+          if (currentInputKind !== 'auto' && !QuestionBankImport.mayFallbackToPlainText(currentSourceFormat)) {
             throw structuredError;
           }
           canonicalResult = QuestionBankImport.plainTextToQuestionBank(rawText, metadata);
@@ -1320,10 +795,15 @@
         !currentImportResult.can_use
       );
     } catch (e) {
-      currentImportResult = null;
-      renderImportPreview(null);
+      invalidateConvertedState();
       showStatus(`${i18n[currentLang].conversionError}: ${e.message}`, true);
     }
+  }
+
+  function invalidateConvertedState() {
+    currentImportResult = null;
+    document.getElementById('output-json').value = '';
+    renderImportPreview(null);
   }
 
   function renderImportPreview(result) {
@@ -1353,15 +833,29 @@
     bankGrid.className = 'import-editor-grid';
     bankGrid.append(
       editorField(t.bankTitle, textInput(result.bank.title, value => {
+        const previousTitleCode = normalizeEditorCode(result.bank.title, '');
         result.bank.title = value.trim();
+        if (!result.bank.code || result.bank.code === previousTitleCode) {
+          result.bank.code = normalizeEditorCode(result.bank.title, '');
+        }
         refreshImportResult();
       }), 'half'),
-      editorField(t.bankCode, textInput(result.bank.code, value => {
-        result.bank.code = normalizeEditorCode(value, 'IMPORTED_BANK');
+      editorField(t.primaryLanguage, selectInput([
+        ['es-MX', 'Español (México)'],
+        ['en-US', 'English (United States)'],
+        ['ru-RU', 'Русский']
+      ], result.bank.primary_language || primaryLanguageFrom(''), value => {
+        result.bank.primary_language = value;
         refreshImportResult();
       }), 'half')
     );
-    bankCard.append(bankIdentity, bankGrid);
+    const bankAdvanced = detailsSection(t.advancedFields, [
+      editorField(t.bankCode, textInput(result.bank.code, value => {
+        result.bank.code = normalizeEditorCode(value, '');
+        refreshImportResult();
+      }), 'half')
+    ]);
+    bankCard.append(bankIdentity, bankGrid, bankAdvanced);
     bankEditor.appendChild(bankCard);
 
     const questions = document.getElementById('preview-questions');
@@ -1384,7 +878,9 @@
         ['numeric_input', 'numeric_input'],
         ['text_input', 'text_input']
       ], question.type || '', value => {
-        question.type = value || null;
+        const inferred = QuestionBankImport.inferQuestionContract({ ...question, type: value || null });
+        question.type = inferred.type;
+        question.scale = inferred.scale;
         refreshImportResult();
       });
       const levelSelect = selectInput([
@@ -1416,39 +912,58 @@
           question.prompt = value.trim();
           refreshImportResult();
         }), 'wide'),
-        editorField(t.questionCode, textInput(question.code, value => {
-          renameImportedQuestion(questionCode, value);
-        })),
-        editorField(t.responseType, typeSelect),
-        editorField(t.scaleId, textInput(question.scale?.id || '', value => {
+        editorField(t.responseType, typeSelect)
+      );
+      if (question.type || question.scale) {
+        grid.append(
+          editorField(t.scaleId, textInput(question.scale?.id || '', value => {
           ensureScale(question).id = value.trim() || null;
           refreshImportResult();
-        })),
-        editorField(t.psychometricLevel, levelSelect),
-        editorField(t.options, areaInput(options, value => {
+          })),
+          editorField(t.psychometricLevel, levelSelect)
+        );
+      }
+      if (['single_select', 'multiple_select'].includes(question.type) || question.options?.length) {
+        grid.append(editorField(t.options, areaInput(options, value => {
           question.options = parseEditedOptions(value);
           const inferred = QuestionBankImport.inferQuestionContract(question);
           question.type = question.type || inferred.type;
-          question.scale = question.scale?.id ? question.scale : inferred.scale;
+          question.scale = inferred.scale;
           refreshImportResult();
-        }), 'wide'),
-        editorField(t.min, numberInput(question.scale?.min, value => {
+        }), 'wide'));
+      }
+      const rangeRelevant = question.type === 'numeric_input' ||
+        question.scale?.psychometric_level === 'ordinal' ||
+        [question.scale?.min, question.scale?.max, question.scale?.step].some(value => value !== null && value !== undefined);
+      if (rangeRelevant) {
+        grid.append(
+          editorField(t.min, numberInput(question.scale?.min, value => {
           ensureScale(question).min = numberOrNull(value);
           refreshImportResult();
-        })),
-        editorField(t.max, numberInput(question.scale?.max, value => {
+          })),
+          editorField(t.max, numberInput(question.scale?.max, value => {
           ensureScale(question).max = numberOrNull(value);
           refreshImportResult();
-        })),
-        editorField(t.step, numberInput(question.scale?.step, value => {
+          })),
+          editorField(t.step, numberInput(question.scale?.step, value => {
           ensureScale(question).step = numberOrNull(value);
           refreshImportResult();
+          })),
+          editorField(t.unit, textInput(question.scale?.unit || '', value => {
+            ensureScale(question).unit = value.trim() || null;
+            refreshImportResult();
+          }))
+        );
+      }
+      const advanced = detailsSection(t.advancedFields, [
+        editorField(t.questionCode, textInput(question.code, value => {
+          renameImportedQuestion(questionCode, value);
         })),
         editorField(t.status, statusSelect),
-        editorField(t.unit, textInput(question.scale?.unit || '', value => {
+        ...(!rangeRelevant ? [editorField(t.unit, textInput(question.scale?.unit || '', value => {
           ensureScale(question).unit = value.trim() || null;
           refreshImportResult();
-        })),
+        }))] : []),
         editorField(t.scaleDirection, textInput(question.scale?.direction || '', value => {
           ensureScale(question).direction = value.trim() || null;
           refreshImportResult();
@@ -1489,8 +1004,8 @@
           question.parameter = value.trim() || null;
           refreshImportResult();
         }))
-      );
-      row.append(identity, grid);
+      ]);
+      row.append(identity, grid, advanced);
       errors.forEach(item => {
         const error = document.createElement('div');
         error.className = 'import-diagnostic';
@@ -1520,6 +1035,20 @@
     caption.textContent = label;
     wrapper.append(caption, control);
     return wrapper;
+  }
+
+  function detailsSection(label, fields) {
+    const details = document.createElement('details');
+    details.style.marginTop = '12px';
+    const summary = document.createElement('summary');
+    summary.textContent = label;
+    summary.style.cursor = 'pointer';
+    const grid = document.createElement('div');
+    grid.className = 'import-editor-grid';
+    grid.style.marginTop = '12px';
+    grid.append(...fields);
+    details.append(summary, grid);
+    return details;
   }
 
   function textInput(value, onChange) {
@@ -1689,17 +1218,23 @@
     renderImportPreview(null);
   }
 
-  function copyResult() {
+  async function copyResult() {
     const outputArea = document.getElementById('output-json');
     if (outputArea.value) {
-      navigator.clipboard.writeText(outputArea.value);
-      showStatus(i18n[currentLang].msgCopied, false);
+      try {
+        await navigator.clipboard.writeText(outputArea.value);
+        showStatus(i18n[currentLang].msgCopied, false);
+      } catch (_) {
+        showStatus(i18n[currentLang].copyFailed, true);
+      }
     }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('input-json').addEventListener('input', () => {
       currentParsedValue = null;
+      currentInputKind = 'auto';
+      invalidateConvertedState();
     });
     const saved = (localStorage.getItem('app_language') || 'es').replace('-MX', '').replace('-US', '');
     setLanguage(i18n[saved] ? saved : 'es');
