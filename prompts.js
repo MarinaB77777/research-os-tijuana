@@ -4,7 +4,7 @@
  * AI output is a research hypothesis only. Bibliographic metadata is checked
  * independently and every method requires an explicit researcher decision.
  */
-const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_mapping_v3';
+const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_open_methods_v4';
 
 const VALIDATION_MAPPING_SYSTEM_PROMPT = `
 You are assisting a researcher with candidate discovery for validation mapping.
@@ -29,7 +29,7 @@ The researcher supplies:
   node_id, node_type, label, parent_node_id, and level
 - target_population
 - language_and_cultural_context
-- standard_method_access_scope: "open_only" or "include_licensed"
+- standard_method_access_scope: "open_only"
 
 The bank's individual question texts are intentionally not supplied. Do not
 infer or reconstruct them. The deep research question is the unit of candidate
@@ -90,13 +90,16 @@ Rules:
 - target_node_ids may contain only exact node_id values supplied by the researcher.
 - covered_subconstructs may contain only exact labels from validation_targets.
 - Assess the meaning of every deep research question separately.
-- Include a method only when you can identify a plausible published source or
-  explicitly state that the source remains unknown.
-- If standard_method_access_scope is "open_only", return only methods whose
-  instrument use is plausibly available without purchase or case-by-case
-  permission. Do not infer instrument rights from access to an article.
-- If standard_method_access_scope is "include_licensed", paid or
-  permission-based methods may be proposed, but label them accurately.
+- Include a method only when you can identify a published, recognized standard
+  method and a traceable primary or authoritative source. If the method or its
+  source cannot be identified, do not return it as a candidate; report the
+  corresponding deep research question under potentially_unique_constructs or
+  the search gap under search_limitations.
+- Return only methods whose instrument use is supported as available without
+  purchase, subscription, or case-by-case permission. For every returned
+  candidate, rights_and_access.status must be "open" and the explanation must
+  identify the basis for that claim. Article access alone is not evidence that
+  the instrument is free to use.
 - A candidate is not a recognized standard merely because it has a DOI.
   Provide a plausible primary validation source; the researcher must confirm
   recognition, scientific fit, and instrument-use rights independently.
