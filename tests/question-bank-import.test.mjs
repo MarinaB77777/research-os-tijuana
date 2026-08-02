@@ -754,6 +754,12 @@ test('multi-format readers are local and the editing workspace stays compact', a
   assert.doesNotMatch(page, /editorField\(t\.scaleId, textInput\(/);
   assert.match(page, /needs-user-input/);
   assert.match(page, /control\.setAttribute\('aria-invalid', 'true'\)/);
+  assert.match(page, /id="resolution-navigation"/);
+  assert.match(page, /resolutionPosition:\s*\(current, total\)/);
+  assert.match(page, /querySelectorAll\('#import-preview label\.needs-user-input'\)/);
+  assert.match(page, /target\.scrollIntoView\(\{ behavior: 'smooth', block: 'center' \}\)/);
+  assert.match(page, /resolution-previous'\)\.addEventListener\('click'/);
+  assert.match(page, /resolution-next'\)\.addEventListener\('click'/);
   assert.match(page, /height:\s*280px/);
   assert.match(page, /max-height:\s*500px/);
   assert.match(page, /textarea::\-webkit-scrollbar\s*\{[\s\S]*?width:\s*14px/);

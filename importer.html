@@ -265,6 +265,65 @@
       box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14);
     }
 
+    .resolution-navigation {
+      position: sticky;
+      top: 8px;
+      z-index: 5;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0 0 12px;
+      padding: 9px 10px;
+      border: 1px solid rgba(245, 158, 11, 0.55);
+      border-radius: 8px;
+      background: rgba(120, 53, 15, 0.18);
+    }
+
+    .resolution-navigation[hidden] { display: none; }
+
+    .resolution-navigation-status {
+      color: #fbbf24;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .resolution-navigation-controls {
+      display: flex;
+      gap: 7px;
+    }
+
+    .resolution-navigation button {
+      padding: 6px 10px;
+      border: 1px solid rgba(245, 158, 11, 0.7);
+      border-radius: 6px;
+      background: #1f2937;
+      color: var(--text-color);
+      cursor: pointer;
+      font: inherit;
+    }
+
+    .resolution-navigation button:hover,
+    .resolution-navigation button:focus-visible {
+      border-color: #fbbf24;
+      outline: none;
+    }
+
+    .import-editor label.needs-user-input.current-resolution input,
+    .import-editor label.needs-user-input.current-resolution select,
+    .import-editor label.needs-user-input.current-resolution textarea {
+      box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.38);
+    }
+
+    @media (max-width: 620px) {
+      .resolution-navigation {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .resolution-navigation-controls button { flex: 1; }
+    }
+
     .import-identity {
       margin-bottom: 10px;
       color: var(--text-muted);
@@ -427,6 +486,13 @@
       <label id="ui-preview-label">Vista previa del reconocimiento</label>
     </div>
     <div id="preview-summary" style="margin-bottom:12px;color:var(--text-muted)"></div>
+    <div id="resolution-navigation" class="resolution-navigation" hidden>
+      <span id="resolution-navigation-status" class="resolution-navigation-status"></span>
+      <div class="resolution-navigation-controls">
+        <button type="button" id="resolution-previous"></button>
+        <button type="button" id="resolution-next"></button>
+      </div>
+    </div>
     <div id="preview-bank"></div>
     <div id="preview-questions" class="preview-questions"></div>
     <div id="preview-diagnostics" style="margin-top:12px"></div>
@@ -488,6 +554,9 @@
       status: "Estado",
       emptyChoice: "— no determinado —",
       importedScale: "Contrato del archivo",
+      previousResolution: "← Corrección anterior",
+      nextResolution: "Siguiente corrección →",
+      resolutionPosition: (current, total) => `Corrección ${current} de ${total}`,
       scaleNames: {
         single_choice: "Selección Única (Categorías)", multiple_choice: "Selección Múltiple", dichotomous: "Dicotómica (Sí/No)",
         likert_7: "Escala Likert (7 puntos)", likert_5: "Escala Likert (5 puntos)", frequency_scale: "Escala de Frecuencia",
@@ -539,6 +608,9 @@
       status: "Status",
       emptyChoice: "— not determined —",
       importedScale: "Contract from source file",
+      previousResolution: "← Previous correction",
+      nextResolution: "Next correction →",
+      resolutionPosition: (current, total) => `Correction ${current} of ${total}`,
       scaleNames: {
         single_choice: "Single Choice (Categories)", multiple_choice: "Multiple Choice", dichotomous: "Dichotomous (Yes/No)",
         likert_7: "Likert Scale (7-point)", likert_5: "Likert Scale (5-point)", frequency_scale: "Frequency Scale",
@@ -590,6 +662,9 @@
       status: "Статус",
       emptyChoice: "— не определено —",
       importedScale: "Контракт из исходного файла",
+      previousResolution: "← Предыдущее исправление",
+      nextResolution: "Следующее исправление →",
+      resolutionPosition: (current, total) => `Исправление ${current} из ${total}`,
       scaleNames: {
         single_choice: "Одиночный выбор (категории)", multiple_choice: "Множественный выбор", dichotomous: "Дихотомическая (Да/Нет)",
         likert_7: "Шкала Лайкерта (7-балльная)", likert_5: "Шкала Лайкерта (5-балльная)", frequency_scale: "Частотная шкала",
@@ -712,6 +787,7 @@
   let currentParsedValue = null;
   let currentInputKind = 'structured';
   let currentImportResult = null;
+  let currentResolutionIndex = 0;
 
   function setLanguage(lang) {
     currentLang = lang;
@@ -732,6 +808,8 @@
     document.getElementById('ui-btn-copy').innerText = t.btnCopy;
     document.getElementById('ui-btn-convert').innerText = t.btnConvert;
     document.getElementById('ui-btn-use').innerText = t.btnUse;
+    document.getElementById('resolution-previous').textContent = t.previousResolution;
+    document.getElementById('resolution-next').textContent = t.nextResolution;
     document.querySelectorAll('[data-placeholder-key]').forEach(element => {
       element.placeholder = t[element.dataset.placeholderKey];
     });
@@ -849,6 +927,8 @@
     if (!result) {
       preview.style.display = 'none';
       useButton.style.display = 'none';
+      currentResolutionIndex = 0;
+      updateResolutionNavigation();
       return;
     }
     const t = i18n[currentLang];
@@ -1065,6 +1145,42 @@
       line.textContent = localizeDiagnostic(item);
       diagnostics.appendChild(line);
     });
+    updateResolutionNavigation();
+  }
+
+  function resolutionFields() {
+    return Array.from(document.querySelectorAll('#import-preview label.needs-user-input'));
+  }
+
+  function updateResolutionNavigation() {
+    const navigation = document.getElementById('resolution-navigation');
+    const fields = resolutionFields();
+    navigation.hidden = fields.length === 0;
+    if (!fields.length) {
+      currentResolutionIndex = 0;
+      return;
+    }
+    currentResolutionIndex = Math.min(currentResolutionIndex, fields.length - 1);
+    fields.forEach((field, index) => {
+      field.classList.toggle('current-resolution', index === currentResolutionIndex);
+    });
+    document.getElementById('resolution-navigation-status').textContent =
+      i18n[currentLang].resolutionPosition(currentResolutionIndex + 1, fields.length);
+  }
+
+  function goToResolution(offset) {
+    const fields = resolutionFields();
+    if (!fields.length) return;
+    currentResolutionIndex = (currentResolutionIndex + offset + fields.length) % fields.length;
+    fields.forEach(field => field.classList.remove('current-resolution'));
+    const target = fields[currentResolutionIndex];
+    for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+      if (parent.tagName === 'DETAILS') parent.open = true;
+    }
+    target.classList.add('current-resolution');
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => target.querySelector('input, select, textarea')?.focus({ preventScroll: true }), 250);
+    updateResolutionNavigation();
   }
 
   function localizeDiagnostic(item) {
@@ -1322,6 +1438,8 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('resolution-previous').addEventListener('click', () => goToResolution(-1));
+    document.getElementById('resolution-next').addEventListener('click', () => goToResolution(1));
     document.getElementById('input-json').addEventListener('input', () => {
       currentParsedValue = null;
       currentInputKind = 'auto';
