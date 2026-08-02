@@ -253,6 +253,18 @@
       box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.16);
     }
 
+    .import-editor label.needs-user-input > span {
+      color: #fbbf24;
+    }
+
+    .import-editor label.needs-user-input input,
+    .import-editor label.needs-user-input select,
+    .import-editor label.needs-user-input textarea {
+      border-color: #f59e0b;
+      background: rgba(120, 53, 15, 0.28);
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.14);
+    }
+
     .import-identity {
       margin-bottom: 10px;
       color: var(--text-muted);
@@ -475,6 +487,13 @@
       step: "Paso",
       status: "Estado",
       emptyChoice: "— no determinado —",
+      importedScale: "Contrato del archivo",
+      scaleNames: {
+        single_choice: "Selección Única (Categorías)", multiple_choice: "Selección Múltiple", dichotomous: "Dicotómica (Sí/No)",
+        likert_7: "Escala Likert (7 puntos)", likert_5: "Escala Likert (5 puntos)", frequency_scale: "Escala de Frecuencia",
+        nps_scale: "Escala NPS (0–10)", discrete_count: "Conteo Discreto", continuous_slider: "Escala Análoga Visual (VAS 0–100)",
+        currency_metric: "Métrica Financiera", percentage_share: "Distribución Porcentual (0–100%)", short_string: "Texto Corto", long_paragraph: "Párrafo"
+      },
       editHelp: "Corrija aquí los campos reconocidos. Los cambios modifican el objeto canónico que se guardará.",
       pagesNoText: "Este archivo Pages moderno no contiene una vista PDF con texto. Pages guarda el texto en IWA propietario; expórtelo como DOCX o PDF para una extracción completa, sin OCR ni pérdida silenciosa."
     },
@@ -519,6 +538,13 @@
       step: "Step",
       status: "Status",
       emptyChoice: "— not determined —",
+      importedScale: "Contract from source file",
+      scaleNames: {
+        single_choice: "Single Choice (Categories)", multiple_choice: "Multiple Choice", dichotomous: "Dichotomous (Yes/No)",
+        likert_7: "Likert Scale (7-point)", likert_5: "Likert Scale (5-point)", frequency_scale: "Frequency Scale",
+        nps_scale: "NPS Scale (0–10)", discrete_count: "Discrete Count", continuous_slider: "Visual Analog Scale (VAS 0–100)",
+        currency_metric: "Currency Metric", percentage_share: "Percentage Share (0–100%)", short_string: "Short String", long_paragraph: "Paragraph"
+      },
       editHelp: "Correct the recognized fields here. These changes update the canonical object that will be saved.",
       pagesNoText: "This modern Pages file has no embedded text PDF. Pages stores its text in proprietary IWA data; export it as DOCX or PDF for complete extraction without OCR or silent loss."
     },
@@ -563,6 +589,13 @@
       step: "Шаг",
       status: "Статус",
       emptyChoice: "— не определено —",
+      importedScale: "Контракт из исходного файла",
+      scaleNames: {
+        single_choice: "Одиночный выбор (категории)", multiple_choice: "Множественный выбор", dichotomous: "Дихотомическая (Да/Нет)",
+        likert_7: "Шкала Лайкерта (7-балльная)", likert_5: "Шкала Лайкерта (5-балльная)", frequency_scale: "Частотная шкала",
+        nps_scale: "Индекс NPS (0–10)", discrete_count: "Дискретный счёт", continuous_slider: "Визуальная аналоговая шкала (VAS 0–100)",
+        currency_metric: "Финансовая метрика", percentage_share: "Процентное распределение (0–100%)", short_string: "Короткий текст", long_paragraph: "Развёрнутый абзац"
+      },
       editHelp: "Исправляйте распознанные поля здесь. Изменяется именно канонический объект, который будет сохранён.",
       pagesNoText: "Этот современный файл Pages не содержит встроенного PDF с текстом. Pages хранит текст в закрытом формате IWA; экспортируйте файл в DOCX или PDF для полного извлечения без OCR и скрытых потерь."
     }
@@ -598,8 +631,10 @@
       UNRESOLVED_TYPE: "Seleccione el tipo de respuesta antes de registrar esta pregunta.",
       INVALID_TYPE: "El tipo de respuesta no es compatible con la ejecución del cuestionario.",
       UNRESOLVED_SCALE: "Seleccione el contrato de escala antes de registrar esta pregunta.",
+      INCOMPATIBLE_SCALE_TYPE: "La escala seleccionada no corresponde al tipo de respuesta. Seleccione una escala compatible.",
       UNRESOLVED_PSYCHOMETRIC_LEVEL: "Seleccione el nivel psicométrico antes de registrar esta pregunta.",
       INVALID_PSYCHOMETRIC_LEVEL: "El nivel psicométrico no es compatible con el contrato de análisis.",
+      SCALE_LEVEL_MISMATCH: "El nivel psicométrico no corresponde a la escala seleccionada. Vuelva a seleccionar la escala.",
       INVALID_OPTIONS: "Las opciones de la pregunta deben ser una lista.",
       MISSING_OPTIONS: "Una pregunta de selección necesita al menos dos opciones.",
       INVALID_OPTION: "Cada opción necesita texto.",
@@ -655,8 +690,10 @@
       UNRESOLVED_TYPE: "Перед регистрацией вопроса выберите тип ответа.",
       INVALID_TYPE: "Этот тип ответа не поддерживается модулем проведения анкет.",
       UNRESOLVED_SCALE: "Перед регистрацией вопроса выберите контракт шкалы.",
+      INCOMPATIBLE_SCALE_TYPE: "Выбранная шкала не соответствует типу ответа. Выберите совместимую шкалу.",
       UNRESOLVED_PSYCHOMETRIC_LEVEL: "Перед регистрацией вопроса выберите психометрический уровень.",
       INVALID_PSYCHOMETRIC_LEVEL: "Этот психометрический уровень не поддерживается контрактом анализа.",
+      SCALE_LEVEL_MISMATCH: "Психометрический уровень не соответствует выбранной шкале. Выберите шкалу заново.",
       INVALID_OPTIONS: "Варианты ответа должны быть массивом.",
       MISSING_OPTIONS: "Для вопроса с выбором нужны как минимум два варианта ответа.",
       INVALID_OPTION: "У каждого варианта должен быть текст.",
@@ -831,6 +868,7 @@
     bankIdentity.textContent = `bank UUID: ${result.bank.bank_id} · v${result.bank.version}`;
     const bankGrid = document.createElement('div');
     bankGrid.className = 'import-editor-grid';
+    const bankErrorCodes = diagnosticCodes(result.diagnostics.filter(item => !item.question_code));
     bankGrid.append(
       editorField(t.bankTitle, textInput(result.bank.title, value => {
         const previousTitleCode = normalizeEditorCode(result.bank.title, '');
@@ -839,7 +877,7 @@
           result.bank.code = normalizeEditorCode(result.bank.title, '');
         }
         refreshImportResult();
-      }), 'half'),
+      }), 'half', bankErrorCodes.has('MISSING_BANK_TITLE')),
       editorField(t.primaryLanguage, selectInput([
         ['es-MX', 'Español (México)'],
         ['en-US', 'English (United States)'],
@@ -847,7 +885,7 @@
       ], result.bank.primary_language || primaryLanguageFrom(''), value => {
         result.bank.primary_language = value;
         refreshImportResult();
-      }), 'half')
+      }), 'half', bankErrorCodes.has('MISSING_PRIMARY_LANGUAGE'))
     );
     const bankAdvanced = detailsSection(t.advancedFields, [
       editorField(t.bankCode, textInput(result.bank.code, value => {
@@ -863,6 +901,7 @@
     result.bank.question_order.forEach((questionCode, index) => {
       const question = result.bank.questions[questionCode];
       const errors = result.diagnostics.filter(item => item.question_code === questionCode);
+      const errorCodes = diagnosticCodes(errors);
       const row = document.createElement('div');
       row.className = 'import-editor';
       const identity = document.createElement('div');
@@ -878,21 +917,19 @@
         ['numeric_input', 'numeric_input'],
         ['text_input', 'text_input']
       ], question.type || '', value => {
-        const inferred = QuestionBankImport.inferQuestionContract({ ...question, type: value || null });
+        const requestedType = value || null;
+        const currentContract = QuestionBankImport.scaleContract(question.scale?.id);
+        question.type = requestedType;
+        if (currentContract && currentContract.response_type !== requestedType) question.scale = null;
+        if (!currentContract && question.scale?.id && requestedType) question.scale = null;
+        const inferred = QuestionBankImport.inferQuestionContract(question);
         question.type = inferred.type;
         question.scale = inferred.scale;
+        if (question.scale?.id === 'text') applyScaleSelection(question, 'short_string');
+        if (question.scale?.id === 'numeric') applyScaleSelection(question, 'continuous_slider');
         refreshImportResult();
       });
-      const levelSelect = selectInput([
-        ['', t.emptyChoice],
-        ['nominal', 'nominal'],
-        ['ordinal', 'ordinal'],
-        ['interval_ratio', 'interval_ratio'],
-        ['textual', 'textual']
-      ], question.scale?.psychometric_level || '', value => {
-        ensureScale(question).psychometric_level = value || null;
-        refreshImportResult();
-      });
+      const levelDisplay = readOnlyInput(question.scale?.psychometric_level || '—');
       const statusSelect = selectInput([
         ['draft', 'Draft'],
         ['trial', 'Trial'],
@@ -911,16 +948,21 @@
         editorField(t.prompt, areaInput(question.prompt, value => {
           question.prompt = value.trim();
           refreshImportResult();
-        }), 'wide'),
-        editorField(t.responseType, typeSelect)
+        }), 'wide', errorCodes.has('MISSING_PROMPT') || errorCodes.has('PLACEHOLDER_PROMPT')),
+        editorField(t.responseType, typeSelect, '', errorCodes.has('UNRESOLVED_TYPE') || errorCodes.has('INVALID_TYPE'))
       );
       if (question.type || question.scale) {
+        const scaleNeedsResolution = errorCodes.has('UNRESOLVED_SCALE') ||
+          errorCodes.has('INCOMPATIBLE_SCALE_TYPE') ||
+          errorCodes.has('UNRESOLVED_PSYCHOMETRIC_LEVEL') ||
+          errorCodes.has('INVALID_PSYCHOMETRIC_LEVEL') ||
+          errorCodes.has('SCALE_LEVEL_MISMATCH');
         grid.append(
-          editorField(t.scaleId, textInput(question.scale?.id || '', value => {
-          ensureScale(question).id = value.trim() || null;
-          refreshImportResult();
-          })),
-          editorField(t.psychometricLevel, levelSelect)
+          editorField(t.scaleId, selectInput(scaleOptions(question, t), question.scale?.id || '', value => {
+            applyScaleSelection(question, value);
+            refreshImportResult();
+          }), '', scaleNeedsResolution),
+          editorField(t.psychometricLevel, levelDisplay)
         );
       }
       if (['single_select', 'multiple_select'].includes(question.type) || question.options?.length) {
@@ -930,7 +972,8 @@
           question.type = question.type || inferred.type;
           question.scale = inferred.scale;
           refreshImportResult();
-        }), 'wide'));
+        }), 'wide', ['INVALID_OPTIONS', 'MISSING_OPTIONS', 'INVALID_OPTION', 'MISSING_OPTION_VALUE', 'DUPLICATE_OPTION_VALUE']
+          .some(code => errorCodes.has(code))));
       }
       const rangeRelevant = question.type === 'numeric_input' ||
         question.scale?.psychometric_level === 'ordinal' ||
@@ -1028,11 +1071,16 @@
     return i18n[currentLang].diagnostics?.[item.code] || item.message;
   }
 
-  function editorField(label, control, className = '') {
+  function diagnosticCodes(items) {
+    return new Set((items || []).filter(item => item.level === 'error').map(item => item.code));
+  }
+
+  function editorField(label, control, className = '', needsUserInput = false) {
     const wrapper = document.createElement('label');
-    wrapper.className = className;
+    wrapper.className = [className, needsUserInput ? 'needs-user-input' : ''].filter(Boolean).join(' ');
     const caption = document.createElement('span');
     caption.textContent = label;
+    if (needsUserInput) control.setAttribute('aria-invalid', 'true');
     wrapper.append(caption, control);
     return wrapper;
   }
@@ -1086,6 +1134,49 @@
     });
     select.addEventListener('change', () => onChange(select.value));
     return select;
+  }
+
+  function readOnlyInput(value) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value ?? '';
+    input.disabled = true;
+    return input;
+  }
+
+  function scaleOptions(question, t) {
+    const contracts = QuestionBankImport.scaleContractsForType(question.type);
+    const options = [['', t.emptyChoice]];
+    const currentId = String(question.scale?.id || '').trim();
+    if (currentId && !QuestionBankImport.scaleContract(currentId)) {
+      options.push([currentId, `${t.importedScale}: ${currentId}`]);
+    }
+    contracts.forEach(contract => {
+      options.push([contract.id, `${t.scaleNames[contract.id]} · ${contract.id}`]);
+    });
+    return options;
+  }
+
+  function applyScaleSelection(question, scaleId) {
+    const selectedId = String(scaleId || '').trim();
+    if (!selectedId) {
+      const scale = ensureScale(question);
+      scale.id = null;
+      scale.psychometric_level = null;
+      return;
+    }
+    const contract = QuestionBankImport.scaleContract(selectedId);
+    if (!contract) return;
+    const scale = ensureScale(question);
+    scale.id = contract.id;
+    scale.psychometric_level = contract.psychometric_level;
+    question.type = contract.response_type;
+    for (const field of ['min', 'max', 'step', 'unit']) {
+      if ((scale[field] === null || scale[field] === undefined || scale[field] === '') &&
+          Object.prototype.hasOwnProperty.call(contract, field)) {
+        scale[field] = contract[field];
+      }
+    }
   }
 
   function ensureScale(question) {

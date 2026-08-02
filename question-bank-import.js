@@ -3,6 +3,21 @@
 
   const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const STATUS = new Set(['draft', 'trial', 'active']);
+  const SCALE_CONTRACTS = Object.freeze([
+    Object.freeze({ id: 'single_choice', psychometric_level: 'nominal', response_type: 'single_select' }),
+    Object.freeze({ id: 'multiple_choice', psychometric_level: 'nominal', response_type: 'multiple_select' }),
+    Object.freeze({ id: 'dichotomous', psychometric_level: 'nominal', response_type: 'single_select' }),
+    Object.freeze({ id: 'likert_7', psychometric_level: 'ordinal', response_type: 'single_select', min: 1, max: 7, step: 1 }),
+    Object.freeze({ id: 'likert_5', psychometric_level: 'ordinal', response_type: 'single_select', min: 1, max: 5, step: 1 }),
+    Object.freeze({ id: 'frequency_scale', psychometric_level: 'ordinal', response_type: 'single_select' }),
+    Object.freeze({ id: 'nps_scale', psychometric_level: 'ordinal', response_type: 'single_select', min: 0, max: 10, step: 1 }),
+    Object.freeze({ id: 'discrete_count', psychometric_level: 'interval_ratio', response_type: 'numeric_input', step: 1 }),
+    Object.freeze({ id: 'continuous_slider', psychometric_level: 'interval_ratio', response_type: 'numeric_input', min: 0, max: 100, step: 1 }),
+    Object.freeze({ id: 'currency_metric', psychometric_level: 'interval_ratio', response_type: 'numeric_input' }),
+    Object.freeze({ id: 'percentage_share', psychometric_level: 'interval_ratio', response_type: 'numeric_input', min: 0, max: 100, step: 1, unit: '%' }),
+    Object.freeze({ id: 'short_string', psychometric_level: 'textual', response_type: 'text_input' }),
+    Object.freeze({ id: 'long_paragraph', psychometric_level: 'textual', response_type: 'text_input' })
+  ]);
 
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
@@ -283,6 +298,15 @@
     if (value === '' || value === undefined || value === null) return null;
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function scaleContract(scaleId) {
+    return SCALE_CONTRACTS.find(contract => contract.id === String(scaleId || '').trim()) || null;
+  }
+
+  function scaleContractsForType(responseType) {
+    const normalizedType = normalizeResponseType(responseType);
+    return SCALE_CONTRACTS.filter(contract => !normalizedType || contract.response_type === normalizedType);
   }
 
   function normalizeScale(value, source) {
@@ -1158,11 +1182,19 @@
       const scaleResolved = question.scale && typeof question.scale === 'object' &&
         String(question.scale.id || '').trim();
       if (!scaleResolved) issue('error', 'UNRESOLVED_SCALE', 'A scale contract must be selected before this question can be registered.', questionCode);
+      const registeredScale = scaleResolved ? scaleContract(question.scale.id) : null;
+      if (registeredScale && registeredScale.response_type !== question.type) {
+        issue('error', 'INCOMPATIBLE_SCALE_TYPE', 'The selected scale is not compatible with the response type.', questionCode);
+      }
       if (scaleResolved && !String(question.scale.psychometric_level || '').trim()) {
         issue('error', 'UNRESOLVED_PSYCHOMETRIC_LEVEL', 'The psychometric level must be selected before this question can be registered.', questionCode);
       }
       if (scaleResolved && !['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(question.scale.psychometric_level)) {
         issue('error', 'INVALID_PSYCHOMETRIC_LEVEL', 'The psychometric level is not supported by the analysis contract.', questionCode);
+      }
+      if (registeredScale && question.scale.psychometric_level &&
+          registeredScale.psychometric_level !== question.scale.psychometric_level) {
+        issue('error', 'SCALE_LEVEL_MISMATCH', 'The psychometric level does not match the selected scale contract.', questionCode);
       }
       if (!Array.isArray(question.options)) issue('error', 'INVALID_OPTIONS', 'Question options must be an array.', questionCode);
       if (['single_select', 'multiple_select'].includes(question.type) && (!Array.isArray(question.options) || question.options.length < 2)) {
@@ -1216,6 +1248,9 @@
   }
 
   global.QuestionBankImport = Object.freeze({
+    SCALE_CONTRACTS,
+    scaleContract,
+    scaleContractsForType,
     parseLiteralDocument,
     parseStructuredText,
     mayFallbackToPlainText,

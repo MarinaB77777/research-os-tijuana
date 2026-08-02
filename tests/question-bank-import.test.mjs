@@ -105,6 +105,58 @@ test('structured source formats never fall back to question-mark line scraping',
   assert.equal(importer.mayFallbackToPlainText('text'), true);
 });
 
+test('importer exposes only scale contracts implemented by the question constructor', async () => {
+  const constructorPage = await fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8');
+  const expected = [
+    ['single_choice', 'nominal', 'single_select'],
+    ['multiple_choice', 'nominal', 'multiple_select'],
+    ['dichotomous', 'nominal', 'single_select'],
+    ['likert_7', 'ordinal', 'single_select'],
+    ['likert_5', 'ordinal', 'single_select'],
+    ['frequency_scale', 'ordinal', 'single_select'],
+    ['nps_scale', 'ordinal', 'single_select'],
+    ['discrete_count', 'interval_ratio', 'numeric_input'],
+    ['continuous_slider', 'interval_ratio', 'numeric_input'],
+    ['currency_metric', 'interval_ratio', 'numeric_input'],
+    ['percentage_share', 'interval_ratio', 'numeric_input'],
+    ['short_string', 'textual', 'text_input'],
+    ['long_paragraph', 'textual', 'text_input']
+  ];
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(importer.SCALE_CONTRACTS.map(contract => [
+      contract.id, contract.psychometric_level, contract.response_type
+    ]))),
+    expected
+  );
+  for (const [scaleId] of expected) {
+    assert.match(constructorPage, new RegExp(`id: ["']${scaleId}["']`));
+  }
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(importer.scaleContractsForType('multiple_select').map(contract => contract.id))),
+    ['multiple_choice']
+  );
+  assert.equal(importer.scaleContract('likert_5').psychometric_level, 'ordinal');
+  assert.equal(importer.scaleContract('not_registered'), null);
+});
+
+test('registered scale contracts reject incompatible response types and psychometric levels', () => {
+  const incompatibleType = structuredClone(bank);
+  incompatibleType.questions.Q_1.scale = {
+    id: 'likert_5', psychometric_level: 'ordinal', min: 1, max: 5, step: 1
+  };
+  incompatibleType.questions.Q_1.type = 'multiple_select';
+  assert.ok(importer.validateQuestionBank(incompatibleType)
+    .some(item => item.code === 'INCOMPATIBLE_SCALE_TYPE'));
+
+  const incompatibleLevel = structuredClone(bank);
+  incompatibleLevel.questions.Q_1.scale = {
+    id: 'likert_5', psychometric_level: 'nominal', min: 1, max: 5, step: 1
+  };
+  assert.ok(importer.validateQuestionBank(incompatibleLevel)
+    .some(item => item.code === 'SCALE_LEVEL_MISMATCH'));
+});
+
 test('legacy question_prompt, answer_options, and scale id are normalized without becoming literal prose', () => {
   const imported = importer.canonicalOrConverted({
     title: 'Legacy bank',
@@ -697,6 +749,11 @@ test('multi-format readers are local and the editing workspace stays compact', a
   assert.match(page, /currentParsedValue = null;[\s\S]*addEventListener\('input'/);
   assert.match(page, /id="ui-back-hub">← Volver al inicio/);
   assert.match(page, /UNRESOLVED_SCALE:\s*"Seleccione el contrato de escala/);
+  assert.match(page, /QuestionBankImport\.scaleContractsForType\(question\.type\)/);
+  assert.match(page, /editorField\(t\.scaleId, selectInput\(scaleOptions\(question, t\)/);
+  assert.doesNotMatch(page, /editorField\(t\.scaleId, textInput\(/);
+  assert.match(page, /needs-user-input/);
+  assert.match(page, /control\.setAttribute\('aria-invalid', 'true'\)/);
   assert.match(page, /height:\s*280px/);
   assert.match(page, /max-height:\s*500px/);
   assert.match(page, /textarea::\-webkit-scrollbar\s*\{[\s\S]*?width:\s*14px/);
