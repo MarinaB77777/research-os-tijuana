@@ -380,7 +380,7 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.match(constructor, /importer\.html\?return=constructor_survey\.html/);
   assert.match(constructor, /consumeImportedBank\(\)/);
   assert.doesNotMatch(constructor, /accept="\.json,application\/json"/);
-  assert.match(page, /\.docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages/);
+  assert.match(page, /\.docx,.pdf,.xlsx,.xls,.xml,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages/);
   assert.match(page, /QuestionBankImport\.summarize/);
   assert.match(page, /renameImportedQuestion/);
   assert.match(page, /parseEditedOptions/);
@@ -389,6 +389,127 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.match(page, /research_os\.imported_question_bank\.v1/);
   assert.match(page, /Designed and built in collaboration with Ray AI/);
   assert.doesNotMatch(page, /Gemini AI/);
+});
+
+test('saved banks and questionnaire files return to their owning editors', async () => {
+  const [cabinet, bankConstructor, questionnaireConstructor] = await Promise.all([
+    fs.readFile(new URL('../survey.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8')
+  ]);
+  assert.match(cabinet, /bank\.owned_by_current_account\?'constructor_quest\.html':'constructor_survey\.html'/);
+  assert.match(bankConstructor, /loadRegisteredBankForEditing/);
+  assert.match(bankConstructor, /questionBankPackageToEditor/);
+  assert.match(bankConstructor, /ResearchContracts\.flattenQuestionBank\(packageData\)/);
+  assert.match(questionnaireConstructor, /accept="\.json,\.questionnaire\.json,application\/json"/);
+  assert.match(questionnaireConstructor, /stateFromQuestionnairePackage/);
+  assert.match(questionnaireConstructor, /applyQuestionnairePackage/);
+  assert.match(questionnaireConstructor, /buildPackage\(\);RC\.writeJson\(DRAFT_KEY,state\)/);
+});
+
+test('question-bank editor reopens and rebuilds canonical identity without changing scientific fields', async () => {
+  const [contractsSource, constructorPage] = await Promise.all([
+    fs.readFile(new URL('../research-contracts.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8')
+  ]);
+  const inlineSource = [...constructorPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+    .map(match => match[1])
+    .find(value => value.includes('function buildQuestionBankPackage'));
+  const storage = new Map();
+  const roundTripContext = {
+    crypto: webcrypto,
+    console,
+    URL,
+    Headers,
+    Blob,
+    TextEncoder,
+    TextDecoder,
+    Uint8Array,
+    setTimeout,
+    clearTimeout,
+    alert() {},
+    confirm() { return true; },
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value))
+    },
+    sessionStorage: { getItem: () => null, removeItem() {} },
+    document: {}
+  };
+  roundTripContext.window = roundTripContext;
+  roundTripContext.globalThis = roundTripContext;
+  roundTripContext.window.addEventListener = () => {};
+  vm.createContext(roundTripContext);
+  vm.runInContext(contractsSource, roundTripContext);
+  vm.runInContext(`${inlineSource}\n` +
+    `globalThis.roundTripBank = packageData => {` +
+    `const restored=questionBankPackageToEditor(packageData);` +
+    `bank=restored.questions;bankMetadata=restored.metadata;currentMode=restored.mode;` +
+    `return buildQuestionBankPackage();};`, roundTripContext);
+
+  const reopened = roundTripContext.roundTripBank(bank);
+  const originalQuestion = bank.questions.Q_1;
+  const reopenedQuestion = reopened.questions.Q_1;
+  assert.equal(reopened.bank_id, bank.bank_id);
+  assert.equal(reopened.version, bank.version);
+  assert.equal(reopened.global_time_reference, bank.global_time_reference);
+  assert.equal(reopened.primary_language, bank.primary_language);
+  assert.deepEqual(JSON.parse(JSON.stringify(reopened.question_order)), bank.question_order);
+  for (const field of ['question_id', 'version', 'block', 'family', 'domain', 'parameter', 'type', 'prompt', 'options', 'scale', 'score_direction', 'time', 'status']) {
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(reopenedQuestion[field])),
+      JSON.parse(JSON.stringify(originalQuestion[field])),
+      field
+    );
+  }
+});
+
+test('questionnaire JSON reopening preserves item identities, routing, consent, and time reference', async () => {
+  const [contractsSource, constructorPage] = await Promise.all([
+    fs.readFile(new URL('../research-contracts.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8')
+  ]);
+  const inlineSource = [...constructorPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+    .map(match => match[1])
+    .find(value => value.includes('function stateFromQuestionnairePackage'));
+  const packageData = {
+    schema: 'research_os.questionnaire', schema_version: 1,
+    questionnaire_id: '2ed5f06b-bb82-4d39-bc1f-557f5b07cb71', code: 'QNR', title: 'Questionnaire',
+    description: 'Purpose', version: 2, status: 'draft', primary_language: 'es-MX',
+    global_time_reference: '2026-08-01T12:00:00.000Z',
+    consent: { mode: 'standard', consent_id: '00000000-0000-4000-8000-000000000001', consent_version: 1 },
+    completion_policy: { minimum_answered_items: 1, require_terminal_route: true },
+    start_item_id: 'ea5aa752-536e-44de-9097-63e81c411aa7',
+    items: [
+      { item_id: 'ea5aa752-536e-44de-9097-63e81c411aa7', position: 1, source_bank_id: bank.bank_id, source_bank_version: 3, source_bank_code: bank.code, question_id: bank.questions.Q_1.question_id, question_version: 2, code: 'Q_1', required: true, definition_snapshot: bank.questions.Q_1 },
+      { item_id: '415a14aa-7a79-488f-897d-cc49eeafcd55', position: 2, source_bank_id: bank.bank_id, source_bank_version: 3, source_bank_code: bank.code, question_id: bank.questions.Q_1.question_id, question_version: 2, code: 'Q_1_REPEAT', required: false, definition_snapshot: bank.questions.Q_1 }
+    ],
+    routing: { nodes: {
+      'ea5aa752-536e-44de-9097-63e81c411aa7': { default_target: '415a14aa-7a79-488f-897d-cc49eeafcd55', rules: [{ rule_id: '5082d6cf-d16b-4564-9338-cf69e84c57b0', operator: 'equals', value: 0, target: 'end' }] },
+      '415a14aa-7a79-488f-897d-cc49eeafcd55': { default_target: 'end', rules: [] }
+    } }
+  };
+  const questionnaireContext = {
+    crypto: webcrypto, console, URL, Headers, Blob, TextEncoder, TextDecoder, Uint8Array,
+    localStorage: { getItem: () => null, setItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    document: { addEventListener() {} }
+  };
+  questionnaireContext.window = questionnaireContext;
+  questionnaireContext.globalThis = questionnaireContext;
+  vm.createContext(questionnaireContext);
+  vm.runInContext(contractsSource, questionnaireContext);
+  vm.runInContext(`${inlineSource}\nglobalThis.restoreQuestionnaire=stateFromQuestionnairePackage;`, questionnaireContext);
+  const restored = questionnaireContext.restoreQuestionnaire(packageData);
+  assert.equal(restored.questionnaire_id, packageData.questionnaire_id);
+  assert.equal(restored.global_time_reference, packageData.global_time_reference);
+  assert.deepEqual(JSON.parse(JSON.stringify(restored.consent)), packageData.consent);
+  assert.deepEqual(restored.items.map(item => item.item_id), packageData.items.map(item => item.item_id));
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(restored.items[0].rules)),
+    packageData.routing.nodes[packageData.start_item_id].rules
+  );
+  assert.equal(restored.items[0].default_target, packageData.items[1].item_id);
 });
 
 test('multi-format readers are local and the editing workspace stays compact', async () => {
