@@ -226,6 +226,42 @@ test('real UTF-8 CSV and binary XLSX preserve Spanish text and ordered options',
   ));
 });
 
+test('the constructor own Excel XML export reopens as the same ordered bank rows', async () => {
+  const [constructorPage, contractsSource] = await Promise.all([
+    fs.readFile(new URL('constructor_quest.html', root), 'utf8'),
+    fs.readFile(new URL('research-contracts.js', root), 'utf8')
+  ]);
+  const inlineSource = [...constructorPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)]
+    .map(match => match[1])
+    .find(value => value.includes('function buildExcelXml'));
+  const storage = new Map();
+  const exportContext = {
+    crypto: webcrypto, console, URL, Headers, Blob, TextEncoder, TextDecoder, Uint8Array,
+    setTimeout, clearTimeout, alert() {}, confirm() { return true; }, document: {},
+    localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
+    sessionStorage: { getItem: () => null, removeItem() {} }
+  };
+  exportContext.window = exportContext;
+  exportContext.globalThis = exportContext;
+  exportContext.window.addEventListener = () => {};
+  vm.createContext(exportContext);
+  vm.runInContext(contractsSource, exportContext);
+  vm.runInContext(`${inlineSource}\nglobalThis.exportBankXml=packageData=>buildFile(packageData,'xls').content;`, exportContext);
+  const canonical = rowsBank(rows);
+  const xml = exportContext.exportBankXml(canonical);
+  const reopened = XLSX.read(xml, { type: 'string' });
+  const reopenedRows = XLSX.utils.sheet_to_json(
+    reopened.Sheets[reopened.SheetNames[0]],
+    { defval: null }
+  );
+  const reopenedBank = rowsBank(reopenedRows);
+  assertUsableQuestionnaire(reopenedBank);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(reopenedBank.questions.Q_2.options.map(option => option.value))),
+    ['a', 'b']
+  );
+});
+
 test('real DOCX, PDF, and PAGES-with-PDF-preview preserve question lines', async () => {
   const docx = await makeDocx(questionnaireText);
   const docxResult = await mammoth.extractRawText({
