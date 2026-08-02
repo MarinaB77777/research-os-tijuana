@@ -161,17 +161,29 @@ test('coverage is the union of approved subconstructs and never a question count
   assert.doesNotMatch(html, /is_standard_mapping|standard_methodology/);
 });
 
-test('standard-method search defaults to available methods and includes licensed methods only by opt-in', () => {
+test('standard-method search is restricted to recognized methods that are free to use', () => {
   assert.match(html, /id="methodAccessInput"/);
-  assert.match(html, /<option value="open_only"/);
-  assert.match(promptSource, /standard_method_access_scope is "open_only"/i);
-  assert.match(promptSource, /Do not infer instrument rights from access to an article/i);
+  assert.match(html, /type="hidden" value="open_only"/);
+  assert.doesNotMatch(html, /<option value="include_licensed"/);
+  assert.match(promptSource, /published, recognized standard\s+method/i);
+  assert.match(promptSource, /without\s+purchase, subscription, or case-by-case permission/i);
+  assert.match(promptSource, /Article access alone is not evidence/i);
 
   const openCandidate = { rights_and_access: { status: 'open' } };
   const paidCandidate = { rights_and_access: { status: 'purchase_required' } };
   assert.equal(run('candidateAllowedByAccess(openCandidate, "open_only")', { openCandidate }), true);
   assert.equal(run('candidateAllowedByAccess(paidCandidate, "open_only")', { paidCandidate }), false);
-  assert.equal(run('candidateAllowedByAccess(paidCandidate, "include_licensed")'), true);
+  assert.equal(run('candidateAllowedByAccess(paidCandidate, "include_licensed")'), false);
+  assert.equal(run('mappingSpec().standard_method_access_scope'), 'open_only');
+});
+
+test('bank loading uses the active interface language and results are grouped by deep research question', () => {
+  assert.match(html, /interface_language:currentLang/);
+  assert.doesNotMatch(html, /interface_language:lang\b/);
+  assert.match(html, /function renderCoverageGroups\(\)/);
+  assert.match(html, /node\.node_type==='deep_research_question'/);
+  assert.match(html, /t\('includedQuestions'\)/);
+  assert.match(html, /t\('proposedMethods'\)/);
 });
 
 test('bank questions stay in the local group tree but are not sent into candidate discovery', () => {
@@ -573,7 +585,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
   );
   assert.equal(result.ai_provenance.provider, 'groq');
   assert.equal(result.ai_provenance.model, 'openai/gpt-oss-20b');
-  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_mapping_v3');
+  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_open_methods_v4');
   assert.equal(result.ai_provenance.human_authority, false);
   assert.equal(result.potentially_unique_constructs[0].separate_validation_required, true);
   assert.equal(result.methodology_basis.length, 5);
