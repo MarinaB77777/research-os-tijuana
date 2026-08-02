@@ -496,7 +496,11 @@
       catch(error){document.getElementById('errorBanner').textContent=error.message;document.getElementById('errorBanner').style.display='block';}
     }
 
-    function openBank(bank){location.href=`constructor_survey.html?bank=${encodeURIComponent(bank.bank_id)}&version=${encodeURIComponent(bank.version)}`;}
+    function openBank(bank){
+      const target=bank.owned_by_current_account?'constructor_quest.html':'constructor_survey.html';
+      const returnTarget=bank.owned_by_current_account?'&return=survey.html':'';
+      location.href=`${target}?bank=${encodeURIComponent(bank.bank_id)}&version=${encodeURIComponent(bank.version)}${returnTarget}`;
+    }
     function openQuestionnaire(questionnaire){location.href=`constructor_survey.html?questionnaire=${encodeURIComponent(questionnaire.questionnaire_id)}&version=${encodeURIComponent(questionnaire.version)}`;}
         
     function renderBanksTable() {
