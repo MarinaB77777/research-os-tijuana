@@ -18,7 +18,8 @@ test('all question-bank file consumers use one local multi-format reader', async
     assert.match(page, /question-bank-file-reader\.js/);
     assert.match(page, /QuestionBankFileReader\.readQuestionnaireFile/);
   }
-  assert.match(reader, /'docx', 'pdf', 'xlsx', 'xls', 'csv', 'yml', 'yaml', 'txt', 'json', 'py', 'js', 'pages'/);
+  assert.match(reader, /'docx', 'pdf', 'xlsx', 'xls', 'xml', 'csv', 'yml', 'yaml', 'txt', 'json', 'py', 'js', 'pages'/);
+  assert.match(reader, /extension === 'xml'/);
   assert.match(reader, /vendor\/xlsx\.full\.min\.js\.part-00/);
   assert.match(reader, /vendor\/pdf\.worker\.min\.js\.part-00/);
   assert.match(reader, /workbook\.SheetNames\.map/);
