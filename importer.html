@@ -392,9 +392,9 @@
   <div class="workspace">
     <div class="panel">
       <div class="panel-header">
-        <label for="input-json" id="ui-input-label">Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):</label>
+        <label for="input-json" id="ui-input-label">Encuesta Fuente (DOCX, PDF, XLSX, XML, CSV, YAML, TXT, JSON, PY, PAGES):</label>
         <div class="file-input-wrapper">
-          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages" onchange="handleFileSelect(event)">
+          <input type="file" id="file-loader" accept=".docx,.pdf,.xlsx,.xls,.xml,.csv,.yml,.yaml,.txt,.json,.py,.js,.pages" onchange="handleFileSelect(event)">
           <button class="btn btn-secondary" onclick="document.getElementById('file-loader').click()" id="ui-btn-upload">📂 Cargar Archivo</button>
         </div>
       </div>
@@ -436,7 +436,7 @@
   const i18n = {
     es: {
       title: "Convertidor Universal de Cuestionarios",
-      inputLabel: "Encuesta Fuente (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
+      inputLabel: "Encuesta Fuente (DOCX, PDF, XLSX, XML, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Resultado (Canonical Schema + UUID):",
       previewLabel: "Vista previa del reconocimiento",
       btnUpload: "📂 Cargar Archivo",
@@ -478,7 +478,7 @@
     },
     en: {
       title: "Universal Survey Schema Converter",
-      inputLabel: "Source Survey (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
+      inputLabel: "Source Survey (DOCX, PDF, XLSX, XML, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Result (Canonical Schema + UUID):",
       previewLabel: "Recognition preview",
       btnUpload: "📂 Upload File",
@@ -520,7 +520,7 @@
     },
     ru: {
       title: "Универсальный конвертер анкет",
-      inputLabel: "Исходная анкета (DOCX, PDF, XLSX, CSV, YAML, TXT, JSON, PY, PAGES):",
+      inputLabel: "Исходная анкета (DOCX, PDF, XLSX, XML, CSV, YAML, TXT, JSON, PY, PAGES):",
       outputLabel: "Результат (Canonical Schema + UUID):",
       previewLabel: "Предварительный просмотр распознавания",
       btnUpload: "📂 Загрузить файл",
