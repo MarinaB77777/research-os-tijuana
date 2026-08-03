@@ -293,6 +293,45 @@ test('login interface recovers from an authentication timeout', async () => {
   assert.match(authSource, /controller\.abort\(\)/);
   assert.match(loginSource, /AUTH_REQUEST_TIMEOUT/);
   assert.match(loginSource, /finally\{submitButton\.disabled=false\}/);
+  assert.match(loginSource, /auth_unavailable/);
+  assert.match(authSource, /AUTH_REQUEST_TIMEOUT_MS = 35000/);
+});
+
+test('authenticated account closure revokes access without deleting research records', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = respondentAccessFetches(async (url, options) => {
+    assert.match(url, /rpc\/close_research_os_account$/);
+    rpcBody = JSON.parse(options.body);
+    return jsonFetch({ closed_at: '2026-08-02T12:00:00.000Z' });
+  });
+  try {
+    const res = response();
+    await handler(request('DELETE', '/account', { password: 'current-password' }), res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.role, 'respondent');
+    assert.equal(rpcBody.p_account_id, '23572089-acde-4b51-8566-f770a0be2c3c');
+    assert.equal(rpcBody.p_password, 'current-password');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('account closure contract anonymizes login and preserves referenced records', async () => {
+  const [migration, authSource, cabinet, settings] = await Promise.all([
+    fs.readFile(new URL('../supabase/account_closure_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../auth.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../cabinet.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../settings.html', import.meta.url), 'utf8')
+  ]);
+  assert.match(migration, /status in \('active', 'suspended', 'revoked', 'deleted'\)/);
+  assert.match(migration, /username = 'deleted_'/);
+  assert.match(migration, /update public\.research_os_auth_sessions/);
+  assert.match(migration, /Active research must be closed or transferred/);
+  assert.doesNotMatch(migration, /delete\s+from\s+public\.research_os_accounts/i);
+  assert.match(authSource, /DELETE/);
+  assert.match(cabinet, /deleteAccount\(\)/);
+  assert.match(settings, /deleteResearcherAccount\(\)/);
 });
 
 test('public respondent registration creates its account and session atomically', async () => {

@@ -47,9 +47,9 @@
   <script src="auth.js"></script>
   <script>
     const copy={
-      es:{title:'Acceso al espacio personal',description:'Las páginas públicas permanecen abiertas. Inicie sesión solo para entrar a su gabinete o trabajar con datos protegidos.',username:'Usuario',password:'Contraseña',submit:'Entrar',register:'Crear una cuenta de participante',public:'← Continuar explorando la plataforma',checking:'Verificando acceso…',timeout:'El servidor no respondió a tiempo. Inténtelo de nuevo; no es necesario registrarse otra vez.'},
-      en:{title:'Personal workspace access',description:'Public pages remain open. Sign in only for your cabinet or a protected-data action.',username:'Username',password:'Password',submit:'Sign in',register:'Create a participant account',public:'← Continue exploring the platform',checking:'Verifying access…',timeout:'The server did not respond in time. Try again; you do not need to register again.'},
-      ru:{title:'Вход в личное пространство',description:'Публичные страницы остаются открытыми. Вход нужен только для кабинета и действий с защищёнными данными.',username:'Логин',password:'Пароль',submit:'Войти',register:'Зарегистрироваться как респондент',public:'← Продолжить смотреть систему',checking:'Проверяем доступ…',timeout:'Сервер не ответил вовремя. Попробуйте ещё раз; регистрироваться заново не нужно.'}
+      es:{title:'Acceso al espacio personal',description:'Las páginas públicas permanecen abiertas. Inicie sesión solo para entrar a su gabinete o trabajar con datos protegidos.',username:'Usuario',password:'Contraseña',submit:'Entrar',register:'Crear una cuenta de participante',public:'← Continuar explorando la plataforma',checking:'Verificando acceso…',timeout:'El servidor no respondió a tiempo. Inténtelo de nuevo; no es necesario registrarse otra vez.',unavailable:'No se pudo verificar la sesión anterior. Inicie sesión de nuevo; su cuenta y sus datos permanecen guardados.'},
+      en:{title:'Personal workspace access',description:'Public pages remain open. Sign in only for your cabinet or a protected-data action.',username:'Username',password:'Password',submit:'Sign in',register:'Create a participant account',public:'← Continue exploring the platform',checking:'Verifying access…',timeout:'The server did not respond in time. Try again; you do not need to register again.',unavailable:'The previous session could not be verified. Sign in again; your account and data remain saved.'},
+      ru:{title:'Вход в личное пространство',description:'Публичные страницы остаются открытыми. Вход нужен только для кабинета и действий с защищёнными данными.',username:'Логин',password:'Пароль',submit:'Войти',register:'Зарегистрироваться как респондент',public:'← Продолжить смотреть систему',checking:'Проверяем доступ…',timeout:'Сервер не ответил вовремя. Попробуйте ещё раз; регистрироваться заново не нужно.',unavailable:'Не удалось проверить предыдущую сессию. Войдите снова — аккаунт и данные сохранены.'}
     };
     const params=new URLSearchParams(location.search);
     const expectedRole=['researcher','respondent'].includes(params.get('role'))?params.get('role'):null;
@@ -58,13 +58,12 @@
     if(expectedRole==='respondent')registerLink.href=`register.html?return=${encodeURIComponent(returnTarget)}`;
     let lang=localStorage.getItem('app_language')||'es';
     if(!copy[lang])lang='es';
-    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;submitButton.textContent=t.submit;registerLink.textContent=t.register;publicLink.textContent=t.public}
+    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;submitButton.textContent=t.submit;registerLink.textContent=t.register;publicLink.textContent=t.public;if(params.get('reason')==='auth_unavailable')status.textContent=t.unavailable}
     async function submitCredentials(){status.textContent=copy[lang].checking;submitButton.disabled=true;try{await ResearchAuth.login(usernameInput.value.trim(),passwordInput.value,expectedRole);history.replaceState({},document.title,'login.html');location.replace(returnTarget)}catch(error){status.textContent=error.code==='AUTH_REQUEST_TIMEOUT'?copy[lang].timeout:error.message}finally{submitButton.disabled=false}}
     loginForm.addEventListener('submit',event=>{event.preventDefault();submitCredentials()});
     document.addEventListener('DOMContentLoaded',async()=>{
       setLang(lang);
-      const session=await ResearchAuth.verify(expectedRole);
-      if(session)location.replace(returnTarget)
+      try{const session=await ResearchAuth.verify(expectedRole);if(session)location.replace(returnTarget)}catch(_){status.textContent=copy[lang].unavailable}
     });
   </script>
 </body>

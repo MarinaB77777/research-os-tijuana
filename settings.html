@@ -89,6 +89,14 @@
         </div>
     </div>
 
+    <div id="deleteAccountSection" class="section" style="display:none;border-color:#991b1b;">
+        <h2 data-i18n="delete_account_title">Удаление аккаунта исследователя</h2>
+        <p data-i18n="delete_account_explanation">Аккаунт можно удалить только после закрытия или передачи активных исследований. Исторические исследовательские записи сохраняются.</p>
+        <input id="deleteAccountPassword" type="password" autocomplete="current-password" data-i18n-placeholder="current_password" placeholder="Текущий пароль">
+        <button id="deleteAccountButton" class="btn" style="background:#991b1b;margin-top:12px" onclick="deleteResearcherAccount()" data-i18n="delete_account_button">Удалить мой аккаунт</button>
+        <p id="deleteAccountStatus" style="color:#fca5a5;font-size:12px"></p>
+    </div>
+
     <!-- 3. API-ключи -->
     <div class="section">
         <h2 data-i18n="sec1_title">3. Серверные подключения ИИ</h2>
@@ -153,7 +161,11 @@ const i18n = {
         label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
         label_translator: "🌐 Перевод и адаптация (translator.html):",
         btn_save: "💾 Сохранить настройки",
-        toast_saved: "✅ Настройки успешно сохранены!"
+        toast_saved: "✅ Настройки успешно сохранены!",
+        delete_account_title: "Удаление аккаунта исследователя",
+        delete_account_explanation: "Аккаунт можно удалить только после закрытия или передачи активных исследований. Исторические исследовательские записи сохраняются.",
+        current_password: "Текущий пароль",
+        delete_account_button: "Удалить мой аккаунт"
     },
     es: {
         back_home: "← Inicio",
@@ -183,7 +195,11 @@ const i18n = {
         label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
         label_translator: "🌐 Traducción y adaptación (translator.html):",
         btn_save: "💾 Guardar configuración",
-        toast_saved: "✅ ¡Configuración guardada con éxito!"
+        toast_saved: "✅ ¡Configuración guardada con éxito!",
+        delete_account_title: "Eliminar cuenta de investigador",
+        delete_account_explanation: "La cuenta solo puede eliminarse después de cerrar o transferir los estudios activos. Los registros históricos se conservan.",
+        current_password: "Contraseña actual",
+        delete_account_button: "Eliminar mi cuenta"
     },
     en: {
         back_home: "← Back to Hub",
@@ -213,7 +229,11 @@ const i18n = {
         label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
         label_translator: "🌐 Translation & adaptation (translator.html):",
         btn_save: "💾 Save Configuration",
-        toast_saved: "✅ Configuration saved successfully!"
+        toast_saved: "✅ Configuration saved successfully!",
+        delete_account_title: "Delete researcher account",
+        delete_account_explanation: "The account can be deleted only after active studies are closed or transferred. Historical research records are retained.",
+        current_password: "Current password",
+        delete_account_button: "Delete my account"
     }
 };
 
@@ -234,6 +254,10 @@ function setLang(lang, e) {
     document.querySelectorAll('[data-i18n]').forEach(elem => {
         const key = elem.getAttribute('data-i18n');
         if (dict[key]) elem.innerText = dict[key];
+    });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(elem => {
+        const key = elem.getAttribute('data-i18n-placeholder');
+        if (dict[key]) elem.placeholder = dict[key];
     });
     const accountStatus = document.getElementById('accountManagerStatus');
     if (accountStatus) {
@@ -331,9 +355,28 @@ async function loadSettings() {
     applyAvailable('task_translator', config.translator);
 }
 
+async function deleteResearcherAccount() {
+    const password = document.getElementById('deleteAccountPassword').value;
+    const button = document.getElementById('deleteAccountButton');
+    const status = document.getElementById('deleteAccountStatus');
+    status.textContent = '';
+    if (!password || !confirm(translatedText('delete_account_explanation'))) return;
+    button.disabled = true;
+    try {
+        await ResearchAuth.deleteAccount(password);
+        location.replace('index.html');
+    } catch (error) {
+        status.textContent = error.message;
+        button.disabled = false;
+    }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     accountManagerSession = await ResearchAuth.verify('researcher');
-    if (accountManagerSession) await loadSettings();
+    if (accountManagerSession) {
+        document.getElementById('deleteAccountSection').style.display = 'block';
+        await loadSettings();
+    }
     const savedLang = localStorage.getItem('app_language') || 'ru';
     const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
     if (btn) btn.click();

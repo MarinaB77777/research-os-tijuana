@@ -25,6 +25,7 @@
     <button class="lang" data-lang="ru" onclick="setLanguage('ru')">RU</button>
     <button class="lang" data-lang="es" onclick="setLanguage('es')">ES</button>
     <button class="lang" data-lang="en" onclick="setLanguage('en')">EN</button>
+    <button class="secondary" onclick="document.getElementById('deleteDialog').showModal()" data-i18n="deleteAccount">Удалить аккаунт</button>
     <button class="danger" onclick="logout()" data-i18n="logout">Выйти</button>
   </div>
 </header>
@@ -62,6 +63,20 @@
   </div>
 </dialog>
 
+<dialog id="deleteDialog">
+  <div class="dialog-head"><h2 data-i18n="deleteTitle">Удаление аккаунта</h2></div>
+  <div class="dialog-body">
+    <p data-i18n="deleteExplanation">После удаления вход станет невозможен. Учётные данные будут обезличены, а уже собранные исследовательские записи и согласия сохранят целостность.</p>
+    <label for="deletePassword" data-i18n="currentPassword">Текущий пароль</label>
+    <input id="deletePassword" type="password" autocomplete="current-password" style="display:block;width:100%;margin-top:8px;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text)">
+    <div id="deleteError" class="error" style="margin-top:10px"></div>
+  </div>
+  <div class="dialog-actions row">
+    <button id="confirmDeleteButton" class="danger" onclick="deleteAccount()" data-i18n="confirmDelete">Удалить навсегда</button>
+    <button class="secondary" onclick="document.getElementById('deleteDialog').close()" data-i18n="cancel">Отмена</button>
+  </div>
+</dialog>
+
 <dialog id="signedDialog">
   <div class="dialog-head">
     <h2 id="signedTitle"></h2>
@@ -76,9 +91,9 @@
 <script>
 'use strict';
 const T={
- ru:{logo:'🔬 Research OS — Кабинет участника',logout:'Выйти',welcome:'Личный кабинет',description:'Здесь находятся доступные анкеты, подписанные согласия и история прохождений.',available:'📋 Доступные анкеты',history:'📊 История прохождений',loading:'Загрузка…',emptyAvailable:'Сейчас нет доступных активных анкет.',emptyHistory:'У вас пока нет начатых или завершённых прохождений.',readStart:'Прочитать согласие и начать',version:'Версия',ready:'Готова к прохождению',acceptText:'Я прочитал(а) документ и добровольно соглашаюсь участвовать.',signStart:'Подписать и начать',cancel:'Отмена',close:'Закрыть',accepted:'Согласие принято',started:'Начато',completed:'Завершено',active:'Сессия начата',discarded:'Прервано',revoked:'Отозвано',signedCopy:'Открыть подписанное согласие',loadError:'Не удалось загрузить кабинет.',startError:'Не удалось начать прохождение.'},
- es:{logo:'🔬 Research OS — Panel del participante',logout:'Salir',welcome:'Panel personal',description:'Aquí se encuentran los cuestionarios disponibles, los consentimientos firmados y el historial.',available:'📋 Cuestionarios disponibles',history:'📊 Historial de participaciones',loading:'Cargando…',emptyAvailable:'No hay cuestionarios activos disponibles.',emptyHistory:'Aún no tiene sesiones iniciadas o completadas.',readStart:'Leer el consentimiento y comenzar',version:'Versión',ready:'Listo para completar',acceptText:'He leído el documento y acepto participar voluntariamente.',signStart:'Firmar y comenzar',cancel:'Cancelar',close:'Cerrar',accepted:'Consentimiento aceptado',started:'Iniciado',completed:'Completado',active:'Sesión iniciada',discarded:'Interrumpido',revoked:'Revocado',signedCopy:'Abrir consentimiento firmado',loadError:'No se pudo cargar el panel.',startError:'No se pudo iniciar el cuestionario.'},
- en:{logo:'🔬 Research OS — Participant Hub',logout:'Log out',welcome:'Personal hub',description:'Available questionnaires, signed consents, and completion history are kept here.',available:'📋 Available questionnaires',history:'📊 Completion history',loading:'Loading…',emptyAvailable:'No active questionnaires are currently available.',emptyHistory:'You have no started or completed sessions yet.',readStart:'Read consent and start',version:'Version',ready:'Ready to complete',acceptText:'I have read the document and voluntarily agree to participate.',signStart:'Sign and start',cancel:'Cancel',close:'Close',accepted:'Consent accepted',started:'Started',completed:'Completed',active:'Session started',discarded:'Interrupted',revoked:'Revoked',signedCopy:'Open signed consent',loadError:'The participant hub could not be loaded.',startError:'The questionnaire could not be started.'}
+ ru:{logo:'🔬 Research OS — Кабинет участника',logout:'Выйти',deleteAccount:'Удалить аккаунт',deleteTitle:'Удаление аккаунта',deleteExplanation:'После удаления вход станет невозможен. Учётные данные будут обезличены, а уже собранные исследовательские записи и согласия сохранят целостность.',currentPassword:'Текущий пароль',confirmDelete:'Удалить навсегда',welcome:'Личный кабинет',description:'Здесь находятся доступные анкеты, подписанные согласия и история прохождений.',available:'📋 Доступные анкеты',history:'📊 История прохождений',loading:'Загрузка…',emptyAvailable:'Сейчас нет доступных активных анкет.',emptyHistory:'У вас пока нет начатых или завершённых прохождений.',readStart:'Прочитать согласие и начать',version:'Версия',ready:'Готова к прохождению',acceptText:'Я прочитал(а) документ и добровольно соглашаюсь участвовать.',signStart:'Подписать и начать',cancel:'Отмена',close:'Закрыть',accepted:'Согласие принято',started:'Начато',completed:'Завершено',active:'Сессия начата',discarded:'Прервано',revoked:'Отозвано',signedCopy:'Открыть подписанное согласие',loadError:'Не удалось загрузить кабинет.',startError:'Не удалось начать прохождение.'},
+ es:{logo:'🔬 Research OS — Panel del participante',logout:'Salir',deleteAccount:'Eliminar cuenta',deleteTitle:'Eliminar cuenta',deleteExplanation:'Después de eliminarla, no será posible iniciar sesión. Los datos de acceso se anonimizarán; los registros de investigación y consentimientos ya recopilados conservarán su integridad.',currentPassword:'Contraseña actual',confirmDelete:'Eliminar definitivamente',welcome:'Panel personal',description:'Aquí se encuentran los cuestionarios disponibles, los consentimientos firmados y el historial.',available:'📋 Cuestionarios disponibles',history:'📊 Historial de participaciones',loading:'Cargando…',emptyAvailable:'No hay cuestionarios activos disponibles.',emptyHistory:'Aún no tiene sesiones iniciadas o completadas.',readStart:'Leer el consentimiento y comenzar',version:'Versión',ready:'Listo para completar',acceptText:'He leído el documento y acepto participar voluntariamente.',signStart:'Firmar y comenzar',cancel:'Cancelar',close:'Cerrar',accepted:'Consentimiento aceptado',started:'Iniciado',completed:'Completado',active:'Sesión iniciada',discarded:'Interrumpido',revoked:'Revocado',signedCopy:'Abrir consentimiento firmado',loadError:'No se pudo cargar el panel.',startError:'No se pudo iniciar el cuestionario.'},
+ en:{logo:'🔬 Research OS — Participant Hub',logout:'Log out',deleteAccount:'Delete account',deleteTitle:'Delete account',deleteExplanation:'After deletion, sign-in will no longer be possible. Login data will be anonymized while existing research records and consents retain their integrity.',currentPassword:'Current password',confirmDelete:'Delete permanently',welcome:'Personal hub',description:'Available questionnaires, signed consents, and completion history are kept here.',available:'📋 Available questionnaires',history:'📊 Completion history',loading:'Loading…',emptyAvailable:'No active questionnaires are currently available.',emptyHistory:'You have no started or completed sessions yet.',readStart:'Read consent and start',version:'Version',ready:'Ready to complete',acceptText:'I have read the document and voluntarily agree to participate.',signStart:'Sign and start',cancel:'Cancel',close:'Close',accepted:'Consent accepted',started:'Started',completed:'Completed',active:'Session started',discarded:'Interrupted',revoked:'Revoked',signedCopy:'Open signed consent',loadError:'The participant hub could not be loaded.',startError:'The questionnaire could not be started.'}
 };
 let lang='ru',principal=null,questionnaires=[],sessions=[],selectedQuestionnaire=null,selectedConsent=null;
 function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
@@ -102,7 +117,7 @@ async function loadCabinet(){
    request('/respondent/sessions',{headers:headers()})
   ]);
   questionnaires=qData.measurements||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
- }catch(error){document.getElementById('pageStatus').textContent=`${T[lang].loadError} ${error.message}`;document.getElementById('pageStatus').className='error';}
+ }catch(error){document.getElementById('pageStatus').textContent=`${T[lang].loadError} ${error.message}`;document.getElementById('pageStatus').className='error';document.getElementById('questionnaireList').textContent=T[lang].loadError;document.getElementById('sessionList').textContent=T[lang].loadError;}
 }
 function renderQuestionnaires(){
  const box=document.getElementById('questionnaireList');if(!box)return;
@@ -138,6 +153,12 @@ function openSignedConsent(index){
  const s=sessions[index];document.getElementById('signedTitle').textContent=s.consent_title;document.getElementById('signedMeta').textContent=`${s.questionnaire_title} · ${T[lang].accepted}: ${formatDate(s.accepted_at)} · v${s.consent_version} · ${s.consent_language} · SHA-256 ${s.consent_text_sha256}`;document.getElementById('signedText').textContent=s.consent_text;document.getElementById('signedDialog').showModal();
 }
 function logout(){ResearchAuth.logout({returnTo:'index.html'});}
+async function deleteAccount(){
+ const password=document.getElementById('deletePassword').value;const button=document.getElementById('confirmDeleteButton');const errorBox=document.getElementById('deleteError');
+ errorBox.textContent='';button.disabled=true;
+ try{await ResearchAuth.deleteAccount(password);location.replace('index.html');}
+ catch(error){errorBox.textContent=error.message;button.disabled=false;}
+}
 document.addEventListener('DOMContentLoaded',async()=>{principal=await ResearchAuth.requireRole('respondent','cabinet.html');if(!principal)return;lang=localStorage.getItem('app_language')||'ru';if(!T[lang])lang='ru';setLanguage(lang);await loadCabinet();});
 </script>
 </body>

@@ -3,7 +3,7 @@
 
   const STORAGE_KEY = 'research_os.auth.v1';
   const ALLOWED_ROLES = new Set(['researcher', 'respondent']);
-  const AUTH_REQUEST_TIMEOUT_MS = 15000;
+  const AUTH_REQUEST_TIMEOUT_MS = 35000;
 
   function readSession() {
     try {
@@ -146,8 +146,14 @@
   }
 
   async function requireRole(role, returnTarget) {
-    const session = await verify(role);
-    if (session) return session;
+    try {
+      const session = await verify(role);
+      if (session) return session;
+    } catch (_) {
+      const target = loginUrl(role, returnTarget || global.location.pathname.split('/').pop());
+      global.location.replace(`${target}&reason=auth_unavailable`);
+      return null;
+    }
     global.location.replace(loginUrl(role, returnTarget || global.location.pathname.split('/').pop()));
     return null;
   }
@@ -187,6 +193,20 @@
     return parseResponse(response);
   }
 
+  async function deleteAccount(password) {
+    if (!password) throw new Error('Current password is required');
+    const headers = authHeaders(null, { 'Content-Type': 'application/json' });
+    if (!headers) throw new Error('An active account session is required');
+    const response = await fetchWithTimeout('/api/account', {
+      method: 'DELETE',
+      headers,
+      body: JSON.stringify({ password })
+    });
+    const payload = await parseResponse(response);
+    clearSession();
+    return payload;
+  }
+
   global.ResearchAuth = Object.freeze({
     readSession,
     clearSession,
@@ -198,6 +218,7 @@
     loginUrl,
     authHeaders,
     createAccount,
+    deleteAccount,
     logout
   });
 })(window);

@@ -44,6 +44,13 @@ const UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 8000;
 })();
+const AUTH_UPSTREAM_TIMEOUT_MS = (() => {
+    const configured = Number.parseInt(
+        process.env.AUTH_UPSTREAM_TIMEOUT_MS || process.env.UPSTREAM_TIMEOUT_MS || '25000',
+        10
+    );
+    return Number.isFinite(configured) && configured > 0 ? configured : 25000;
+})();
 const AI_UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.AI_UPSTREAM_TIMEOUT_MS || '60000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 60000;
@@ -290,9 +297,10 @@ async function verifyAccess(req, expectedRole, supabaseUrl, supabaseAdminKey) {
     }
     try {
         const tokenHash = sessionTokenHash(token);
-        const response = await fetch(
+        const response = await fetchWithTimeout(
             `${supabaseUrl}/rest/v1/research_os_auth_sessions?token_hash=eq.${encodeURIComponent(tokenHash)}&select=session_id,account_id,expires_at,revoked_at&limit=1`,
-            { headers: serviceHeaders(supabaseAdminKey) }
+            { headers: serviceHeaders(supabaseAdminKey) },
+            AUTH_UPSTREAM_TIMEOUT_MS
         );
         if (!response.ok) {
             return { ok: false, status: response.status, error: `Access verification failed: ${await response.text()}` };
@@ -306,9 +314,10 @@ async function verifyAccess(req, expectedRole, supabaseUrl, supabaseAdminKey) {
             new Date(authSession.expires_at).getTime() <= Date.now()) {
             return { ok: false, status: 401, error: 'Access session is not active' };
         }
-        const accountResponse = await fetch(
+        const accountResponse = await fetchWithTimeout(
             `${supabaseUrl}/rest/v1/research_os_accounts?account_id=eq.${encodeURIComponent(authSession.account_id)}&select=account_id,username,user_identifier,role,status,created_by_account_id&limit=1`,
-            { headers: serviceHeaders(supabaseAdminKey) }
+            { headers: serviceHeaders(supabaseAdminKey) },
+            AUTH_UPSTREAM_TIMEOUT_MS
         );
         if (!accountResponse.ok) {
             return { ok: false, status: accountResponse.status, error: `Account verification failed: ${await accountResponse.text()}` };
@@ -326,7 +335,7 @@ async function verifyAccess(req, expectedRole, supabaseUrl, supabaseAdminKey) {
         }
         return { ok: true, principal, authSession, token, tokenHash };
     } catch (error) {
-        return { ok: false, status: 500, error: `Access verification error: ${error.message}` };
+        return { ok: false, status: error.status || 500, error: `Access verification error: ${error.message}` };
     }
 }
 
@@ -347,7 +356,7 @@ async function ownedEntityIds(entityType, researcherAccountId, supabaseUrl, supa
     return new Set((await response.json()).map(row => row.entity_id));
 }
 
-async function callSupabaseRpc(supabaseUrl, key, functionName, body) {
+async function callSupabaseRpc(supabaseUrl, key, functionName, body, timeoutMs = UPSTREAM_TIMEOUT_MS) {
     const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/rpc/${functionName}`, {
         method: 'POST',
         headers: {
@@ -357,7 +366,7 @@ async function callSupabaseRpc(supabaseUrl, key, functionName, body) {
             'Prefer': 'return=representation'
         },
         body: JSON.stringify(body || {})
-    });
+    }, timeoutMs);
     if (!response.ok) {
         const details = await response.text();
         const error = new Error(`Supabase RPC ${functionName} failed: ${details || response.statusText}`);
@@ -700,7 +709,8 @@ export default async function handler(req, res) {
                     p_session_id: randomUUID(),
                     p_token_hash: sessionTokenHash(sessionToken),
                     p_expires_at: expiresAt
-                }
+                },
+                AUTH_UPSTREAM_TIMEOUT_MS
             );
             const registered = Array.isArray(result) ? result[0] : result;
             if (!registered?.account_id) {
@@ -738,7 +748,7 @@ export default async function handler(req, res) {
             const result = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'authenticate_research_os_account', {
                 p_username: username,
                 p_password: password
-            });
+            }, AUTH_UPSTREAM_TIMEOUT_MS);
             authenticated = Array.isArray(result) ? result[0] : result;
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
@@ -767,7 +777,8 @@ export default async function handler(req, res) {
                         token_hash: sessionTokenHash(sessionToken),
                         expires_at: expiresAt
                     })
-                }
+                },
+                AUTH_UPSTREAM_TIMEOUT_MS
             );
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
@@ -821,6 +832,43 @@ export default async function handler(req, res) {
             return res.status(revokeResponse.status).json({ ok: false, error: await revokeResponse.text() });
         }
         return res.status(200).json({ ok: true });
+    }
+
+    if (path === '/account' && method === 'DELETE') {
+        const access = await verifyAccess(req, null, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const password = String(req.body?.password || '');
+        if (!password) {
+            return res.status(400).json({ ok: false, error: 'Current password is required' });
+        }
+        try {
+            const result = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'close_research_os_account',
+                {
+                    p_account_id: access.principal.account_id,
+                    p_password: password
+                },
+                AUTH_UPSTREAM_TIMEOUT_MS
+            );
+            const closed = Array.isArray(result) ? result[0] : result;
+            return res.status(200).json({
+                ok: true,
+                account_id: access.principal.account_id,
+                role: access.principal.role,
+                closed_at: closed?.closed_at || new Date().toISOString()
+            });
+        } catch (error) {
+            const activeResearch = /active research must be closed or transferred/i.test(error.message);
+            const invalidPassword = /current password is incorrect/i.test(error.message);
+            return res.status(activeResearch ? 409 : invalidPassword ? 401 : (error.status || 500)).json({
+                ok: false,
+                error: error.message
+            });
+        }
     }
 
     if (path === '/accounts' && method === 'POST') {
