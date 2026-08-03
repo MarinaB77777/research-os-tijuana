@@ -45,7 +45,7 @@ const bank = {
         { value: 1, text: 'Yes' }
       ],
       scale: {
-        id: 'binary',
+        id: 'dichotomous',
         psychometric_level: 'nominal',
         min: 0,
         max: 1,
@@ -106,7 +106,11 @@ test('structured source formats never fall back to question-mark line scraping',
 });
 
 test('importer exposes only scale contracts implemented by the question constructor', async () => {
-  const constructorPage = await fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8');
+  const [constructorPage, apiSource, sqlContract] = await Promise.all([
+    fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../api/index.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../supabase/question_bank_contract_v2.sql', import.meta.url), 'utf8')
+  ]);
   const expected = [
     ['single_choice', 'nominal', 'single_select'],
     ['multiple_choice', 'nominal', 'multiple_select'],
@@ -131,6 +135,8 @@ test('importer exposes only scale contracts implemented by the question construc
   );
   for (const [scaleId] of expected) {
     assert.match(constructorPage, new RegExp(`id: ["']${scaleId}["']`));
+    assert.match(apiSource, new RegExp(`\\b${scaleId}:`));
+    assert.match(sqlContract, new RegExp(`'${scaleId}'`));
   }
   assert.deepEqual(
     JSON.parse(JSON.stringify(importer.scaleContractsForType('multiple_select').map(contract => contract.id))),
@@ -157,6 +163,37 @@ test('registered scale contracts reject incompatible response types and psychome
     .some(item => item.code === 'SCALE_LEVEL_MISMATCH'));
 });
 
+test('registration readiness enforces scale semantics and bank lifecycle consistently', () => {
+  const unregistered = structuredClone(bank);
+  unregistered.questions.Q_1.scale.id = 'ordinal';
+  assert.ok(importer.validateQuestionBank(unregistered)
+    .some(item => item.code === 'UNREGISTERED_SCALE'));
+
+  const malformedLikert = structuredClone(bank);
+  malformedLikert.questions.Q_1.type = 'single_select';
+  malformedLikert.questions.Q_1.scale = {
+    id: 'likert_5', psychometric_level: 'ordinal', min: 1, max: 5, step: 1
+  };
+  malformedLikert.questions.Q_1.options = Array.from({ length: 6 }, (_, value) => ({ value, text: String(value) }));
+  assert.ok(importer.validateQuestionBank(malformedLikert)
+    .some(item => item.code === 'SCALE_OPTIONS_MISMATCH'));
+
+  const malformedPercentage = structuredClone(bank);
+  malformedPercentage.questions.Q_1.type = 'numeric_input';
+  malformedPercentage.questions.Q_1.options = [];
+  malformedPercentage.questions.Q_1.scale = {
+    id: 'percentage_share', psychometric_level: 'interval_ratio', min: -50, max: 250, step: 1, unit: 'kg'
+  };
+  const percentageCodes = new Set(importer.validateQuestionBank(malformedPercentage).map(item => item.code));
+  assert.ok(percentageCodes.has('SCALE_RANGE_MISMATCH'));
+  assert.ok(percentageCodes.has('SCALE_UNIT_MISMATCH'));
+
+  const invalidLifecycle = structuredClone(bank);
+  invalidLifecycle.status = 'active';
+  assert.ok(importer.validateQuestionBank(invalidLifecycle)
+    .some(item => item.code === 'ACTIVE_BANK_QUESTION_STATUS'));
+});
+
 test('legacy question_prompt, answer_options, and scale id are normalized without becoming literal prose', () => {
   const imported = importer.canonicalOrConverted({
     title: 'Legacy bank',
@@ -175,7 +212,7 @@ test('legacy question_prompt, answer_options, and scale id are normalized withou
     JSON.parse(JSON.stringify(imported.questions.Q_1.options)),
     [{ value: 1, text: 'No' }, { value: 2, text: 'Yes' }]
   );
-  assert.equal(imported.questions.Q_1.scale.id, 'binary');
+  assert.equal(imported.questions.Q_1.scale.id, 'single_choice');
   assert.equal(importer.summarize(imported, 'py').can_use, true);
 });
 
@@ -366,7 +403,9 @@ test('an explicit bare numeric range is preserved without being mislabeled as Li
   assert.equal(question.scale.max, 5);
   assert.equal(question.scale.step, 1);
   assert.equal(question.options.length, 5);
-  assert.equal(importer.summarize(imported, 'txt').can_use, true);
+  const result = importer.summarize(imported, 'txt');
+  assert.equal(result.can_use, false);
+  assert.ok(result.diagnostics.some(item => item.code === 'UNREGISTERED_SCALE'));
 });
 
 test('answer options without service fields or bullets are collected after an options heading', () => {
@@ -481,7 +520,7 @@ test('a standalone model question becomes one canonical question without changin
   const result = importer.summarize(imported, 'py');
   const question = imported.questions.Q_1;
 
-  assert.equal(result.can_use, true);
+  assert.equal(result.can_use, false);
   assert.deepEqual(JSON.parse(JSON.stringify(imported.question_order)), ['Q_1']);
   assert.equal(question.prompt, source.prompt);
   assert.equal(question.type, 'single_select');
@@ -493,6 +532,7 @@ test('a standalone model question becomes one canonical question without changin
   assert.equal(question.scale.psychometric_level, 'ordinal');
   assert.equal(question.score_direction, 'higher_is_more_risk');
   assert.equal(question.active, true);
+  assert.ok(result.diagnostics.some(item => item.code === 'UNREGISTERED_SCALE'));
   assert.match(question.question_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   assert.match(imported.bank_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   const independentlyImported = importer.canonicalOrConverted(source, {
@@ -515,6 +555,19 @@ test('an actually empty bank is rejected before server registration', () => {
   const result = importer.summarize(empty, 'json');
   assert.equal(result.can_use, false);
   assert.ok(result.diagnostics.some(item => item.code === 'EMPTY_QUESTION_BANK'));
+});
+
+test('damaged canonical service identity is repaired with provenance while malformed content stays explicit', () => {
+  const damaged = structuredClone(bank);
+  damaged.bank_id = 'not-a-uuid';
+  damaged.questions.Q_1.question_id = null;
+  damaged.questions.Q_1.options[0] = null;
+  const imported = importer.canonicalOrConverted(damaged);
+  assert.match(imported.bank_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.match(imported.questions.Q_1.question_id, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+  assert.ok(imported.import_repairs.some(repair => repair.field === 'bank_id'));
+  assert.doesNotThrow(() => importer.validateQuestionBank(imported));
+  assert.ok(importer.validateQuestionBank(imported).some(item => item.code === 'INVALID_OPTION'));
 });
 
 test('normalized code collisions retain every question under a unique visible code', () => {
@@ -591,6 +644,9 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.match(page, /await navigator\.clipboard\.writeText/);
   assert.doesNotMatch(page, /title:\s*currentSourceTitle\s*\|\|\s*'Imported question bank'/);
   assert.match(page, /detailsSection\(t\.advancedFields/);
+  assert.match(page, /const previewOrder = Array\.isArray\(result\.bank\.question_order\)/);
+  assert.match(page, /window\.setTimeout\(\(\) => goToResolution\(0\), 0\)/);
+  assert.doesNotMatch(page, /options\.push\(\[currentId,/);
   assert.match(page, /ResearchContracts\.requestJson\('\/question-banks\/save'/);
   assert.match(page, /research_os\.imported_question_bank\.v1/);
   assert.match(page, /CRM Sharks · Ray \| Research OS Pilot/);
@@ -607,6 +663,9 @@ test('saved banks and questionnaire files return to their owning editors', async
   assert.match(bankConstructor, /loadRegisteredBankForEditing/);
   assert.match(bankConstructor, /questionBankPackageToEditor/);
   assert.match(bankConstructor, /ResearchContracts\.flattenQuestionBank\(packageData\)/);
+  assert.match(bankConstructor, /function registeredScaleDefaults/);
+  assert.match(bankConstructor, /Select a registered scale for question/);
+  assert.match(bankConstructor, /fixedScaleOptionValues/);
   assert.match(questionnaireConstructor, /accept="\.json,\.questionnaire\.json,application\/json"/);
   assert.match(questionnaireConstructor, /stateFromQuestionnairePackage/);
   assert.match(questionnaireConstructor, /applyQuestionnairePackage/);

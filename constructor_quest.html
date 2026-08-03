@@ -980,7 +980,7 @@
         if (!Array.isArray(data) || data.length === 0) {
           return getDefaultBank(lang);
         }
-        return data.map((v, idx) => {
+        const sanitized = data.map((v, idx) => {
           if (!v || typeof v !== 'object') v = {};
           const type = ['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(v.type) ? v.type : 'nominal';
           const tracking_mode = ['time_variant', 'time_invariant'].includes(v.tracking_mode) ? v.tracking_mode : 'time_invariant';
@@ -1023,6 +1023,17 @@
             score_direction: Object.prototype.hasOwnProperty.call(v, 'score_direction') ? v.score_direction : undefined
           };
         });
+        sanitized.forEach(variable => {
+          if (['binary', 'boolean'].includes(variable.scale)) {
+            const values = variable.options.map(option => Number(option.s));
+            variable.scale = values.length === 2 && values.includes(0) && values.includes(1)
+              ? 'dichotomous'
+              : 'single_choice';
+            variable.type = 'nominal';
+          }
+          applyRegisteredScaleDefaults(variable);
+        });
+        return sanitized;
       }
 
       function loadBank(lang) {
@@ -1437,6 +1448,10 @@
           const normalizedCode = normalizeQuestionCode(question.id, index);
           if (bank.some((other, otherIndex) =>
               otherIndex !== index && normalizeQuestionCode(other.id, otherIndex) === normalizedCode)) return true;
+          const registeredScale = Object.values(getScaleMatrix()).some(group =>
+            group.scales.some(scale => scale.id === question.scale)
+          );
+          if (!registeredScale) return true;
           if (question.type === 'nominal' || question.type === 'ordinal') {
             if (!Array.isArray(question.options) || question.options.length === 0) return true;
             const values = question.options.map(option => option.s);
@@ -1444,6 +1459,14 @@
                 (question.type === 'nominal' && values.some(value => value === null || value === undefined || String(value).trim() === '')) ||
                 new Set(values.map(String)).size !== values.length ||
                 question.options.some(option => !option.l?.trim())) return true;
+            const fixedValues = fixedScaleOptionValues(question.scale);
+            if (fixedValues) {
+              const numericValues = values.map(Number);
+              if (numericValues.length !== fixedValues.length ||
+                  (question.scale === 'dichotomous'
+                    ? !numericValues.includes(0) || !numericValues.includes(1) || new Set(numericValues).size !== 2
+                    : numericValues.some((value, optionIndex) => value !== fixedValues[optionIndex]))) return true;
+            }
           }
           return false;
         });
@@ -1494,9 +1517,6 @@
           if (sObj.id === v.scale) opt.selected = true;
           scaleSelect.appendChild(opt);
         });
-        if (v.scale && !typeScales.some(scale => scale.id === v.scale)) {
-          scaleSelect.add(new Option(v.scale, v.scale, true, true));
-        }
 
         document.getElementById('questionStatusSelect').value = v.status || 'draft';
         document.getElementById('promptInput').value = v.prompt || '';
@@ -1521,6 +1541,11 @@
           document.getElementById('metricStep').value = v.config.step ?? 1;
           document.getElementById('metricDirection').value = v.config.direction ?? 'direct';
           document.getElementById('metricUnit').value = v.config.unit ?? '';
+          const fixedScale = registeredScaleDefaults(v.scale) || {};
+          document.getElementById('metricMin').disabled = Object.prototype.hasOwnProperty.call(fixedScale, 'min');
+          document.getElementById('metricMax').disabled = Object.prototype.hasOwnProperty.call(fixedScale, 'max');
+          document.getElementById('metricStep').disabled = Object.prototype.hasOwnProperty.call(fixedScale, 'step');
+          document.getElementById('metricUnit').disabled = Object.prototype.hasOwnProperty.call(fixedScale, 'unit');
           document.getElementById('metricUnit').placeholder = dict.placeholderUnit;
         } else if (v.type === 'textual') {
           metricCard.style.display = 'none';
@@ -1549,6 +1574,8 @@
         const v = bank[currentIndex];
         const dict = i18n[currentLang] || i18n['es-MX'];
         if (!v || !v.options) return;
+        const fixedValues = fixedScaleOptionValues(v.scale);
+        document.getElementById('addOptBtn').disabled = Boolean(fixedValues);
 
         v.options.forEach((opt, optIdx) => {
           const wrapper = document.createElement('div');
@@ -1560,8 +1587,8 @@
           
           line.innerHTML = `
             <input type="text" value="${escapeHtml(opt.l)}" placeholder="${escapeHtml(dict.placeholderCategory)}" oninput="updateOptionLabel(${optIdx}, this.value)" style="flex: 2;" />
-            <input type="${v.type === 'ordinal' ? 'number' : 'text'}" id="weight_input_${optIdx}" value="${escapeHtml(opt.s)}" placeholder="${escapeHtml(codeLabel)}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;" />
-            <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;">✕</button>
+            <input type="${v.type === 'ordinal' ? 'number' : 'text'}" id="weight_input_${optIdx}" value="${escapeHtml(opt.s)}" placeholder="${escapeHtml(codeLabel)}" oninput="updateOptionWeight(${optIdx}, this.value)" style="flex: 1;"${fixedValues?' disabled':''} />
+            <button class="btn-danger" onclick="removeOption(${optIdx})" style="padding: 10px 14px;"${fixedValues?' disabled':''}>✕</button>
           `;
           wrapper.appendChild(line);
           container.appendChild(wrapper);
@@ -1662,6 +1689,7 @@
           v.options = JSON.parse(JSON.stringify(found.preset));
         }
         v.scale = val;
+        applyRegisteredScaleDefaults(v);
         saveBank();
         updateUI();
       }
@@ -1704,6 +1732,7 @@
         
         v.config.direction = document.getElementById('metricDirection').value;
         v.config.unit = document.getElementById('metricUnit').value;
+        applyRegisteredScaleDefaults(v);
         saveBank();
         validateAllInvariants();
         renderPreview();
@@ -1785,6 +1814,32 @@
         return 'single_select';
       }
 
+      function registeredScaleDefaults(scaleId) {
+        return {
+          likert_7: { min: 1, max: 7, step: 1 },
+          likert_5: { min: 1, max: 5, step: 1 },
+          nps_scale: { min: 0, max: 10, step: 1 },
+          discrete_count: { step: 1 },
+          continuous_slider: { min: 0, max: 100, step: 1 },
+          percentage_share: { min: 0, max: 100, step: 1, unit: '%' }
+        }[scaleId] || null;
+      }
+
+      function fixedScaleOptionValues(scaleId) {
+        if (scaleId === 'dichotomous') return [1, 0];
+        if (scaleId === 'likert_5') return [1, 2, 3, 4, 5];
+        if (scaleId === 'likert_7') return [1, 2, 3, 4, 5, 6, 7];
+        if (scaleId === 'nps_scale') return Array.from({ length: 11 }, (_, value) => value);
+        return null;
+      }
+
+      function applyRegisteredScaleDefaults(variable) {
+        const defaults = registeredScaleDefaults(variable?.scale);
+        if (!defaults) return;
+        if (!variable.config || typeof variable.config !== 'object') variable.config = {};
+        Object.assign(variable.config, defaults);
+      }
+
       function semanticToken(value) {
         return String(value || 'value')
           .normalize('NFKD')
@@ -1812,6 +1867,19 @@
           if (!isUuid(variable.question_id)) variable.question_id = createUuid();
           const code = normalizeQuestionCode(variable.id, index);
           if (questions[code]) throw new Error(`Duplicate normalized question code: ${code}`);
+          const registeredScale = Object.values(getScaleMatrix()).some(group =>
+            group.scales.some(scale => scale.id === variable.scale)
+          );
+          if (!registeredScale) throw new Error(`Select a registered scale for question ${code}`);
+          const fixedValues = fixedScaleOptionValues(variable.scale);
+          const actualValues = variable.options.map(option => Number(option.s));
+          const fixedValuesInvalid = fixedValues && (variable.options.length !== fixedValues.length ||
+            (variable.scale === 'dichotomous'
+              ? !actualValues.includes(0) || !actualValues.includes(1) || new Set(actualValues).size !== 2
+              : actualValues.some((value, optionIndex) => value !== fixedValues[optionIndex])));
+          if (fixedValuesInvalid) {
+            throw new Error(`Answer values for question ${code} do not match the registered ${variable.scale} scale`);
+          }
 
           const blockMatch = code.match(/^[A-Z]+/);
           const ordered = variable.type === 'ordinal' || variable.type === 'interval_ratio';
@@ -1822,6 +1890,7 @@
                 text: option.l
               }))
             : [];
+          applyRegisteredScaleDefaults(variable);
 
           questions[code] = {
             question_id: variable.question_id,

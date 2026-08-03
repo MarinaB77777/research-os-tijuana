@@ -67,6 +67,15 @@ test('statistical page has no fabricated startup result and exposes the complete
   assert.match(page, /CRM Sharks · Ray AI/);
 });
 
+test('statistical planning blocks methods that conflict with psychometric level', async () => {
+  const page = await fs.readFile(new URL('../data-analysis.html', import.meta.url), 'utf8');
+  assert.match(page, /methodMeasurementError/);
+  assert.match(page, /level!=='interval_ratio'/);
+  assert.match(page, /!\['ordinal','interval_ratio'\]\.includes\(level\)/);
+  assert.match(page, /!\['nominal','ordinal'\]\.includes\(level\)/);
+  assert.match(page, /numeric category codes are not continuous measurements/);
+});
+
 test('statistical page forms reproducible groups from canonical questionnaire answers', async () => {
   const page = await fs.readFile(new URL('../data-analysis.html', import.meta.url), 'utf8');
   assert.match(page, /value="derived_group"/);

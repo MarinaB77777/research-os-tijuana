@@ -60,7 +60,7 @@ function canonicalBank(reusePermission) {
         status: 'draft',
         type: 'single_select',
         prompt: 'Question',
-        scale: { id: 'binary', psychometric_level: 'nominal' },
+        scale: { id: 'dichotomous', psychometric_level: 'nominal' },
         options: [{ value: 0, text: 'No' }, { value: 1, text: 'Yes' }]
       }
     }

@@ -11,7 +11,7 @@
     button{border:0;border-radius:8px;padding:11px 17px;background:var(--accent);color:var(--bg);font-weight:800;cursor:pointer}button:hover{filter:brightness(1.08)}button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:transparent;border:1px solid var(--line);color:var(--text)}
     main{max-width:820px;margin:0 auto;padding:28px 18px}.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:24px}.muted{color:var(--muted);line-height:1.5}.error{color:var(--bad)}h1{font-size:23px;color:var(--accent);margin:0 0 8px}h2{font-size:19px;margin:0 0 18px;line-height:1.4}.progress{height:8px;background:var(--inner);border-radius:999px;overflow:hidden;margin:18px 0}.progress>div{height:100%;background:var(--accent);transition:width .2s}
     .question{background:var(--inner);border:1px solid var(--line);border-radius:10px;padding:20px}.code{font-size:11px;color:var(--muted);margin-bottom:8px}.option{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-radius:9px;padding:13px;margin-top:9px;cursor:pointer}.option:hover{border-color:var(--accent)}.option input{margin-top:3px;accent-color:var(--accent)}
-    input[type=text],input[type=number]{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;font:inherit}.actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}.hidden{display:none!important}
+    input[type=text],input[type=number],textarea{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:12px;margin-top:10px;font:inherit}textarea{min-height:150px;resize:vertical;line-height:1.5}input[type=range]{width:100%;margin-top:16px;accent-color:var(--accent)}.range-meta{display:flex;justify-content:space-between;gap:12px;color:var(--muted);margin-top:7px;font-size:13px}.range-value{color:var(--accent);font-weight:800}.unit{color:var(--muted);margin-top:7px}.actions{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-top:20px;flex-wrap:wrap}.hidden{display:none!important}
     footer{text-align:center;color:#64748b;border-top:1px solid var(--line);padding:20px;font-size:12px;margin-top:30px}
   </style>
 </head>
@@ -40,9 +40,9 @@
 'use strict';
 const RC=window.ResearchContracts;
 const T={
- ru:{cabinet:'← В кабинет',loading:'Загрузка анкеты…',back:'Назад',next:'Далее',finish:'Завершить и отправить',progress:'Вопрос',of:'из',loadError:'Анкету не удалось загрузить.',sessionInactive:'Эта сессия уже не активна.',submitError:'Ответы не удалось сохранить.',requiredAnswer:'Ответьте на обязательный вопрос.',minimumAnswers:'Для завершения недостаточно ответов.',invalidRoute:'Маршрут анкеты некорректен.',submitting:'Сохранение ответов…'},
- es:{cabinet:'← Al panel',loading:'Cargando cuestionario…',back:'Atrás',next:'Siguiente',finish:'Finalizar y enviar',progress:'Pregunta',of:'de',loadError:'No se pudo cargar el cuestionario.',sessionInactive:'Esta sesión ya no está activa.',submitError:'No se pudieron guardar las respuestas.',requiredAnswer:'Responda la pregunta obligatoria.',minimumAnswers:'No hay suficientes respuestas para completar.',invalidRoute:'La ruta del cuestionario no es válida.',submitting:'Guardando respuestas…'},
- en:{cabinet:'← Participant hub',loading:'Loading questionnaire…',back:'Back',next:'Next',finish:'Finish and submit',progress:'Question',of:'of',loadError:'The questionnaire could not be loaded.',sessionInactive:'This session is no longer active.',submitError:'The responses could not be saved.',requiredAnswer:'Answer the required question.',minimumAnswers:'There are not enough answers to complete.',invalidRoute:'The questionnaire route is invalid.',submitting:'Saving responses…'}
+ ru:{cabinet:'← В кабинет',loading:'Загрузка анкеты…',back:'Назад',next:'Далее',finish:'Завершить и отправить',progress:'Вопрос',of:'из',loadError:'Анкету не удалось загрузить.',sessionInactive:'Эта сессия уже не активна.',submitError:'Ответы не удалось сохранить.',requiredAnswer:'Ответьте на обязательный вопрос.',invalidValue:'Ответ не соответствует допустимому диапазону или шагу шкалы.',minimumAnswers:'Для завершения недостаточно ответов.',invalidRoute:'Маршрут анкеты некорректен.',submitting:'Сохранение ответов…'},
+ es:{cabinet:'← Al panel',loading:'Cargando cuestionario…',back:'Atrás',next:'Siguiente',finish:'Finalizar y enviar',progress:'Pregunta',of:'de',loadError:'No se pudo cargar el cuestionario.',sessionInactive:'Esta sesión ya no está activa.',submitError:'No se pudieron guardar las respuestas.',requiredAnswer:'Responda la pregunta obligatoria.',invalidValue:'La respuesta no respeta el rango o el paso permitido por la escala.',minimumAnswers:'No hay suficientes respuestas para completar.',invalidRoute:'La ruta del cuestionario no es válida.',submitting:'Guardando respuestas…'},
+ en:{cabinet:'← Participant hub',loading:'Loading questionnaire…',back:'Back',next:'Next',finish:'Finish and submit',progress:'Question',of:'of',loadError:'The questionnaire could not be loaded.',sessionInactive:'This session is no longer active.',submitError:'The responses could not be saved.',requiredAnswer:'Answer the required question.',invalidValue:'The response is outside the scale range or does not follow its step.',minimumAnswers:'There are not enough answers to complete.',invalidRoute:'The questionnaire route is invalid.',submitting:'Saving responses…'}
 };
 let lang='ru',principal=null,sessionId=null,collectionSession=null,questionnaire=null,items=[],itemById=new Map(),history=[],currentItemId=null,answers=new Map(),presentedAt=new Map(),sessionFinalized=false,discardRequested=false;
 function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
@@ -73,15 +73,26 @@ function renderCurrent(){
  document.getElementById('progressBar').style.width=`${Math.max(1,Math.round(((index+1)/items.length)*100))}%`;document.getElementById('progressText').textContent=`${T[lang].progress} ${index+1} ${T[lang].of} ${items.length}`;document.getElementById('questionBlock').innerHTML=renderQuestion(item,definition,prompt,answer);document.getElementById('backButton').disabled=history.length===0;document.getElementById('nextButton').textContent=isTerminalRoute(item,answer)?T[lang].finish:T[lang].next;document.getElementById('status').textContent='';
 }
 function renderQuestion(item,q,prompt,answer){
- const type=q.type||'single_select',name=`answer_${item.item_id}`;
- if(['number','numeric','numeric_input'].includes(type))return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><input id="${name}" type="number" value="${answer===undefined?'':escapeHtml(answer)}"></div>`;
- if(['text','text_input'].includes(type))return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><input id="${name}" type="text" value="${answer===undefined?'':escapeHtml(answer)}"></div>`;
+ const type=q.type||'single_select',name=`answer_${item.item_id}`,scale=q.scale||{},scaleId=String(scale.id||'');
+ if(['number','numeric','numeric_input'].includes(type)){
+  const min=Number.isFinite(Number(scale.min))&&scale.min!==null&&scale.min!==''?Number(scale.min):null,max=Number.isFinite(Number(scale.max))&&scale.max!==null&&scale.max!==''?Number(scale.max):null,step=Number.isFinite(Number(scale.step))&&Number(scale.step)>0?Number(scale.step):'any',unit=scale.unit?`<div class="unit">${escapeHtml(scale.unit)}</div>`:'',attrs=`${min===null?'':` min="${escapeHtml(min)}"`}${max===null?'':` max="${escapeHtml(max)}"`} step="${escapeHtml(step)}"`;
+  if(scaleId==='continuous_slider'){
+   const sliderMin=min??0,sliderMax=max??100,sliderValue=answer===undefined?sliderMin:answer;
+   return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><input id="${name}" type="range" min="${escapeHtml(sliderMin)}" max="${escapeHtml(sliderMax)}" step="${escapeHtml(step==='any'?1:step)}" value="${escapeHtml(sliderValue)}" data-touched="${answer===undefined?'false':'true'}" data-unit="${scale.unit?` ${escapeHtml(scale.unit)}`:''}" onpointerdown="this.dataset.touched='true'" oninput="this.dataset.touched='true';document.getElementById('${name}_value').textContent=this.value+this.dataset.unit"><div class="range-meta"><span>${escapeHtml(sliderMin)}</span><span id="${name}_value" class="range-value">${escapeHtml(sliderValue)}${scale.unit?` ${escapeHtml(scale.unit)}`:''}</span><span>${escapeHtml(sliderMax)}</span></div></div>`;
+  }
+  return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><input id="${name}" type="number"${attrs} value="${answer===undefined?'':escapeHtml(answer)}">${unit}</div>`;
+ }
+ if(['text','text_input'].includes(type)){
+  const maxLength=Number.isInteger(q.max_length)&&q.max_length>0?` maxlength="${q.max_length}"`:'';
+  if(scaleId==='long_paragraph')return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><textarea id="${name}"${maxLength}>${answer===undefined?'':escapeHtml(answer)}</textarea></div>`;
+  return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2><input id="${name}" type="text"${maxLength} value="${answer===undefined?'':escapeHtml(answer)}"></div>`;
+ }
  const multiple=['multi_select','multiple_select','multiple_choice'].includes(type),selected=multiple?(Array.isArray(answer)?answer:[]):[answer];
  return `<div class="question"><div class="code">${escapeHtml(item.code)}</div><h2>${escapeHtml(prompt)}</h2>${(q.options||[]).map(option=>{const checked=selected.some(value=>sameValue(value,option.value));return `<label class="option"><input type="${multiple?'checkbox':'radio'}" name="${name}" value="${escapeHtml(JSON.stringify(option.value))}"${checked?' checked':''}><span>${escapeHtml(localized(option.text)||option.label||String(option.value))}</span></label>`;}).join('')}</div>`;
 }
 function readCurrentAnswer(){
  const item=itemById.get(currentItemId),q=item.definition_snapshot||{},type=q.type||'single_select',name=`answer_${item.item_id}`;let value;
- if(['number','numeric','numeric_input'].includes(type)){const raw=document.getElementById(name)?.value;value=raw===''?undefined:Number(raw);}
+ if(['number','numeric','numeric_input'].includes(type)){const control=document.getElementById(name),raw=control?.value;value=control?.type==='range'&&control.dataset.touched!=='true'||raw===''?undefined:Number(raw);}
  else if(['text','text_input'].includes(type)){const raw=document.getElementById(name)?.value.trim();value=raw||undefined;}
  else if(['multi_select','multiple_select','multiple_choice'].includes(type)){const values=[...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el=>JSON.parse(el.value));value=values.length?values:undefined;}
  else{const selected=document.querySelector(`input[name="${name}"]:checked`);value=selected?JSON.parse(selected.value):undefined;}
@@ -97,6 +108,7 @@ function resolvedNext(item,answer){const target=resolvedTarget(item,answer);retu
 function isTerminalRoute(item,answer){return resolvedNext(item,answer)==='end';}
 async function goNext(){
  const item=itemById.get(currentItemId),answer=readCurrentAnswer(),target=resolvedNext(item,answer);
+ const answerControl=document.getElementById(`answer_${item.item_id}`);if(answerControl&&!answerControl.checkValidity()){document.getElementById('status').textContent=T[lang].invalidValue;document.getElementById('status').className='error';answerControl.focus();return;}
  if(item.required!==false&&!hasAnswer(answer)){document.getElementById('status').textContent=T[lang].requiredAnswer;document.getElementById('status').className='error';return;}
  if(target==='end'){await submitAll();return;}
  if(!itemById.has(target)){document.getElementById('status').textContent='Invalid route target';document.getElementById('status').className='error';return;}

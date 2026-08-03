@@ -2,6 +2,7 @@
   'use strict';
 
   const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const SYSTEM_CODE = /^[A-Z][A-Z0-9_]*$/;
   const STATUS = new Set(['draft', 'trial', 'active']);
   const SCALE_CONTRACTS = Object.freeze([
     Object.freeze({ id: 'single_choice', psychometric_level: 'nominal', response_type: 'single_select' }),
@@ -309,6 +310,90 @@
     return SCALE_CONTRACTS.filter(contract => !normalizedType || contract.response_type === normalizedType);
   }
 
+  function sameNumber(left, right) {
+    return typeof left === 'number' && Number.isFinite(left) && left === right;
+  }
+
+  function numericOptionValues(options) {
+    if (!Array.isArray(options)) return null;
+    const values = options.map(option => Number(option?.value));
+    return values.every(Number.isFinite) ? values : null;
+  }
+
+  function expectedSequence(min, max, step) {
+    const values = [];
+    for (let value = min; value <= max + step / 1000000; value += step) {
+      values.push(Number(value.toPrecision(12)));
+    }
+    return values;
+  }
+
+  function validateScaleContract(question, questionCode, issue) {
+    const scale = question?.scale;
+    const scaleId = String(scale?.id || '').trim();
+    if (!scaleId) return;
+    const contract = scaleContract(scaleId);
+    if (!contract) {
+      issue('error', 'UNREGISTERED_SCALE', 'Select one of the registered scale contracts before registration.', questionCode);
+      return;
+    }
+    if (contract.response_type !== question.type) {
+      issue('error', 'INCOMPATIBLE_SCALE_TYPE', 'The selected scale is not compatible with the response type.', questionCode);
+    }
+    if (scale.psychometric_level && contract.psychometric_level !== scale.psychometric_level) {
+      issue('error', 'SCALE_LEVEL_MISMATCH', 'The psychometric level does not match the selected scale contract.', questionCode);
+    }
+    for (const field of ['min', 'max', 'step']) {
+      const value = scale[field];
+      if (value !== null && value !== undefined && value !== '' && (typeof value !== 'number' || !Number.isFinite(value))) {
+        issue('error', 'INVALID_SCALE_RANGE', `Scale ${field} must be a finite number.`, questionCode);
+      }
+      if (Object.prototype.hasOwnProperty.call(contract, field) && !sameNumber(value, contract[field])) {
+        issue('error', 'SCALE_RANGE_MISMATCH', `Scale ${field} must equal the registered ${contract.id} contract.`, questionCode);
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(contract, 'unit') && String(scale.unit || '') !== contract.unit) {
+      issue('error', 'SCALE_UNIT_MISMATCH', `Scale unit must equal the registered ${contract.id} contract.`, questionCode);
+    }
+    const min = Number(scale.min), max = Number(scale.max), step = Number(scale.step);
+    if (scale.min !== null && scale.min !== undefined && scale.min !== '' &&
+        scale.max !== null && scale.max !== undefined && scale.max !== '' &&
+        (!(max > min))) {
+      issue('error', 'INVALID_SCALE_RANGE', 'Scale maximum must be greater than minimum.', questionCode);
+    }
+    if (scale.step !== null && scale.step !== undefined && scale.step !== '' && !(step > 0)) {
+      issue('error', 'INVALID_SCALE_STEP', 'Scale step must be greater than zero.', questionCode);
+    }
+    if (contract.id === 'discrete_count' && !Number.isInteger(step)) {
+      issue('error', 'INVALID_SCALE_STEP', 'Discrete count requires a positive integer step.', questionCode);
+    }
+
+    const optionValues = numericOptionValues(question.options);
+    const fixedOptionRanges = {
+      likert_5: [1, 5, 1],
+      likert_7: [1, 7, 1],
+      nps_scale: [0, 10, 1]
+    };
+    const fixed = fixedOptionRanges[contract.id];
+    if (fixed) {
+      const expected = expectedSequence(...fixed);
+      if (!optionValues || optionValues.length !== expected.length ||
+          optionValues.some((value, index) => value !== expected[index])) {
+        issue('error', 'SCALE_OPTIONS_MISMATCH', `Answer values must follow the registered ${contract.id} sequence.`, questionCode);
+      }
+    } else if (contract.id === 'dichotomous') {
+      if (!optionValues || optionValues.length !== 2 ||
+          new Set(optionValues).size !== 2 || !optionValues.includes(0) || !optionValues.includes(1)) {
+        issue('error', 'SCALE_OPTIONS_MISMATCH', 'Dichotomous answer values must be exactly 0 and 1.', questionCode);
+      }
+    } else if (contract.id === 'frequency_scale') {
+      if (!optionValues || optionValues.length < 2 ||
+          optionValues.some((value, index) => index > 0 && value <= optionValues[index - 1])) {
+        issue('error', 'SCALE_OPTIONS_MISMATCH', 'Frequency scale values must be numeric and strictly increasing in presentation order.', questionCode);
+      }
+    }
+  }
+
   function normalizeScale(value, source) {
     if (value && typeof value === 'object' && !Array.isArray(value)) return clone(value);
     const scaleId = valueOrNull(value) ??
@@ -366,13 +451,25 @@
       'выберите все', 'несколько вариантов', 'множественный выбор'
     ]);
 
+    const importedScaleId = normalizedWords(result.scale?.id).replace(/\s+/g, '_');
+    if (importedScaleId === 'binary' || importedScaleId === 'boolean') {
+      const values = numericOptionValues(result.options);
+      const dichotomous = values && values.length === 2 && new Set(values).size === 2 &&
+        values.includes(0) && values.includes(1);
+      result.scale.id = dichotomous ? 'dichotomous' : 'single_choice';
+      result.scale.psychometric_level = 'nominal';
+    } else if (importedScaleId === 'text' && result.type === 'text_input') {
+      result.scale.id = 'short_string';
+      result.scale.psychometric_level = 'textual';
+    }
+
     if (!result.type && hasOptions) {
       result.type = multipleInstruction ? 'multiple_select' : 'single_select';
     }
 
     if (!result.scale && result.type === 'text_input') {
       result.scale = {
-        id: 'text', psychometric_level: 'textual', min: null, max: null,
+        id: 'short_string', psychometric_level: 'textual', min: null, max: null,
         step: null, unit: null, direction: null
       };
     } else if (!result.scale && result.type === 'numeric_input') {
@@ -1089,8 +1186,52 @@
     };
   }
 
+  function repairCanonicalGeneratedFields(source) {
+    const bank = clone(source);
+    const repairs = [];
+    if (!UUID_V4.test(String(bank.bank_id || ''))) {
+      repairs.push({ field: 'bank_id', source_value: valueOrNull(bank.bank_id), action: 'generated_uuid_v4' });
+      bank.bank_id = uuid();
+    }
+    if (bank.questions && typeof bank.questions === 'object' && !Array.isArray(bank.questions)) {
+      Object.entries(bank.questions).forEach(([questionCode, question]) => {
+        if (!question || typeof question !== 'object' || Array.isArray(question)) return;
+        if (!UUID_V4.test(String(question.question_id || ''))) {
+          repairs.push({ field: `questions.${questionCode}.question_id`, source_value: valueOrNull(question.question_id), action: 'generated_uuid_v4' });
+          question.question_id = uuid();
+        }
+        const importedRouting = {};
+        if (Object.prototype.hasOwnProperty.call(question, 'routing')) {
+          importedRouting.routing = clone(question.routing);
+          delete question.routing;
+        }
+        if (Array.isArray(question.options)) {
+          question.options.forEach((option, index) => {
+            if (!option || typeof option !== 'object' || Array.isArray(option)) return;
+            for (const field of ['next', 'target']) {
+              if (Object.prototype.hasOwnProperty.call(option, field)) {
+                (importedRouting.options ??= {})[index] ??= {};
+                importedRouting.options[index][field] = option[field] === undefined ? null : clone(option[field]);
+                delete option[field];
+              }
+            }
+          });
+        }
+        if (Object.keys(importedRouting).length) {
+          question.source_context = {
+            ...(question.source_context && typeof question.source_context === 'object' ? question.source_context : {}),
+            imported_question_routing: importedRouting
+          };
+          repairs.push({ field: `questions.${questionCode}.routing`, action: 'moved_to_source_context' });
+        }
+      });
+    }
+    if (repairs.length) bank.import_repairs = [...(Array.isArray(bank.import_repairs) ? bank.import_repairs : []), ...repairs];
+    return bank;
+  }
+
   function canonicalOrConverted(value, metadata) {
-    if (value?.schema === 'research_os.question_bank') return clone(value);
+    if (value?.schema === 'research_os.question_bank') return repairCanonicalGeneratedFields(value);
     if (Array.isArray(value?.variables) && value?.engine) {
       return strictCyanProtocolToQuestionBank(value, metadata);
     }
@@ -1149,11 +1290,14 @@
     if (!UUID_V4.test(String(bank.bank_id || ''))) issue('error', 'INVALID_BANK_ID', 'A valid bank UUID is required.');
     if (!bank.title) issue('error', 'MISSING_BANK_TITLE', 'The imported bank needs a title.');
     if (!bank.code) issue('error', 'MISSING_BANK_CODE', 'The imported bank needs a code.');
+    if (bank.code && !SYSTEM_CODE.test(String(bank.code))) issue('error', 'INVALID_BANK_CODE', 'The bank system code must use uppercase Latin letters, digits, and underscores.');
+    if (!Number.isInteger(bank.version) || bank.version < 1) issue('error', 'INVALID_BANK_VERSION', 'Bank version must be a positive integer.');
+    if (!STATUS.has(bank.status)) issue('error', 'INVALID_BANK_STATUS', 'Bank status must be draft, trial, or active.');
     if (!String(bank.primary_language || '').trim()) issue('error', 'MISSING_PRIMARY_LANGUAGE', 'The primary content language is required.');
     if (!bank.global_time_reference || Number.isNaN(Date.parse(bank.global_time_reference))) {
       issue('error', 'INVALID_GLOBAL_TIME_REFERENCE', 'A valid Global Time Reference timestamp is required.');
     }
-    if (!Array.isArray(bank.question_order) || !bank.questions || typeof bank.questions !== 'object') {
+    if (!Array.isArray(bank.question_order) || !bank.questions || typeof bank.questions !== 'object' || Array.isArray(bank.questions)) {
       issue('error', 'INVALID_QUESTION_COLLECTION', 'questions and question_order are required.');
       return diagnostics;
     }
@@ -1171,6 +1315,8 @@
       seen.add(questionCode);
       if (!UUID_V4.test(String(question.question_id || ''))) issue('error', 'INVALID_QUESTION_ID', 'A valid question UUID is required.', questionCode);
       if (question.code !== questionCode) issue('error', 'CODE_MISMATCH', 'Question key and code do not match.', questionCode);
+      if (!SYSTEM_CODE.test(String(question.code || ''))) issue('error', 'INVALID_QUESTION_CODE', 'Question code must use uppercase Latin letters, digits, and underscores.', questionCode);
+      if (!Number.isInteger(question.version) || question.version < 1) issue('error', 'INVALID_QUESTION_VERSION', 'Question version must be a positive integer.', questionCode);
       if (!String(question.prompt || '').trim()) issue('error', 'MISSING_PROMPT', `Question ${index + 1} has no prompt.`, questionCode);
       if (/^(?:new research question|nueva pregunta de investigaci[oó]n|новый вопрос исследования)\s*\?$/i.test(String(question.prompt || '').trim())) {
         issue('error', 'PLACEHOLDER_PROMPT', 'The question still contains an unfinished placeholder prompt.', questionCode);
@@ -1182,20 +1328,13 @@
       const scaleResolved = question.scale && typeof question.scale === 'object' &&
         String(question.scale.id || '').trim();
       if (!scaleResolved) issue('error', 'UNRESOLVED_SCALE', 'A scale contract must be selected before this question can be registered.', questionCode);
-      const registeredScale = scaleResolved ? scaleContract(question.scale.id) : null;
-      if (registeredScale && registeredScale.response_type !== question.type) {
-        issue('error', 'INCOMPATIBLE_SCALE_TYPE', 'The selected scale is not compatible with the response type.', questionCode);
-      }
       if (scaleResolved && !String(question.scale.psychometric_level || '').trim()) {
         issue('error', 'UNRESOLVED_PSYCHOMETRIC_LEVEL', 'The psychometric level must be selected before this question can be registered.', questionCode);
       }
       if (scaleResolved && !['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(question.scale.psychometric_level)) {
         issue('error', 'INVALID_PSYCHOMETRIC_LEVEL', 'The psychometric level is not supported by the analysis contract.', questionCode);
       }
-      if (registeredScale && question.scale.psychometric_level &&
-          registeredScale.psychometric_level !== question.scale.psychometric_level) {
-        issue('error', 'SCALE_LEVEL_MISMATCH', 'The psychometric level does not match the selected scale contract.', questionCode);
-      }
+      validateScaleContract(question, questionCode, issue);
       if (!Array.isArray(question.options)) issue('error', 'INVALID_OPTIONS', 'Question options must be an array.', questionCode);
       if (['single_select', 'multiple_select'].includes(question.type) && (!Array.isArray(question.options) || question.options.length < 2)) {
         issue('error', 'MISSING_OPTIONS', 'A selection question needs at least two answer options.', questionCode);
@@ -1225,6 +1364,8 @@
         issue('warning', 'NORMALIZED_CODE_COLLISION', `Imported code ${question.source_code} was made unique as ${questionCode}.`, questionCode);
       }
       if (!STATUS.has(question.status)) issue('error', 'INVALID_STATUS', 'Question status must be draft, trial, or active.', questionCode);
+      if (bank.status === 'active' && question.status !== 'active') issue('error', 'ACTIVE_BANK_QUESTION_STATUS', 'An active bank may contain only active questions.', questionCode);
+      if (bank.status === 'trial' && question.status === 'draft') issue('error', 'TRIAL_BANK_QUESTION_STATUS', 'A trial bank may not contain draft questions.', questionCode);
     });
     Object.keys(bank.questions).forEach(questionCode => {
       if (!seen.has(questionCode)) issue('error', 'UNORDERED_QUESTION', `Question ${questionCode} is not in question_order.`, questionCode);

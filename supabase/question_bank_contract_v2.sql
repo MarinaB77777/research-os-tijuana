@@ -94,6 +94,7 @@ declare
     v_question jsonb;
     v_question_id uuid;
     v_question_version integer;
+    v_scale_id text;
     v_existing_definition jsonb;
     v_position integer;
 begin
@@ -106,6 +107,17 @@ begin
        or (package_data #>> '{reuse_policy,attribution_required}')::boolean is distinct from true
        or (package_data #>> '{reuse_policy,ownership_retained_by_author}')::boolean is distinct from true then
         raise exception 'A valid reuse policy with retained authorship and required attribution is required';
+    end if;
+    if nullif(btrim(package_data ->> 'code'), '') is null
+       or package_data ->> 'code' !~ '^[A-Z][A-Z0-9_]*$'
+       or package_data ->> 'version' is null
+       or (package_data ->> 'version')::integer < 1
+       or package_data ->> 'status' is null
+       or package_data ->> 'status' not in ('draft', 'trial', 'active')
+       or nullif(btrim(package_data ->> 'title'), '') is null
+       or nullif(btrim(package_data ->> 'primary_language'), '') is null
+       or nullif(btrim(package_data ->> 'global_time_reference'), '') is null then
+        raise exception 'Bank identity, status, language, Global Time Reference, and positive version are invalid';
     end if;
 
     v_bank_id := (package_data ->> 'bank_id')::uuid;
@@ -197,6 +209,13 @@ begin
         if v_question ->> 'code' is distinct from v_code then
             raise exception 'Question key % does not match its code', v_code;
         end if;
+        if v_code !~ '^[A-Z][A-Z0-9_]*$'
+           or v_question ->> 'version' is null
+           or (v_question ->> 'version')::integer < 1
+           or v_question ->> 'status' is null
+           or v_question ->> 'status' not in ('draft', 'trial', 'active') then
+            raise exception 'Question % has an invalid code, version, or status', v_code;
+        end if;
         if v_question ->> 'type' is null
            or v_question ->> 'type' not in
               ('single_select', 'multiple_select', 'numeric_input', 'text_input') then
@@ -208,6 +227,45 @@ begin
            or v_question #>> '{scale,psychometric_level}' not in
               ('nominal', 'ordinal', 'interval_ratio', 'textual') then
             raise exception 'Question % has an incomplete measurement contract', v_code;
+        end if;
+        v_scale_id := v_question #>> '{scale,id}';
+        if v_scale_id not in (
+            'single_choice', 'multiple_choice', 'dichotomous',
+            'likert_7', 'likert_5', 'frequency_scale', 'nps_scale',
+            'discrete_count', 'continuous_slider', 'currency_metric',
+            'percentage_share', 'short_string', 'long_paragraph'
+        ) then
+            raise exception 'Question % uses unregistered scale contract %', v_code, v_scale_id;
+        end if;
+        if (v_scale_id = 'single_choice' and (v_question ->> 'type' <> 'single_select' or v_question #>> '{scale,psychometric_level}' <> 'nominal'))
+           or (v_scale_id = 'multiple_choice' and (v_question ->> 'type' <> 'multiple_select' or v_question #>> '{scale,psychometric_level}' <> 'nominal'))
+           or (v_scale_id = 'dichotomous' and (v_question ->> 'type' <> 'single_select' or v_question #>> '{scale,psychometric_level}' <> 'nominal'))
+           or (v_scale_id in ('likert_7', 'likert_5', 'frequency_scale', 'nps_scale') and (v_question ->> 'type' <> 'single_select' or v_question #>> '{scale,psychometric_level}' <> 'ordinal'))
+           or (v_scale_id in ('discrete_count', 'continuous_slider', 'currency_metric', 'percentage_share') and (v_question ->> 'type' <> 'numeric_input' or v_question #>> '{scale,psychometric_level}' <> 'interval_ratio'))
+           or (v_scale_id in ('short_string', 'long_paragraph') and (v_question ->> 'type' <> 'text_input' or v_question #>> '{scale,psychometric_level}' <> 'textual')) then
+            raise exception 'Question % response type or psychometric level conflicts with scale %', v_code, v_scale_id;
+        end if;
+        if exists (
+            select 1
+              from (values ('min'), ('max'), ('step')) scale_field(field_name)
+             where v_question #> array['scale', scale_field.field_name] is not null
+               and v_question #> array['scale', scale_field.field_name] <> 'null'::jsonb
+               and jsonb_typeof(v_question #> array['scale', scale_field.field_name]) <> 'number'
+        )
+           or (jsonb_typeof(v_question #> '{scale,min}') = 'number'
+               and jsonb_typeof(v_question #> '{scale,max}') = 'number'
+               and (v_question #>> '{scale,max}')::numeric <= (v_question #>> '{scale,min}')::numeric)
+           or (jsonb_typeof(v_question #> '{scale,step}') = 'number'
+               and (v_question #>> '{scale,step}')::numeric <= 0) then
+            raise exception 'Question % scale bounds and step must be finite numeric values with max > min and step > 0', v_code;
+        end if;
+        if (v_scale_id = 'likert_5' and (v_question #> '{scale,min}' is distinct from '1'::jsonb or v_question #> '{scale,max}' is distinct from '5'::jsonb or v_question #> '{scale,step}' is distinct from '1'::jsonb))
+           or (v_scale_id = 'likert_7' and (v_question #> '{scale,min}' is distinct from '1'::jsonb or v_question #> '{scale,max}' is distinct from '7'::jsonb or v_question #> '{scale,step}' is distinct from '1'::jsonb))
+           or (v_scale_id = 'nps_scale' and (v_question #> '{scale,min}' is distinct from '0'::jsonb or v_question #> '{scale,max}' is distinct from '10'::jsonb or v_question #> '{scale,step}' is distinct from '1'::jsonb))
+           or (v_scale_id = 'continuous_slider' and (v_question #> '{scale,min}' is distinct from '0'::jsonb or v_question #> '{scale,max}' is distinct from '100'::jsonb or v_question #> '{scale,step}' is distinct from '1'::jsonb))
+           or (v_scale_id = 'percentage_share' and (v_question #> '{scale,min}' is distinct from '0'::jsonb or v_question #> '{scale,max}' is distinct from '100'::jsonb or v_question #> '{scale,step}' is distinct from '1'::jsonb or v_question #>> '{scale,unit}' is distinct from '%'))
+           or (v_scale_id = 'discrete_count' and (jsonb_typeof(v_question #> '{scale,step}') is distinct from 'number' or (v_question #>> '{scale,step}')::numeric <= 0 or trunc((v_question #>> '{scale,step}')::numeric) <> (v_question #>> '{scale,step}')::numeric)) then
+            raise exception 'Question % bounds, step, or unit conflict with scale %', v_code, v_scale_id;
         end if;
         if jsonb_typeof(v_question -> 'options') is distinct from 'array'
            or (
@@ -231,6 +289,38 @@ begin
              having count(*) > 1
            ) then
             raise exception 'Question % has empty or duplicate answer options', v_code;
+        end if;
+        if v_scale_id in ('likert_5', 'likert_7', 'nps_scale') and exists (
+            select 1
+              from jsonb_array_elements(v_question -> 'options') with ordinality option_value(value, position)
+             where jsonb_typeof(option_value.value -> 'value') <> 'number'
+                or (option_value.value ->> 'value')::numeric < case when v_scale_id = 'nps_scale' then 0 else 1 end
+                or (option_value.value ->> 'value')::numeric <> (option_value.position - case when v_scale_id = 'nps_scale' then 1 else 0 end)::numeric
+        ) then
+            raise exception 'Question % answer values conflict with scale %', v_code, v_scale_id;
+        end if;
+        if (v_scale_id = 'likert_5' and jsonb_array_length(v_question -> 'options') <> 5)
+           or (v_scale_id = 'likert_7' and jsonb_array_length(v_question -> 'options') <> 7)
+           or (v_scale_id = 'nps_scale' and jsonb_array_length(v_question -> 'options') <> 11)
+           or (v_scale_id = 'dichotomous' and (
+                jsonb_array_length(v_question -> 'options') <> 2
+                or not exists (select 1 from jsonb_array_elements(v_question -> 'options') o where o -> 'value' = '0'::jsonb)
+                or not exists (select 1 from jsonb_array_elements(v_question -> 'options') o where o -> 'value' = '1'::jsonb)
+           )) then
+            raise exception 'Question % answer count or values conflict with scale %', v_code, v_scale_id;
+        end if;
+        if v_scale_id = 'frequency_scale' and (
+            jsonb_array_length(v_question -> 'options') < 2
+            or exists (select 1 from jsonb_array_elements(v_question -> 'options') o where jsonb_typeof(o -> 'value') <> 'number')
+            or exists (
+                select 1
+                  from jsonb_array_elements(v_question -> 'options') with ordinality current_option(value, position)
+                  join jsonb_array_elements(v_question -> 'options') with ordinality previous_option(value, position)
+                    on previous_option.position = current_option.position - 1
+                 where (current_option.value ->> 'value')::numeric <= (previous_option.value ->> 'value')::numeric
+            )
+        ) then
+            raise exception 'Question % frequency values must be numeric and strictly increasing', v_code;
         end if;
         if v_question ? 'routing'
            or exists (

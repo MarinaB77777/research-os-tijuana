@@ -54,8 +54,13 @@ function questionnaire() {
     start_item_id: IDS.item1,
     completion_policy: { minimum_answered_items: 1, require_terminal_route: true },
     items: [
-      { item_id: IDS.item1, position: 1, required: true },
-      { item_id: IDS.item2, position: 2, required: true }
+      { item_id: IDS.item1, position: 1, required: true, definition_snapshot: {
+        type: 'single_select', options: [{ value: 'continue', text: 'Continue' }, { value: 'stop', text: 'Stop' }],
+        scale: { id: 'single_choice', psychometric_level: 'nominal' }
+      } },
+      { item_id: IDS.item2, position: 2, required: true, definition_snapshot: {
+        type: 'text_input', options: [], scale: { id: 'short_string', psychometric_level: 'textual' }
+      } }
     ],
     routing: {
       nodes: {
@@ -155,9 +160,9 @@ function authenticatedFetch(questionnairePackage, onRpc) {
   };
 }
 
-async function submit(records, route, onRpc = async () => jsonFetch({ saved_count: records.length })) {
+async function submit(records, route, onRpc = async () => jsonFetch({ saved_count: records.length }), questionnairePackage = questionnaire()) {
   const originalFetch = globalThis.fetch;
-  globalThis.fetch = authenticatedFetch(questionnaire(), onRpc);
+  globalThis.fetch = authenticatedFetch(questionnairePackage, onRpc);
   try {
     const res = response();
     await handler({
@@ -212,6 +217,28 @@ test('responses from an untraversed branch are rejected', async () => {
   assert.match(res.payload.error, /outside the completed route/i);
 });
 
+test('server rejects a forged numeric response outside the registered scale contract', async () => {
+  const numericQuestionnaire = questionnaire();
+  numericQuestionnaire.items = [{
+    item_id: IDS.item1,
+    position: 1,
+    required: true,
+    definition_snapshot: {
+      type: 'numeric_input', options: [],
+      scale: { id: 'percentage_share', psychometric_level: 'interval_ratio', min: 0, max: 100, step: 1, unit: '%' }
+    }
+  }];
+  numericQuestionnaire.routing.nodes = { [IDS.item1]: { default_target: 'end', rules: [] } };
+  const res = await submit(
+    [answer(IDS.item1, IDS.question1, IDS.response1, 101)],
+    [IDS.item1],
+    async () => jsonFetch({ saved_count: 1 }),
+    numericQuestionnaire
+  );
+  assert.equal(res.statusCode, 422);
+  assert.match(res.payload.error, /outside the scale range/i);
+});
+
 test('null and empty payloads cannot impersonate completed answers', async () => {
   for (const emptyValue of [null, '', '   ', []]) {
     const res = await submit(
@@ -249,6 +276,10 @@ test('completion policy is explicit in the constructor and enforced atomically i
   assert.match(migration, /set status = 'missed'/);
   assert.match(assessment, /pagehide/);
   assert.match(assessment, /discardIncompleteSession/);
+  assert.match(assessment, /type="range"/);
+  assert.match(assessment, /data-touched/);
+  assert.match(assessment, /scaleId==='long_paragraph'/);
+  assert.match(assessment, /answerControl\.checkValidity\(\)/);
 });
 
 test('respondent exit discards the active session through an owner-bound RPC', async () => {

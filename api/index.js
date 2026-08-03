@@ -1,6 +1,45 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SYSTEM_CODE = /^[A-Z][A-Z0-9_]*$/;
+const QUESTION_SCALE_CONTRACTS = Object.freeze({
+    single_choice: { level: 'nominal', type: 'single_select' },
+    multiple_choice: { level: 'nominal', type: 'multiple_select' },
+    dichotomous: { level: 'nominal', type: 'single_select' },
+    likert_7: { level: 'ordinal', type: 'single_select', min: 1, max: 7, step: 1 },
+    likert_5: { level: 'ordinal', type: 'single_select', min: 1, max: 5, step: 1 },
+    frequency_scale: { level: 'ordinal', type: 'single_select' },
+    nps_scale: { level: 'ordinal', type: 'single_select', min: 0, max: 10, step: 1 },
+    discrete_count: { level: 'interval_ratio', type: 'numeric_input', step: 1 },
+    continuous_slider: { level: 'interval_ratio', type: 'numeric_input', min: 0, max: 100, step: 1 },
+    currency_metric: { level: 'interval_ratio', type: 'numeric_input' },
+    percentage_share: { level: 'interval_ratio', type: 'numeric_input', min: 0, max: 100, step: 1, unit: '%' },
+    short_string: { level: 'textual', type: 'text_input' },
+    long_paragraph: { level: 'textual', type: 'text_input' }
+});
+
+function validQuestionScaleContract(question) {
+    const scale = question?.scale || {};
+    const contract = QUESTION_SCALE_CONTRACTS[String(scale.id || '')];
+    if (!contract || contract.type !== question?.type || contract.level !== scale.psychometric_level) return false;
+    for (const field of ['min', 'max', 'step']) {
+        if (scale[field] !== null && scale[field] !== undefined && scale[field] !== '' && (typeof scale[field] !== 'number' || !Number.isFinite(scale[field]))) return false;
+        if (Object.prototype.hasOwnProperty.call(contract, field) && scale[field] !== contract[field]) return false;
+    }
+    if (Object.prototype.hasOwnProperty.call(contract, 'unit') && String(scale.unit || '') !== contract.unit) return false;
+    if (scale.min !== null && scale.min !== undefined && scale.min !== '' &&
+        scale.max !== null && scale.max !== undefined && scale.max !== '' && !(Number(scale.max) > Number(scale.min))) return false;
+    if (scale.step !== null && scale.step !== undefined && scale.step !== '' && !(Number(scale.step) > 0)) return false;
+    if (contract === QUESTION_SCALE_CONTRACTS.discrete_count && !Number.isInteger(Number(scale.step))) return false;
+    const values = Array.isArray(question.options) ? question.options.map(option => Number(option?.value)) : [];
+    if (['likert_5', 'likert_7', 'nps_scale'].includes(scale.id)) {
+        const expected = Array.from({ length: contract.max - contract.min + 1 }, (_, index) => contract.min + index);
+        if (values.length !== expected.length || values.some((value, index) => value !== expected[index])) return false;
+    }
+    if (scale.id === 'dichotomous' && (values.length !== 2 || new Set(values).size !== 2 || !values.includes(0) || !values.includes(1))) return false;
+    if (scale.id === 'frequency_scale' && (values.length < 2 || values.some((value, index) => !Number.isFinite(value) || index > 0 && value <= values[index - 1]))) return false;
+    return true;
+}
 const UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 8000;
@@ -34,6 +73,47 @@ function hasQuestionnaireAnswer(value) {
     if (typeof value === 'string' && value.trim() === '') return false;
     if (Array.isArray(value) && value.length === 0) return false;
     return true;
+}
+
+function validateQuestionnaireAnswer(item, value) {
+    const definition = item?.definition_snapshot || {};
+    const type = definition.type || 'single_select';
+    const options = Array.isArray(definition.options) ? definition.options : [];
+    const allowed = candidate => options.some(option => sameQuestionnaireValue(candidate, option?.value));
+    if (type === 'single_select') {
+        if (Array.isArray(value) || !allowed(value)) throw new Error(`Answer for ${item.item_id} is not an allowed single-selection value`);
+        return;
+    }
+    if (type === 'multiple_select') {
+        if (!Array.isArray(value) || !value.length || value.some(candidate => !allowed(candidate)) ||
+            new Set(value.map(candidate => JSON.stringify(candidate))).size !== value.length) {
+            throw new Error(`Answer for ${item.item_id} is not a valid set of allowed selections`);
+        }
+        return;
+    }
+    if (type === 'text_input') {
+        if (typeof value !== 'string' || !value.trim()) throw new Error(`Answer for ${item.item_id} must be non-empty text`);
+        if (Number.isInteger(definition.max_length) && definition.max_length > 0 && value.length > definition.max_length) {
+            throw new Error(`Answer for ${item.item_id} exceeds its maximum text length`);
+        }
+        return;
+    }
+    if (type === 'numeric_input') {
+        if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`Answer for ${item.item_id} must be a finite number`);
+        const scale = definition.scale || {};
+        const hasMin = scale.min !== null && scale.min !== undefined && scale.min !== '';
+        const hasMax = scale.max !== null && scale.max !== undefined && scale.max !== '';
+        const hasStep = scale.step !== null && scale.step !== undefined && scale.step !== '';
+        const min = Number(scale.min), max = Number(scale.max), step = Number(scale.step);
+        if ((hasMin && value < min) || (hasMax && value > max)) throw new Error(`Answer for ${item.item_id} is outside the scale range`);
+        if (hasStep && step > 0) {
+            const origin = hasMin ? min : 0;
+            const quotient = (value - origin) / step;
+            if (Math.abs(quotient - Math.round(quotient)) > 1e-9) throw new Error(`Answer for ${item.item_id} does not follow the scale step`);
+        }
+        return;
+    }
+    throw new Error(`Questionnaire item ${item.item_id} has an unsupported response type`);
 }
 
 function validateQuestionnaireGraph(questionnaire) {
@@ -132,6 +212,7 @@ function validateCompletedQuestionnaireRoute(questionnaire, responseRecords, sub
         if (item.required !== false && !record) {
             throw new Error(`Required questionnaire item ${currentItemId} has no answer`);
         }
+        if (record) validateQuestionnaireAnswer(item, record.value);
         const answer = record?.value;
         const node = questionnaire.routing.nodes[currentItemId];
         const rule = (node.rules || []).find(candidate => candidate.operator === 'equals' &&
@@ -1767,7 +1848,7 @@ export default async function handler(req, res) {
         if (!uuidV4.test(packageData.bank_id || '')) {
             return res.status(400).json({ ok: false, error: 'Valid bank_id UUID is required' });
         }
-        if (!packageData.code || !packageData.title || !packageData.primary_language ||
+        if (!packageData.code || !SYSTEM_CODE.test(packageData.code) || !packageData.title || !packageData.primary_language ||
             !packageData.global_time_reference || Number.isNaN(Date.parse(packageData.global_time_reference)) ||
             !Number.isInteger(packageData.version) || packageData.version < 1) {
             return res.status(400).json({ ok: false, error: 'Bank code, title, language, Global Time Reference, and positive integer version are required' });
@@ -1803,12 +1884,14 @@ export default async function handler(req, res) {
                 new Set(question.options.map(option => JSON.stringify(option.value))).size === question.options.length;
             if (!uuidV4.test(question?.question_id || '') ||
                 question?.code !== entryCode ||
+                !SYSTEM_CODE.test(entryCode) ||
                 !question?.prompt ||
                 !Number.isInteger(question?.version) ||
                 question.version < 1 ||
                 !['single_select', 'multiple_select', 'numeric_input', 'text_input'].includes(question?.type) ||
                 !question?.scale || !String(question.scale.id || '').trim() ||
                 !['nominal', 'ordinal', 'interval_ratio', 'textual'].includes(question.scale.psychometric_level) ||
+                !validQuestionScaleContract(question) ||
                 !validOptions ||
                 !['draft', 'trial', 'active'].includes(question?.status) ||
                 Object.prototype.hasOwnProperty.call(question, 'routing') ||
@@ -1816,7 +1899,9 @@ export default async function handler(req, res) {
                     option && typeof option === 'object' &&
                     (Object.prototype.hasOwnProperty.call(option, 'next') ||
                      Object.prototype.hasOwnProperty.call(option, 'target'))
-                )) {
+                ) ||
+                (packageData.status === 'active' && question.status !== 'active') ||
+                (packageData.status === 'trial' && question.status === 'draft')) {
                 return res.status(400).json({
                     ok: false,
                     error: `Question ${entryCode} does not satisfy the canonical identity/measurement contract or contains questionnaire routing`

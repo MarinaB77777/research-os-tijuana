@@ -551,7 +551,9 @@
       min: "Mínimo",
       max: "Máximo",
       step: "Paso",
+      version: "Versión",
       status: "Estado",
+      questionOrder: "Orden de preguntas (un código por línea)",
       emptyChoice: "— no determinado —",
       importedScale: "Contrato del archivo",
       previousResolution: "← Corrección anterior",
@@ -605,7 +607,9 @@
       min: "Minimum",
       max: "Maximum",
       step: "Step",
+      version: "Version",
       status: "Status",
+      questionOrder: "Question order (one code per line)",
       emptyChoice: "— not determined —",
       importedScale: "Contract from source file",
       previousResolution: "← Previous correction",
@@ -659,7 +663,9 @@
       min: "Минимум",
       max: "Максимум",
       step: "Шаг",
+      version: "Версия",
       status: "Статус",
+      questionOrder: "Порядок вопросов (по одному коду в строке)",
       emptyChoice: "— не определено —",
       importedScale: "Контракт из исходного файла",
       previousResolution: "← Предыдущее исправление",
@@ -693,6 +699,9 @@
       INVALID_BANK_ID: "Se requiere un UUID válido para el banco.",
       MISSING_BANK_TITLE: "El banco importado necesita un nombre.",
       MISSING_BANK_CODE: "El banco importado necesita un código.",
+      INVALID_BANK_CODE: "El código del banco debe usar letras latinas mayúsculas, números y guiones bajos.",
+      INVALID_BANK_VERSION: "La versión del banco debe ser un entero positivo.",
+      INVALID_BANK_STATUS: "El estado del banco debe ser draft, trial o active.",
       MISSING_PRIMARY_LANGUAGE: "Seleccione el idioma principal del contenido.",
       INVALID_GLOBAL_TIME_REFERENCE: "Se requiere una referencia temporal global válida.",
       INVALID_QUESTION_COLLECTION: "Se requieren questions y question_order.",
@@ -701,6 +710,8 @@
       DUPLICATE_ORDER: "La pregunta aparece más de una vez en question_order.",
       INVALID_QUESTION_ID: "Se requiere un UUID válido para la pregunta.",
       CODE_MISMATCH: "La clave y el código de la pregunta no coinciden.",
+      INVALID_QUESTION_CODE: "El código de la pregunta debe usar letras latinas mayúsculas, números y guiones bajos.",
+      INVALID_QUESTION_VERSION: "La versión de la pregunta debe ser un entero positivo.",
       MISSING_PROMPT: "Falta el texto de la pregunta.",
       PLACEHOLDER_PROMPT: "La pregunta aún contiene un texto provisional sin completar.",
       UNRESOLVED_TYPE: "Seleccione el tipo de respuesta antes de registrar esta pregunta.",
@@ -710,6 +721,12 @@
       UNRESOLVED_PSYCHOMETRIC_LEVEL: "Seleccione el nivel psicométrico antes de registrar esta pregunta.",
       INVALID_PSYCHOMETRIC_LEVEL: "El nivel psicométrico no es compatible con el contrato de análisis.",
       SCALE_LEVEL_MISMATCH: "El nivel psicométrico no corresponde a la escala seleccionada. Vuelva a seleccionar la escala.",
+      UNREGISTERED_SCALE: "Seleccione una escala registrada de la lista.",
+      INVALID_SCALE_RANGE: "Revise los límites numéricos de la escala.",
+      INVALID_SCALE_STEP: "El paso de la escala debe ser válido y mayor que cero.",
+      SCALE_RANGE_MISMATCH: "Los límites o el paso no corresponden al contrato de escala seleccionado.",
+      SCALE_UNIT_MISMATCH: "La unidad no corresponde al contrato de escala seleccionado.",
+      SCALE_OPTIONS_MISMATCH: "Los valores de respuesta no corresponden al contrato de escala seleccionado.",
       INVALID_OPTIONS: "Las opciones de la pregunta deben ser una lista.",
       MISSING_OPTIONS: "Una pregunta de selección necesita al menos dos opciones.",
       INVALID_OPTION: "Cada opción necesita texto.",
@@ -718,6 +735,8 @@
       QUESTION_ROUTING: "Configure las transiciones en el constructor del cuestionario.",
       NORMALIZED_CODE_COLLISION: "Se conservó la pregunta con un código único porque dos códigos importados coincidían después de la normalización.",
       INVALID_STATUS: "El estado debe ser draft, trial o active.",
+      ACTIVE_BANK_QUESTION_STATUS: "Un banco active solo puede contener preguntas active.",
+      TRIAL_BANK_QUESTION_STATUS: "Un banco trial no puede contener preguntas draft.",
       UNORDERED_QUESTION: "La pregunta no está incluida en question_order."
     }
   });
@@ -752,6 +771,9 @@
       INVALID_BANK_ID: "Требуется корректный UUID банка.",
       MISSING_BANK_TITLE: "Импортированному банку нужно название.",
       MISSING_BANK_CODE: "Импортированному банку нужен код.",
+      INVALID_BANK_CODE: "Код банка должен содержать заглавные латинские буквы, цифры и подчёркивания.",
+      INVALID_BANK_VERSION: "Версия банка должна быть положительным целым числом.",
+      INVALID_BANK_STATUS: "Статус банка должен быть draft, trial или active.",
       MISSING_PRIMARY_LANGUAGE: "Выберите основной язык содержания.",
       INVALID_GLOBAL_TIME_REFERENCE: "Требуется корректная глобальная временная привязка.",
       INVALID_QUESTION_COLLECTION: "Необходимы questions и question_order.",
@@ -760,6 +782,8 @@
       DUPLICATE_ORDER: "Вопрос повторяется в question_order.",
       INVALID_QUESTION_ID: "Требуется корректный UUID вопроса.",
       CODE_MISMATCH: "Ключ и код вопроса не совпадают.",
+      INVALID_QUESTION_CODE: "Код вопроса должен содержать заглавные латинские буквы, цифры и подчёркивания.",
+      INVALID_QUESTION_VERSION: "Версия вопроса должна быть положительным целым числом.",
       MISSING_PROMPT: "Отсутствует текст вопроса.",
       PLACEHOLDER_PROMPT: "Вопрос всё ещё содержит незавершённый временный текст.",
       UNRESOLVED_TYPE: "Перед регистрацией вопроса выберите тип ответа.",
@@ -769,6 +793,12 @@
       UNRESOLVED_PSYCHOMETRIC_LEVEL: "Перед регистрацией вопроса выберите психометрический уровень.",
       INVALID_PSYCHOMETRIC_LEVEL: "Этот психометрический уровень не поддерживается контрактом анализа.",
       SCALE_LEVEL_MISMATCH: "Психометрический уровень не соответствует выбранной шкале. Выберите шкалу заново.",
+      UNREGISTERED_SCALE: "Выберите зарегистрированную шкалу из списка.",
+      INVALID_SCALE_RANGE: "Проверьте числовые границы шкалы.",
+      INVALID_SCALE_STEP: "Шаг шкалы должен быть корректным числом больше нуля.",
+      SCALE_RANGE_MISMATCH: "Границы или шаг не соответствуют выбранному контракту шкалы.",
+      SCALE_UNIT_MISMATCH: "Единица не соответствует выбранному контракту шкалы.",
+      SCALE_OPTIONS_MISMATCH: "Значения вариантов ответа не соответствуют выбранному контракту шкалы.",
       INVALID_OPTIONS: "Варианты ответа должны быть массивом.",
       MISSING_OPTIONS: "Для вопроса с выбором нужны как минимум два варианта ответа.",
       INVALID_OPTION: "У каждого варианта должен быть текст.",
@@ -777,6 +807,8 @@
       QUESTION_ROUTING: "Настройте переходы в конструкторе анкеты.",
       NORMALIZED_CODE_COLLISION: "Вопрос сохранён под уникальным кодом: два исходных кода совпали после нормализации.",
       INVALID_STATUS: "Статус должен быть draft, trial или active.",
+      ACTIVE_BANK_QUESTION_STATUS: "Банк active может содержать только вопросы active.",
+      TRIAL_BANK_QUESTION_STATUS: "Банк trial не может содержать вопросы draft.",
       UNORDERED_QUESTION: "Вопрос не включён в question_order."
     }
   });
@@ -903,12 +935,16 @@
         }
       }
       currentImportResult = QuestionBankImport.summarize(canonicalResult, currentSourceFormat);
+      currentResolutionIndex = 0;
       outputArea.value = JSON.stringify(canonicalResult, null, 2);
       renderImportPreview(currentImportResult);
       showStatus(
         currentImportResult.can_use ? i18n[currentLang].msgSuccess : i18n[currentLang].needsResolution,
         !currentImportResult.can_use
       );
+      if (!currentImportResult.can_use && resolutionFields().length) {
+        window.setTimeout(() => goToResolution(0), 0);
+      }
     } catch (e) {
       invalidateConvertedState();
       showStatus(`${i18n[currentLang].conversionError}: ${e.message}`, true);
@@ -971,15 +1007,44 @@
       editorField(t.bankCode, textInput(result.bank.code, value => {
         result.bank.code = normalizeEditorCode(value, '');
         refreshImportResult();
-      }), 'half')
+      }), 'half', bankErrorCodes.has('MISSING_BANK_CODE') || bankErrorCodes.has('INVALID_BANK_CODE')),
+      editorField(t.version, numberInput(result.bank.version, value => {
+        result.bank.version = numberOrNull(value);
+        refreshImportResult();
+      }), '', bankErrorCodes.has('INVALID_BANK_VERSION')),
+      editorField(t.status, selectInput([
+        ['', t.emptyChoice], ['draft', 'Draft'], ['trial', 'Trial'], ['active', 'Active']
+      ], result.bank.status || '', value => {
+        result.bank.status = value;
+        refreshImportResult();
+      }), '', bankErrorCodes.has('INVALID_BANK_STATUS')),
+      editorField('Global Time Reference', textInput(result.bank.global_time_reference || '', value => {
+        result.bank.global_time_reference = value.trim();
+        refreshImportResult();
+      }), 'half', bankErrorCodes.has('INVALID_GLOBAL_TIME_REFERENCE')),
+      editorField(t.questionOrder, areaInput(Array.isArray(result.bank.question_order) ? result.bank.question_order.join('\n') : '', value => {
+        result.bank.question_order = String(value || '').split(/\r?\n|,/).map(code => code.trim()).filter(Boolean);
+        refreshImportResult();
+      }), 'wide', ['INVALID_QUESTION_COLLECTION', 'EMPTY_QUESTION_BANK', 'MISSING_QUESTION', 'DUPLICATE_ORDER', 'UNORDERED_QUESTION']
+        .some(code => bankErrorCodes.has(code) || result.diagnostics.some(item => item.code === code)))
     ]);
     bankCard.append(bankIdentity, bankGrid, bankAdvanced);
     bankEditor.appendChild(bankCard);
 
     const questions = document.getElementById('preview-questions');
     questions.innerHTML = '';
-    result.bank.question_order.forEach((questionCode, index) => {
-      const question = result.bank.questions[questionCode];
+    const previewOrder = Array.isArray(result.bank.question_order) ? result.bank.question_order : [];
+    previewOrder.forEach((questionCode, index) => {
+      const question = result.bank.questions && typeof result.bank.questions === 'object'
+        ? result.bank.questions[questionCode]
+        : null;
+      if (!question || typeof question !== 'object') {
+        const missing = document.createElement('div');
+        missing.className = 'import-editor import-diagnostic';
+        missing.textContent = localizeDiagnostic({ code: 'MISSING_QUESTION', message: `Question ${questionCode} is absent from questions.` });
+        questions.appendChild(missing);
+        return;
+      }
       const errors = result.diagnostics.filter(item => item.question_code === questionCode);
       const errorCodes = diagnosticCodes(errors);
       const row = document.createElement('div');
@@ -1011,6 +1076,7 @@
       });
       const levelDisplay = readOnlyInput(question.scale?.psychometric_level || '—');
       const statusSelect = selectInput([
+        ['', t.emptyChoice],
         ['draft', 'Draft'],
         ['trial', 'Trial'],
         ['active', 'Active']
@@ -1018,9 +1084,10 @@
         question.status = value;
         refreshImportResult();
       });
-      const options = (question.options || [])
+      const optionList = Array.isArray(question.options) ? question.options : [];
+      const options = optionList
         .map((option, optionIndex) =>
-          `${option.value ?? optionIndex + 1} | ${option.text ?? ''}`
+          `${option?.value ?? optionIndex + 1} | ${option?.text ?? ''}`
         )
         .join('\n');
 
@@ -1036,7 +1103,8 @@
           errorCodes.has('INCOMPATIBLE_SCALE_TYPE') ||
           errorCodes.has('UNRESOLVED_PSYCHOMETRIC_LEVEL') ||
           errorCodes.has('INVALID_PSYCHOMETRIC_LEVEL') ||
-          errorCodes.has('SCALE_LEVEL_MISMATCH');
+          errorCodes.has('SCALE_LEVEL_MISMATCH') ||
+          errorCodes.has('UNREGISTERED_SCALE');
         grid.append(
           editorField(t.scaleId, selectInput(scaleOptions(question, t), question.scale?.id || '', value => {
             applyScaleSelection(question, value);
@@ -1052,7 +1120,7 @@
           question.type = question.type || inferred.type;
           question.scale = inferred.scale;
           refreshImportResult();
-        }), 'wide', ['INVALID_OPTIONS', 'MISSING_OPTIONS', 'INVALID_OPTION', 'MISSING_OPTION_VALUE', 'DUPLICATE_OPTION_VALUE']
+        }), 'wide', ['INVALID_OPTIONS', 'MISSING_OPTIONS', 'INVALID_OPTION', 'MISSING_OPTION_VALUE', 'DUPLICATE_OPTION_VALUE', 'SCALE_OPTIONS_MISMATCH']
           .some(code => errorCodes.has(code))));
       }
       const rangeRelevant = question.type === 'numeric_input' ||
@@ -1063,26 +1131,31 @@
           editorField(t.min, numberInput(question.scale?.min, value => {
           ensureScale(question).min = numberOrNull(value);
           refreshImportResult();
-          })),
+          }), '', errorCodes.has('INVALID_SCALE_RANGE') || errorCodes.has('SCALE_RANGE_MISMATCH')),
           editorField(t.max, numberInput(question.scale?.max, value => {
           ensureScale(question).max = numberOrNull(value);
           refreshImportResult();
-          })),
+          }), '', errorCodes.has('INVALID_SCALE_RANGE') || errorCodes.has('SCALE_RANGE_MISMATCH')),
           editorField(t.step, numberInput(question.scale?.step, value => {
           ensureScale(question).step = numberOrNull(value);
           refreshImportResult();
-          })),
+          }), '', errorCodes.has('INVALID_SCALE_STEP') || errorCodes.has('SCALE_RANGE_MISMATCH')),
           editorField(t.unit, textInput(question.scale?.unit || '', value => {
             ensureScale(question).unit = value.trim() || null;
             refreshImportResult();
-          }))
+          }), '', errorCodes.has('SCALE_UNIT_MISMATCH'))
         );
       }
       const advanced = detailsSection(t.advancedFields, [
         editorField(t.questionCode, textInput(question.code, value => {
           renameImportedQuestion(questionCode, value);
-        })),
-        editorField(t.status, statusSelect),
+        }), '', errorCodes.has('CODE_MISMATCH') || errorCodes.has('INVALID_QUESTION_CODE')),
+        editorField(t.version, numberInput(question.version, value => {
+          question.version = numberOrNull(value);
+          refreshImportResult();
+        }), '', errorCodes.has('INVALID_QUESTION_VERSION')),
+        editorField(t.status, statusSelect, '', errorCodes.has('INVALID_STATUS') ||
+          errorCodes.has('ACTIVE_BANK_QUESTION_STATUS') || errorCodes.has('TRIAL_BANK_QUESTION_STATUS')),
         ...(!rangeRelevant ? [editorField(t.unit, textInput(question.scale?.unit || '', value => {
           ensureScale(question).unit = value.trim() || null;
           refreshImportResult();
@@ -1263,10 +1336,6 @@
   function scaleOptions(question, t) {
     const contracts = QuestionBankImport.scaleContractsForType(question.type);
     const options = [['', t.emptyChoice]];
-    const currentId = String(question.scale?.id || '').trim();
-    if (currentId && !QuestionBankImport.scaleContract(currentId)) {
-      options.push([currentId, `${t.importedScale}: ${currentId}`]);
-    }
     contracts.forEach(contract => {
       options.push([contract.id, `${t.scaleNames[contract.id]} · ${contract.id}`]);
     });
@@ -1288,10 +1357,8 @@
     scale.psychometric_level = contract.psychometric_level;
     question.type = contract.response_type;
     for (const field of ['min', 'max', 'step', 'unit']) {
-      if ((scale[field] === null || scale[field] === undefined || scale[field] === '') &&
-          Object.prototype.hasOwnProperty.call(contract, field)) {
-        scale[field] = contract[field];
-      }
+      if (Object.prototype.hasOwnProperty.call(contract, field)) scale[field] = contract[field];
+      else if (['single_choice', 'multiple_choice', 'dichotomous', 'short_string', 'long_paragraph'].includes(contract.id)) scale[field] = null;
     }
   }
 
@@ -1382,6 +1449,9 @@
       currentImportResult.can_use ? i18n[currentLang].msgSuccess : i18n[currentLang].needsResolution,
       !currentImportResult.can_use
     );
+    if (!currentImportResult.can_use && resolutionFields().length) {
+      window.setTimeout(() => goToResolution(0), 0);
+    }
   }
 
   async function saveAndUseInQuestionnaireConstructor() {
