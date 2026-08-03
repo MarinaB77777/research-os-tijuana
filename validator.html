@@ -471,13 +471,6 @@
     document.getElementById('ui-btn-validate').innerText = t.btnValidate;
   }
 
-  function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-  }
-
   async function parsePdfWithLib(arrayBuffer) {
     if (typeof pdfjsLib === 'undefined') throw new Error("PDF.js не загружен.");
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
@@ -759,6 +752,142 @@
     };
   }
 
+  function validateQuestionBankPackage(packageData) {
+    const diagnostics = QuestionBankImport.validateQuestionBank(packageData);
+    return {
+      documentName: 'Question Bank Package', nodeLabel: 'Questions',
+      nodeCount: Array.isArray(packageData?.question_order) ? packageData.question_order.length : 0,
+      typeCount: new Set(Object.values(packageData?.questions || {}).map(question => question?.type).filter(Boolean)).size,
+      errors: diagnostics.filter(item => item.level === 'error').map(item => '❌ ' + item.message),
+      warnings: diagnostics.filter(item => item.level === 'warning').map(item => '⚠️ ' + item.message)
+    };
+  }
+
+  function validateQuestionnairePackage(packageData) {
+    const errors = [], warnings = [];
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const systemCode = /^[A-Z][A-Z0-9_]*$/;
+    const statuses = ['draft', 'trial', 'active'];
+    const fail = message => errors.push('❌ ' + message);
+    const items = Array.isArray(packageData?.items) ? packageData.items : [];
+    const nodes = packageData?.routing?.nodes;
+
+    if (packageData?.schema !== 'research_os.questionnaire' || packageData?.schema_version !== 1) fail('Требуется research_os.questionnaire schema_version 1.');
+    if (!uuidV4.test(String(packageData?.questionnaire_id || ''))) fail('questionnaire_id должен быть UUID v4.');
+    if (!systemCode.test(String(packageData?.code || ''))) fail('Системный код анкеты должен использовать A–Z, 0–9 и _.');
+    if (!String(packageData?.title || '').trim()) fail('Отсутствует название анкеты.');
+    if (!Number.isInteger(packageData?.version) || packageData.version < 1) fail('Версия анкеты должна быть положительным целым числом.');
+    if (!statuses.includes(packageData?.status)) fail('Статус анкеты должен быть draft, trial или active.');
+    if (!String(packageData?.primary_language || '').trim()) fail('Отсутствует основной язык анкеты.');
+    if (!packageData?.global_time_reference || Number.isNaN(Date.parse(packageData.global_time_reference))) fail('Требуется корректная Global Time Reference.');
+    if (!['standard', 'special'].includes(packageData?.consent?.mode) ||
+        !uuidV4.test(String(packageData?.consent?.consent_id || '')) ||
+        !Number.isInteger(packageData?.consent?.consent_version) || packageData.consent.consent_version < 1) {
+      fail('Требуется корректная привязка standard/special consent с UUID и положительной версией.');
+    }
+    const minimumAnswered = packageData?.completion_policy?.minimum_answered_items;
+    if (!Number.isInteger(minimumAnswered) || minimumAnswered < 1 || packageData?.completion_policy?.require_terminal_route !== true) {
+      fail('Политика завершения должна содержать положительное minimum_answered_items и require_terminal_route: true.');
+    }
+    if (!items.length) fail('Анкета должна содержать хотя бы один элемент.');
+    if (!nodes || typeof nodes !== 'object' || Array.isArray(nodes)) fail('routing.nodes должен быть объектом маршрутизации.');
+
+    const itemById = new Map(), snapshotQuestions = {};
+    items.forEach(function(item, index) {
+      const label = 'Элемент ' + (index + 1);
+      if (!uuidV4.test(String(item?.item_id || ''))) fail(label + ': item_id должен быть UUID v4.');
+      else if (itemById.has(item.item_id)) fail(label + ': item_id должен быть уникальным.');
+      else itemById.set(item.item_id, item);
+      if (item?.position !== index + 1) fail(label + ': позиции должны быть последовательными, начиная с 1.');
+      if (!uuidV4.test(String(item?.source_bank_id || '')) || !Number.isInteger(item?.source_bank_version) || item.source_bank_version < 1) fail(label + ': неверная ссылка на исходный банк/версию.');
+      if (!uuidV4.test(String(item?.question_id || '')) || !Number.isInteger(item?.question_version) || item.question_version < 1) fail(label + ': неверная ссылка на вопрос/версию.');
+      if (!String(item?.source_bank_code || '').trim() || !String(item?.code || '').trim()) fail(label + ': отсутствует код источника или вопроса.');
+      if (typeof item?.required !== 'boolean') fail(label + ': required должен быть логическим значением.');
+      if (!item?.definition_snapshot || typeof item.definition_snapshot !== 'object' || Array.isArray(item.definition_snapshot)) {
+        fail(label + ': отсутствует неизменяемый снимок определения вопроса.');
+      } else {
+        const code = 'ITEM_' + (index + 1);
+        snapshotQuestions[code] = { ...item.definition_snapshot, question_id: item.question_id, code, version: item.question_version };
+      }
+    });
+
+    if (Object.keys(snapshotQuestions).length) {
+      const snapshotBank = {
+        schema: 'research_os.question_bank', schema_version: 2,
+        bank_id: uuidV4.test(String(packageData?.questionnaire_id || '')) ? packageData.questionnaire_id : '00000000-0000-4000-8000-000000000000',
+        code: 'QUESTIONNAIRE_SNAPSHOTS', title: 'Questionnaire snapshots', version: 1,
+        status: statuses.includes(packageData?.status) ? packageData.status : 'draft',
+        primary_language: packageData?.primary_language || 'unknown', global_time_reference: packageData?.global_time_reference || null,
+        question_order: Object.keys(snapshotQuestions), questions: snapshotQuestions
+      };
+      QuestionBankImport.validateQuestionBank(snapshotBank).forEach(function(diagnostic) {
+        const label = diagnostic.question_code ? diagnostic.question_code.replace('ITEM_', 'Элемент ') + ': ' : '';
+        (diagnostic.level === 'error' ? errors : warnings).push((diagnostic.level === 'error' ? '❌ ' : '⚠️ ') + label + diagnostic.message);
+      });
+    }
+
+    if (nodes && typeof nodes === 'object' && !Array.isArray(nodes) && items.length) {
+      const nodeKeys = Object.keys(nodes);
+      if (nodeKeys.length !== itemById.size || nodeKeys.some(itemId => !itemById.has(itemId))) fail('routing.nodes и items должны соответствовать друг другу один-к-одному.');
+      if (!itemById.has(packageData?.start_item_id)) fail('start_item_id не указывает на элемент анкеты.');
+      const nextInOrder = itemId => {
+        const index = items.findIndex(item => item.item_id === itemId);
+        return index >= 0 && index + 1 < items.length ? items[index + 1].item_id : 'end';
+      };
+      const visiting = new Set(), visited = new Map(), reachable = new Set();
+      const walk = function(itemId) {
+        if (itemId === 'end') return 0;
+        if (visiting.has(itemId)) throw new Error('Маршрутизация содержит цикл.');
+        if (visited.has(itemId)) return visited.get(itemId);
+        const node = nodes[itemId];
+        if (!itemById.has(itemId) || !node || !Array.isArray(node.rules)) throw new Error('Для каждого элемента требуется корректный routing node.');
+        visiting.add(itemId); reachable.add(itemId);
+        const values = new Set(), targets = [node.default_target];
+        node.rules.forEach(function(rule) {
+          if (!uuidV4.test(String(rule?.rule_id || '')) || rule?.operator !== 'equals' || !Object.prototype.hasOwnProperty.call(rule || {}, 'value')) throw new Error('Каждое правило маршрутизации требует UUID, operator equals и явное value.');
+          const valueKey = JSON.stringify(rule.value);
+          if (values.has(valueKey)) throw new Error('У одного элемента повторяются условия маршрутизации.');
+          values.add(valueKey); targets.push(rule.target);
+        });
+        let shortest = Infinity;
+        for (const rawTarget of targets) {
+          const target = rawTarget === 'next' ? nextInOrder(itemId) : rawTarget;
+          if (target !== 'end' && !itemById.has(target)) throw new Error('Маршрут указывает на отсутствующий элемент.');
+          shortest = Math.min(shortest, 1 + walk(target));
+        }
+        visiting.delete(itemId); visited.set(itemId, shortest); return shortest;
+      };
+      if (itemById.has(packageData?.start_item_id)) {
+        try {
+          const shortest = walk(packageData.start_item_id);
+          if (reachable.size !== itemById.size) fail('Анкета содержит недостижимые элементы.');
+          if (!Number.isFinite(shortest) || (Number.isInteger(minimumAnswered) && minimumAnswered > shortest)) fail('minimum_answered_items превышает длину кратчайшего маршрута.');
+        } catch (error) { fail(error.message); }
+      }
+    }
+    return {
+      documentName: 'Questionnaire Package', nodeLabel: 'Items', nodeCount: items.length,
+      typeCount: new Set(items.map(item => item?.definition_snapshot?.type).filter(Boolean)).size,
+      errors, warnings
+    };
+  }
+
+  function renderNativeValidation(validation, reportBox) {
+    const valid = validation.errors.length === 0;
+    let html = '<div class="audit-panel ' + (valid ? 'success' : 'error') + '">' +
+      '<div class="audit-header"><span class="audit-status-icon">' + (valid ? '🟢' : '🔴') + '</span><div>' +
+      '<div class="audit-title">' + (valid ? 'SYSTEM CONTRACT COMPLIANT' : 'SYSTEM CONTRACT ERRORS') + '</div>' +
+      '<div class="audit-subtitle">' + escapeHtml(validation.documentName) + (valid ? ' · Data Structure Verification Status: 100%' : ' · Discrepancies detected: ' + validation.errors.length) + '</div></div></div>' +
+      '<div class="audit-metrics-grid"><div class="metric-item"><span class="metric-label">' + escapeHtml(validation.nodeLabel) + '</span><span class="metric-value">' + validation.nodeCount + '</span></div>' +
+      '<div class="metric-item"><span class="metric-label">Native Contract</span><span class="metric-value">' + (valid ? 'Verified' : 'Invalid') + '</span></div>' +
+      '<div class="metric-item"><span class="metric-label">Rendering Types</span><span class="metric-value">' + validation.typeCount + '</span></div>' +
+      '<div class="metric-item"><span class="metric-label">Warnings</span><span class="metric-value">' + validation.warnings.length + '</span></div></div>' +
+      '<div class="audit-explanation"><div class="explanation-title">Technical Scope & Architecture Reference:</div><p>Проверены идентичность, версии, Global Time Reference и структурный контракт документа. Для анкеты дополнительно проверяются consent, снимки вопросов, состав и полный граф маршрутизации.</p><p class="sub-note">* Содержательная валидность исследовательских вопросов проверяется отдельно.</p></div></div>';
+    validation.errors.forEach(error => { html += '<div class="error-item">' + escapeHtml(error) + '</div>'; });
+    validation.warnings.forEach(warning => { html += '<div class="warning-item">' + escapeHtml(warning) + '</div>'; });
+    reportBox.innerHTML = html;
+  }
+
   async function handleFileSelect(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -790,6 +919,14 @@
     } catch (e) {
       reportBox.innerHTML = '<div class="status-badge invalid">ОШИБКА ПАРСИНГА</div>' +
         '<div class="error-item">❌ Не удалось разобрать структуру: ' + escapeHtml(e.message) + '</div>';
+      return;
+    }
+
+    if (rawParsed?.schema === 'research_os.question_bank' || rawParsed?.schema === 'research_os.questionnaire') {
+      const validation = rawParsed.schema === 'research_os.questionnaire'
+        ? validateQuestionnairePackage(rawParsed)
+        : validateQuestionBankPackage(rawParsed);
+      renderNativeValidation(validation, reportBox);
       return;
     }
 
@@ -991,6 +1128,11 @@
     document.getElementById('input-data').value = '';
     document.getElementById('validation-report').innerHTML = '<span style="color: var(--text-muted);">Ожидание данных для проверки...</span>';
   }
+
+  window.ResearchOsValidator = Object.freeze({
+    validateQuestionBankPackage,
+    validateQuestionnairePackage
+  });
 </script>
 
 </body>
