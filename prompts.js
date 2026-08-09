@@ -4,7 +4,7 @@
  * AI output is a research hypothesis only. Bibliographic metadata is checked
  * independently and every method requires an explicit researcher decision.
  */
-const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_open_methods_v4';
+const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_standard_methods_v5';
 
 const VALIDATION_MAPPING_SYSTEM_PROMPT = `
 You are assisting a researcher with candidate discovery for validation mapping.
@@ -29,7 +29,7 @@ The researcher supplies:
   node_id, node_type, label, parent_node_id, and level
 - target_population
 - language_and_cultural_context
-- standard_method_access_scope: "open_only"
+- standard_method_access_scope: "include_all_recognized"
 
 The bank's individual question texts are intentionally not supplied. Do not
 infer or reconstruct them. The deep research question is the unit of candidate
@@ -60,6 +60,12 @@ Return only a JSON object with this exact top-level structure:
         "authors": "authors or null",
         "year": "year or null",
         "url": "authoritative URL or null"
+      },
+      "method_access": {
+        "status": "free | purchase_required | permission_required | unknown",
+        "access_url": "official instrument, manual, developer, or authoritative registry URL for a free method; otherwise null",
+        "access_url_type": "instrument | manual | developer | authoritative_registry | null",
+        "basis": "specific basis for the access classification, or unknown"
       },
       "rights_and_access": {
         "status": "open | permission_required | purchase_required | unknown",
@@ -95,11 +101,20 @@ Rules:
   source cannot be identified, do not return it as a candidate; report the
   corresponding deep research question under potentially_unique_constructs or
   the search gap under search_limitations.
-- Return only methods whose instrument use is supported as available without
-  purchase, subscription, or case-by-case permission. For every returned
-  candidate, rights_and_access.status must be "open" and the explanation must
-  identify the basis for that claim. Article access alone is not evidence that
-  the instrument is free to use.
+- For every deep research question, return all identifiable recognized standard
+  methods that address it fully or partially. Do not suppress a recognized
+  method merely because it is paid, licensed, permission-based, or its access
+  conditions are still unknown.
+- For a method supported as free to use, method_access.status must be "free"
+  and method_access.access_url must identify the official instrument, manual,
+  developer page, or an authoritative instrument registry. A free article is
+  not proof that the instrument itself is free to use.
+- For a paid, licensed, subscription, or permission-based method, return its
+  name and scientific attributes, set the corresponding access status, and set
+  method_access.access_url to null. Never reproduce or link to unauthorized
+  copies of protected materials.
+- If access conditions cannot be established, use "unknown". Never convert
+  unknown into free, paid, safe, or unavailable.
 - A candidate is not a recognized standard merely because it has a DOI.
   Provide a plausible primary validation source; the researcher must confirm
   recognition, scientific fit, and instrument-use rights independently.
