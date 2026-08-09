@@ -150,6 +150,9 @@
     Object.assign(copy.es,{openOnlyRule:'Solo se buscan métodos reconocidos cuyo uso sea gratuito y no requiera compra ni permiso individual.',includedQuestions:'Preguntas incluidas',proposedMethods:'Métodos estándar propuestos',noMethod:'No se encontró un método gratuito reconocido',awaitingReview:'Pendiente de revisión',technicalEvidence:'Evidencia técnica reproducible'});
     Object.assign(copy.en,{openOnlyRule:'Only recognized methods that are free to use without purchase or individual permission are searched.',includedQuestions:'Included questions',proposedMethods:'Proposed standard methods',noMethod:'No recognized free method was found',awaitingReview:'Awaiting review',technicalEvidence:'Reproducible technical evidence'});
     Object.assign(copy.ru,{openOnlyRule:'Ищутся только признанные методики, доступные бесплатно, без покупки и индивидуального разрешения.',includedQuestions:'Вопросы группы',proposedMethods:'Предложенные стандартные методики',noMethod:'Бесплатная признанная методика не найдена',awaitingReview:'Ожидает проверки',technicalEvidence:'Воспроизводимые технические данные'});
+    Object.assign(copy.es,{batchProgress:'Procesando parte {current} de {total}…',batchPause:'Parte {completed} de {total} completada. Pausa de {seconds} s para proteger el límite gratuito…',batchRetry:'El proveedor alcanzó su límite. Reintento de la parte {current} de {total} en {seconds} s…',batchPartial:'Se conservaron los resultados de {completed} de {total} partes. El mapa está incompleto: {error}'});
+    Object.assign(copy.en,{batchProgress:'Processing part {current} of {total}…',batchPause:'Part {completed} of {total} completed. Pausing for {seconds} s to protect the free limit…',batchRetry:'The provider rate limit was reached. Retrying part {current} of {total} in {seconds} s…',batchPartial:'Results from {completed} of {total} parts were preserved. The map is incomplete: {error}'});
+    Object.assign(copy.ru,{batchProgress:'Обрабатывается часть {current} из {total}…',batchPause:'Завершена часть {completed} из {total}. Пауза {seconds} с для защиты бесплатного лимита…',batchRetry:'Достигнут лимит провайдера. Повтор части {current} из {total} через {seconds} с…',batchPartial:'Сохранены результаты {completed} из {total} частей. Карта неполная: {error}'});
     const t=key=>(copy[currentLang]||copy.es)[key]||key;
     const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     function safeHttpUrl(value){try{const url=new URL(String(value||''));return['https:','http:'].includes(url.protocol)?url.href:null}catch(_){return null}}
@@ -219,33 +222,85 @@
     }
     function candidateAllowedByAccess(candidate){return candidate?.rights_and_access?.status==='open'}
 
+    const AI_BATCH_TARGET_LIMIT=2,AI_BATCH_PAUSE_MS=20000,AI_RATE_LIMIT_RETRY_DELAYS_MS=[30000,60000];
+    const wait=milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
+    function formatStatus(key,values){return Object.entries(values).reduce((text,[name,value])=>text.replaceAll(`{${name}}`,String(value)),t(key))}
+    function retryableRateLimit(error){return /(?:429|rate.?limit|too many requests)/i.test(String(error?.message||error||''))}
+    async function requestValidationBatch(scopedInput,current,total){
+      for(let attempt=0;;attempt+=1){
+        try{return await AIRouter.sendRequest('analyzer',VALIDATION_MAPPING_SYSTEM_PROMPT,scopedInput)}
+        catch(error){
+          const delay=AI_RATE_LIMIT_RETRY_DELAYS_MS[attempt];
+          if(!retryableRateLimit(error)||delay===undefined)throw error;
+          runStatus.textContent=formatStatus('batchRetry',{current,total,seconds:Math.ceil(delay/1000)});
+          await wait(delay);
+        }
+      }
+    }
+    function candidateMergeKey(candidate){return candidate.primary_source.doi?`doi:${candidate.primary_source.doi}`:`name:${candidate.method_name.toLocaleLowerCase()}`}
+    function mergeCandidates(registry,incoming){
+      const byKey=new Map(registry.map(candidate=>[candidateMergeKey(candidate),candidate]));
+      incoming.forEach(candidate=>{
+        const key=candidateMergeKey(candidate),existing=byKey.get(key);
+        if(!existing){registry.push(candidate);byKey.set(key,candidate);return}
+        existing.target_node_ids=[...new Set([...(existing.target_node_ids||[]),...(candidate.target_node_ids||[])])];
+        existing.covered_subconstructs=[...new Set([...(existing.covered_subconstructs||[]),...(candidate.covered_subconstructs||[])])];
+        existing.limitations=[...new Set([...(existing.limitations||[]),...(candidate.limitations||[])])];
+      });
+    }
+    function mergeUniqueConstructs(registry,incoming,targets){
+      const byId=new Map(registry.map(item=>[item.target_node_id,item]));
+      incoming.forEach(item=>{
+        const target=targets.find(node=>node.node_id===item?.target_node_id)||targets.find(node=>node.label===item?.subconstruct);
+        if(!target)return;
+        const existing=byId.get(target.node_id),reason=String(item?.reason||'').trim();
+        if(existing){if(reason&&!String(existing.reason||'').includes(reason))existing.reason=[existing.reason,reason].filter(Boolean).join(' | ');return}
+        const normalized={target_node_id:target.node_id,target_label:target.label,reason:reason||null,separate_validation_required:true};
+        registry.push(normalized);byId.set(target.node_id,normalized);
+      });
+    }
+    function refreshUniqueFlags(mappingTree,unique){const ids=new Set(unique.map(item=>item.target_node_id));walkTree(mappingTree,node=>{node.potentially_unique=ids.has(node.node_id)})}
+
     async function runMapping(){
       const auth=session(),spec=mappingSpec();runStatus.className='status';
       if(!auth){runStatus.textContent=t('login');runStatus.className='status error';return}
       if(!completeSpec(spec)){runStatus.textContent=t('required');runStatus.className='status error';return}
-      runButton.disabled=true;runStatus.textContent=t('working');
+      runButton.disabled=true;
       const config=AIRouter.getTaskConfig('analyzer'),startedAt=new Date().toISOString(),mappingTree=buildValidationTree(spec),targets=validationTargets(mappingTree);
       const scopedInput={bank_title:spec.bank_title,validation_targets:targets,target_population:spec.target_population,language_and_cultural_context:spec.language_and_cultural_context,standard_method_access_scope:spec.standard_method_access_scope};
+      const batches=[];for(let offset=0;offset<targets.length;offset+=AI_BATCH_TARGET_LIMIT)batches.push(targets.slice(offset,offset+AI_BATCH_TARGET_LIMIT));
+      mapping={schema:'research_os.validation_mapping',schema_version:2,mapping_id:crypto.randomUUID(),owner_account_id:auth.account_id,created_at:startedAt,updated_at:startedAt,status:'candidate_mapping_in_progress',mapping_tree:mappingTree,candidate_registry:[],comparison_strategy:{unit:'deep_research_question_to_method_outcome',coverage_rule:'union_of_researcher_approved_deep_research_questions',direct_and_aggregate_coverage:true,depth_assessed_separately:true,question_level_mapping:false,scale_level_mapping:false,approval_requires:[...REVIEW_DIMENSIONS]},context:{target_population:spec.target_population,language_and_cultural_context:spec.language_and_cultural_context,standard_method_access_scope:spec.standard_method_access_scope},author_instrument:bankIdentity(),potentially_unique_constructs:[],search_limitations:[],ai_provenance:{task:'deep_research_question_validation_mapping_candidate_discovery',provider:config.provider,model:config.model,prompt_version:VALIDATION_MAPPING_PROMPT_VERSION,requested_at:startedAt,completed_at:null,scoped_input:scopedInput,raw_output_batches:[],batch_processing:{target_limit:AI_BATCH_TARGET_LIMIT,pause_milliseconds:AI_BATCH_PAUSE_MS,total_batches:batches.length,completed_batches:0,status:'in_progress'},human_authority:false},methodology_basis:[{title:'Universal Validation Mapping Principles v1',derived_from:'Health Model Validation Mapping Principles v1',role:'domain-neutral mapping contract; the source domain is an example, not a system boundary'},{title:'Deep Research Questions With Explanations',role:'domain-neutral grouping principle: one deep research question states what a selected group of bank questions allows the researcher to understand'},{title:'COSMIN Manual V2',url:'https://www.cosmin.nl/wp-content/uploads/COSMIN-manual-V2_final.pdf',role:'measurement-property evaluation reference'},{title:'Standards for Educational and Psychological Testing',url:'https://www.testingstandards.net/uploads/7/6/6/4/76643089/standards_2014edition.pdf',role:'testing validity and fairness reference'},{title:'Crossref REST API documentation',url:'https://www.crossref.org/documentation/retrieve-metadata/rest-api/',role:'bibliographic metadata verification only'}]};
+      results.classList.remove('hidden');renderMapping();
+      let completed=0;
       try{
-        const raw=await AIRouter.sendRequest('analyzer',VALIDATION_MAPPING_SYSTEM_PROMPT,scopedInput);
-        const rawCandidates=Array.isArray(raw?.candidates)?raw.candidates:[];
-        const candidates=rawCandidates
-          .map(item=>normalizeCandidate(item,targets))
-          .filter(item=>item.method_name)
-          .filter(item=>candidateAllowedByAccess(item,spec.standard_method_access_scope));
-        const rawUnique=Array.isArray(raw?.potentially_unique_constructs)?raw.potentially_unique_constructs:[];
-        const searchLimitations=Array.isArray(raw?.search_limitations)?raw.search_limitations.filter(item=>String(item||'').trim()):[];
-        if(!candidates.length&&!rawUnique.length&&!searchLimitations.length){
-          throw new Error(t(rawCandidates.length?'noOpenCandidates':'noCandidates'));
+        for(let index=0;index<batches.length;index+=1){
+          const batchTargets=batches[index],current=index+1;
+          runStatus.textContent=formatStatus('batchProgress',{current,total:batches.length});
+          const batchInput={...scopedInput,validation_targets:batchTargets,batch_context:{part:current,total_parts:batches.length,independent_scientific_units:true}};
+          const raw=await requestValidationBatch(batchInput,current,batches.length);
+          const rawCandidates=Array.isArray(raw?.candidates)?raw.candidates:[];
+          const batchCandidates=rawCandidates.map(item=>normalizeCandidate(item,batchTargets)).filter(item=>item.method_name).filter(item=>candidateAllowedByAccess(item,spec.standard_method_access_scope));
+          const rawUnique=Array.isArray(raw?.potentially_unique_constructs)?raw.potentially_unique_constructs:[];
+          const batchLimitations=Array.isArray(raw?.search_limitations)?raw.search_limitations.filter(item=>String(item||'').trim()):[];
+          if(!batchCandidates.length&&!rawUnique.length&&!batchLimitations.length)batchLimitations.push(t(rawCandidates.length?'noOpenCandidates':'noCandidates'));
+          mergeCandidates(mapping.candidate_registry,batchCandidates);
+          mergeUniqueConstructs(mapping.potentially_unique_constructs,rawUnique,batchTargets);
+          mapping.search_limitations=[...new Set([...mapping.search_limitations,...batchLimitations])];
+          mapping.ai_provenance.raw_output_batches.push({batch_index:current,target_node_ids:batchTargets.map(item=>item.node_id),completed_at:new Date().toISOString(),raw_output:raw});
+          completed=current;mapping.ai_provenance.batch_processing.completed_batches=completed;mapping.updated_at=new Date().toISOString();
+          refreshUniqueFlags(mappingTree,mapping.potentially_unique_constructs);refreshValidationTree();renderMapping();
+          if(current<batches.length){runStatus.textContent=formatStatus('batchPause',{completed,total:batches.length,seconds:Math.ceil(AI_BATCH_PAUSE_MS/1000)});await wait(AI_BATCH_PAUSE_MS)}
         }
-        await Promise.all(candidates.map(async candidate=>{candidate.source_verification=candidate.primary_source.doi?await verifyDoi(candidate.primary_source.doi):{status:'not_verified',error:t('doiMissing')}}));
-        const unique=rawUnique.map(item=>{const target=targets.find(node=>node.node_id===item?.target_node_id)||targets.find(node=>node.label===item?.subconstruct);return target?{target_node_id:target.node_id,target_label:target.label,reason:item.reason||null,separate_validation_required:true}:null}).filter(Boolean);
-        const uniqueIds=new Set(unique.map(item=>item.target_node_id));walkTree(mappingTree,node=>{node.potentially_unique=uniqueIds.has(node.node_id)});
-        mapping={schema:'research_os.validation_mapping',schema_version:2,mapping_id:crypto.randomUUID(),owner_account_id:auth.account_id,created_at:startedAt,updated_at:new Date().toISOString(),status:'candidate_mapping_only',mapping_tree:mappingTree,candidate_registry:candidates,comparison_strategy:{unit:'deep_research_question_to_method_outcome',coverage_rule:'union_of_researcher_approved_deep_research_questions',direct_and_aggregate_coverage:true,depth_assessed_separately:true,question_level_mapping:false,scale_level_mapping:false,approval_requires:[...REVIEW_DIMENSIONS]},context:{target_population:spec.target_population,language_and_cultural_context:spec.language_and_cultural_context,standard_method_access_scope:spec.standard_method_access_scope},author_instrument:bankIdentity(),potentially_unique_constructs:unique,search_limitations:searchLimitations,ai_provenance:{task:'deep_research_question_validation_mapping_candidate_discovery',provider:config.provider,model:config.model,prompt_version:VALIDATION_MAPPING_PROMPT_VERSION,requested_at:startedAt,completed_at:new Date().toISOString(),scoped_input:scopedInput,raw_output:raw,human_authority:false},methodology_basis:[{title:'Universal Validation Mapping Principles v1',derived_from:'Health Model Validation Mapping Principles v1',role:'domain-neutral mapping contract; the source domain is an example, not a system boundary'},{title:'Deep Research Questions With Explanations',role:'domain-neutral grouping principle: one deep research question states what a selected group of bank questions allows the researcher to understand'},{title:'COSMIN Manual V2',url:'https://www.cosmin.nl/wp-content/uploads/COSMIN-manual-V2_final.pdf',role:'measurement-property evaluation reference'},{title:'Standards for Educational and Psychological Testing',url:'https://www.testingstandards.net/uploads/7/6/6/4/76643089/standards_2014edition.pdf',role:'testing validity and fairness reference'},{title:'Crossref REST API documentation',url:'https://www.crossref.org/documentation/retrieve-metadata/rest-api/',role:'bibliographic metadata verification only'}]};
-        refreshValidationTree();
-        runStatus.textContent='';results.classList.remove('hidden');renderMapping()
-      }catch(error){runStatus.textContent=error.message;runStatus.className='status error'}
-      finally{runButton.disabled=false}
+        for(const candidate of mapping.candidate_registry)candidate.source_verification=candidate.primary_source.doi?await verifyDoi(candidate.primary_source.doi):{status:'not_verified',error:t('doiMissing')};
+        mapping.status='candidate_mapping_only';mapping.updated_at=new Date().toISOString();mapping.ai_provenance.completed_at=mapping.updated_at;mapping.ai_provenance.batch_processing.status='completed';
+        refreshValidationTree();renderMapping();runStatus.textContent='';runStatus.className='status ok';
+      }catch(error){
+        mapping.status=completed?'partial_candidate_mapping':'candidate_mapping_failed';
+        mapping.updated_at=new Date().toISOString();mapping.ai_provenance.completed_at=mapping.updated_at;
+        Object.assign(mapping.ai_provenance.batch_processing,{status:completed?'partial':'failed',failed_batch:completed+1,error:String(error?.message||error)});
+        refreshValidationTree();renderMapping();
+        runStatus.textContent=formatStatus('batchPartial',{completed,total:batches.length,error:error.message});runStatus.className='status error';
+      }finally{runButton.disabled=false}
     }
 
     function sourceReady(candidate){return['bibliographic_metadata_verified','researcher_reviewed_authoritative_source'].includes(candidate.source_verification.status)}
