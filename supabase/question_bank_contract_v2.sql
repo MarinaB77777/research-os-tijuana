@@ -370,7 +370,10 @@ begin
         );
     end loop;
 
-    if v_position <> jsonb_object_length(package_data -> 'questions') then
+    if v_position <> (
+        select count(*)::integer
+          from jsonb_object_keys(package_data -> 'questions')
+    ) then
         raise exception 'question_order and questions must contain the same questions exactly once';
     end if;
 
