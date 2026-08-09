@@ -143,10 +143,11 @@ begin
         raise exception 'A trial bank may not contain draft question versions';
     end if;
 
-    select status, package_data
+    select qb.status, qb.package_data
       into v_existing_status, v_existing_package
-      from public.question_banks
-     where bank_id = v_bank_id and version = v_bank_version
+      from public.question_banks as qb
+     where qb.bank_id = v_bank_id
+       and qb.version = v_bank_version
      for update;
 
     if found and v_existing_status in ('trial', 'active') then
