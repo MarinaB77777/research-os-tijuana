@@ -503,6 +503,60 @@ async function verifyCrossrefDoi(doi) {
     };
 }
 
+function evidenceSearchTokens(value) {
+    return new Set(String(value || '').toLocaleLowerCase()
+        .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(token => token.length > 2));
+}
+
+function evidenceTitleOverlap(query, title) {
+    const expected = evidenceSearchTokens(query);
+    const observed = evidenceSearchTokens(title);
+    if (!expected.size || !observed.size) return 0;
+    let shared = 0;
+    expected.forEach(token => { if (observed.has(token)) shared += 1; });
+    return shared / expected.size;
+}
+
+async function searchCrossrefMethod(methodName, sourceTitle) {
+    const queryText = [methodName, sourceTitle].map(value => String(value || '').trim()).filter(Boolean).join(' ');
+    const headers = { 'Accept': 'application/json', 'User-Agent': 'Research-OS-Tijuana/1.0' };
+    const params = new URLSearchParams({ 'query.bibliographic': queryText, rows: '5' });
+    const mailto = String(process.env.CROSSREF_MAILTO || '').trim();
+    if (mailto) params.set('mailto', mailto);
+    const response = await fetchWithTimeout(
+        `https://api.crossref.org/works?${params}`,
+        { headers },
+        UPSTREAM_TIMEOUT_MS,
+        'Crossref method search did not respond in time'
+    );
+    if (!response.ok) {
+        const error = new Error(`Crossref method search failed with status ${response.status}`);
+        error.status = 502;
+        throw error;
+    }
+    const items = (await response.json())?.message?.items;
+    return (Array.isArray(items) ? items : []).map(message => {
+        const doi = normalizeDoi(message?.DOI);
+        const title = firstMetadataValue(message?.title);
+        return {
+            doi,
+            title,
+            authors: Array.isArray(message?.author)
+                ? message.author.map(author => [author?.given, author?.family].filter(Boolean).join(' ')).filter(Boolean)
+                : [],
+            published_date: crossrefPublishedDate(message),
+            container_title: firstMetadataValue(message?.['container-title']),
+            publisher: message?.publisher || null,
+            work_type: message?.type || null,
+            url: message?.URL || (doi ? `https://doi.org/${doi}` : null),
+            title_overlap: Math.max(evidenceTitleOverlap(methodName, title), evidenceTitleOverlap(sourceTitle, title)),
+            crossref_score: Number.isFinite(Number(message?.score)) ? Number(message.score) : null
+        };
+    }).filter(item => item.doi && item.title).sort((left, right) => right.title_overlap - left.title_overlap);
+}
+
 async function callAiProvider(request) {
     const apiKey = aiProviderKey(request.provider);
     if (!apiKey) {
@@ -688,6 +742,34 @@ export default async function handler(req, res) {
                     rights_status: 'requires_researcher_review'
                 },
                 metadata
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/evidence/method-search' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) {
+            return res.status(access.status).json({ ok: false, error: access.error });
+        }
+        const methodName = String(requestUrl.searchParams.get('method_name') || '').trim();
+        const sourceTitle = String(requestUrl.searchParams.get('source_title') || '').trim();
+        if (!methodName || methodName.length > 300 || sourceTitle.length > 500) {
+            return res.status(400).json({ ok: false, error: 'A valid method name is required' });
+        }
+        try {
+            const matches = await searchCrossrefMethod(methodName, sourceTitle);
+            return res.status(200).json({
+                ok: true,
+                search: {
+                    status: 'completed',
+                    registry: 'Crossref',
+                    searched_at: new Date().toISOString(),
+                    query: { method_name: methodName, source_title: sourceTitle || null },
+                    scope: 'bibliographic candidate discovery only; method identity, scientific fit, instrument access, and rights require researcher review',
+                    matches
+                }
             });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
