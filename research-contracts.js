@@ -132,6 +132,11 @@
           !Number.isInteger(question.version) || question.version < 1) {
         throw new Error(`Invalid question identity at position ${index + 1}`);
       }
+      const definitionSnapshot = JSON.parse(JSON.stringify(question));
+      delete definitionSnapshot.question_id;
+      delete definitionSnapshot.version;
+      delete definitionSnapshot.code;
+      definitionSnapshot.definition_language = question.definition_language || packageData.primary_language;
       return {
         source_bank_id: packageData.bank_id,
         source_bank_version: packageData.version,
@@ -145,7 +150,10 @@
         options: Array.isArray(question.options) ? question.options : [],
         domain: question.domain || null,
         parameter: question.parameter || null,
-        status: question.status
+        status: question.status,
+        definition_language: definitionSnapshot.definition_language,
+        translation_reference: question.translation_reference || null,
+        definition_snapshot: definitionSnapshot
       };
     });
   }
