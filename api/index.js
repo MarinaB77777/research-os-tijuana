@@ -527,6 +527,7 @@ async function callAiProvider(request) {
                         { role: 'user', content: request.serializedPayload }
                     ],
                     temperature: 0.1,
+                    reasoning_format: 'hidden',
                     response_format: { type: 'json_object' }
                 })
             },
@@ -552,7 +553,19 @@ async function callAiProvider(request) {
         );
     }
     if (!response.ok) {
-        const error = new Error(`AI provider request failed with status ${response.status}`);
+        let providerMessage = '';
+        try {
+            const providerError = await response.json();
+            providerMessage = String(
+                providerError?.error?.message || providerError?.message || ''
+            ).trim().slice(0, 500);
+        } catch (_) {
+            providerMessage = '';
+        }
+        const error = new Error(
+            `AI provider request failed with status ${response.status}` +
+            (providerMessage ? `: ${providerMessage}` : '')
+        );
         error.status = 502;
         throw error;
     }
