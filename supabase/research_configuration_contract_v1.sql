@@ -321,7 +321,10 @@ begin
     ) then
         raise exception 'start_item_id is not a questionnaire item';
     end if;
-    if jsonb_object_length(questionnaire_data #> '{routing,nodes}') <> v_position then
+    if (
+        select count(*)::integer
+          from jsonb_object_keys(questionnaire_data #> '{routing,nodes}')
+    ) <> v_position then
         raise exception 'Routing nodes and questionnaire items must have a one-to-one correspondence';
     end if;
 
