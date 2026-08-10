@@ -73,7 +73,7 @@
     </div>
     <div class="field">
       <label>Language</label>
-      <select id="savedQuestionnaireLanguage"></select>
+      <select id="savedQuestionnaireLanguage" onchange="onSavedQuestionnaireLanguageSelection()"></select>
     </div>
     <div class="field">
       <label data-i18n="questionnaireFile">Abrir cuestionario desde archivo JSON</label>
@@ -167,16 +167,20 @@ const LANGUAGE_NAMES={'es-MX':'Spanish (Mexico)','en-US':'English (United States
 function languageLabel(language){return LANGUAGE_NAMES[language]||language||'Unknown';}
 function renderAvailableLanguages(select,rows,preferred){
  select.innerHTML='';
- const complete=(Array.isArray(rows)?rows:[]).filter(row=>row.coverage_complete!==false);
+ const complete=(Array.isArray(rows)?rows:[]).filter(row=>row.is_source||(
+  row.coverage_complete!==false&&row.verification_status==='verified'
+ ));
  complete.sort((a,b)=>Number(Boolean(b.is_source))-Number(Boolean(a.is_source))||String(a.language).localeCompare(String(b.language)));
  complete.forEach(row=>select.add(new Option(`${languageLabel(row.language)}${row.is_source?' · Source':''}`,row.language)));
  if(preferred&&complete.some(row=>String(row.language).toLowerCase()===String(preferred).toLowerCase()))select.value=complete.find(row=>String(row.language).toLowerCase()===String(preferred).toLowerCase()).language;
 }
-function selectedBank(){const value=document.getElementById('bankSelect').value;if(!value)return null;const [id,version]=value.split(':');return bankCatalog.find(bank=>bank.bank_id===id&&Number(bank.version)===Number(version))||null;}
-function selectedSavedQuestionnaire(){const value=document.getElementById('questionnaireSelect').value;if(!value)return null;const [id,version]=value.split(':');return questionnaireCatalog.find(questionnaire=>questionnaire.questionnaire_id===id&&Number(questionnaire.version)===Number(version))||null;}
-function onBankSelection(){const bank=selectedBank();renderAvailableLanguages(document.getElementById('bankLanguage'),bank?.available_languages,state?.primary_language||bank?.source_language);}
-function onBankLanguageSelection(){const selected=document.getElementById('bankLanguage').value;if(selected&&!state.items.length){state.primary_language=selected;renderIdentity();RC.writeJson(DRAFT_KEY,state);}}
-function onSavedQuestionnaireSelection(){const questionnaire=selectedSavedQuestionnaire();renderAvailableLanguages(document.getElementById('savedQuestionnaireLanguage'),questionnaire?.available_languages,questionnaire?.primary_language);}
+function selectedVariantValue(selectId){const value=document.getElementById(selectId).value;if(!value)return{};const [id,version,language]=value.split(':');return{id,version,language};}
+function selectedBank(){const {id,version}=selectedVariantValue('bankSelect');return bankCatalog.find(bank=>bank.bank_id===id&&Number(bank.version)===Number(version))||null;}
+function selectedSavedQuestionnaire(){const {id,version}=selectedVariantValue('questionnaireSelect');return questionnaireCatalog.find(questionnaire=>questionnaire.questionnaire_id===id&&Number(questionnaire.version)===Number(version))||null;}
+function onBankSelection(){const bank=selectedBank(),variant=selectedVariantValue('bankSelect');renderAvailableLanguages(document.getElementById('bankLanguage'),bank?.available_languages,variant.language||state?.primary_language||bank?.source_language);}
+function onBankLanguageSelection(){const selected=document.getElementById('bankLanguage').value,variant=selectedVariantValue('bankSelect'),value=`${variant.id}:${variant.version}:${selected}`;if([...document.getElementById('bankSelect').options].some(option=>option.value===value))document.getElementById('bankSelect').value=value;if(selected&&!state.items.length){state.primary_language=selected;renderIdentity();RC.writeJson(DRAFT_KEY,state);}}
+function onSavedQuestionnaireSelection(){const questionnaire=selectedSavedQuestionnaire(),variant=selectedVariantValue('questionnaireSelect');renderAvailableLanguages(document.getElementById('savedQuestionnaireLanguage'),questionnaire?.available_languages,variant.language||questionnaire?.primary_language);}
+function onSavedQuestionnaireLanguageSelection(){const selected=document.getElementById('savedQuestionnaireLanguage').value,variant=selectedVariantValue('questionnaireSelect'),value=`${variant.id}:${variant.version}:${selected}`;if([...document.getElementById('questionnaireSelect').options].some(option=>option.value===value))document.getElementById('questionnaireSelect').value=value;}
 
 function blankState(){
  const stamp=RC.nowIso();
@@ -299,10 +303,10 @@ function consumeImportedBank(){
  catch(e){setStatus(e.message,'error');return false;}
 }
 async function loadBankCatalog(){
- try{const data=await RC.requestJson('/question-banks');bankCatalog=data.banks||[];const select=document.getElementById('bankSelect');select.innerHTML='';bankCatalog.forEach(b=>select.add(new Option(`${b.title} · ${b.code} v${b.version} · ${(b.available_languages||[]).length} Language`,`${b.bank_id}:${b.version}`)));const params=new URLSearchParams(location.search),requested=params.get('bank'),version=params.get('version'),requestedLanguage=params.get('lang');if(requested){const value=`${requested}:${version||bankCatalog.find(b=>b.bank_id===requested)?.version||''}`;if([...select.options].some(option=>option.value===value))select.value=value;}onBankSelection();if(requestedLanguage&&[...document.getElementById('bankLanguage').options].some(option=>option.value===requestedLanguage))document.getElementById('bankLanguage').value=requestedLanguage;setStatus(`${bankCatalog.length} Question Bank`,'ok');if(!initialBankOpened&&requested){initialBankOpened=true;await loadSelectedBank();}}catch(e){setStatus(e.message,'error');}
+ try{const data=await RC.requestJson('/question-banks');bankCatalog=data.banks||[];const select=document.getElementById('bankSelect');select.innerHTML='';bankCatalog.forEach(b=>(b.available_languages||[]).filter(row=>row.is_source||(row.coverage_complete!==false&&row.verification_status==='verified')).forEach(row=>select.add(new Option(`${b.title} · ${b.code} v${b.version} · ${languageLabel(row.language)} · ${row.is_source?'Source':'Verified translation'}`,`${b.bank_id}:${b.version}:${row.language}`))));const params=new URLSearchParams(location.search),requested=params.get('bank'),version=params.get('version'),requestedLanguage=params.get('lang');if(requested){const requestedBank=bankCatalog.find(b=>b.bank_id===requested&&(!version||Number(b.version)===Number(version)))||bankCatalog.find(b=>b.bank_id===requested);const language=requestedLanguage||requestedBank?.source_language;const value=`${requested}:${version||requestedBank?.version||''}:${language||''}`;if([...select.options].some(option=>option.value===value))select.value=value;}onBankSelection();setStatus(`${select.options.length} Question Bank Language variant`,'ok');if(!initialBankOpened&&requested){initialBankOpened=true;await loadSelectedBank();}}catch(e){setStatus(e.message,'error');}
 }
 async function loadQuestionnaireCatalog(){
- try{const visibility=RC.researcherToken()?'all':'active';const data=await RC.requestJson(`/questionnaires?status=${visibility}`);questionnaireCatalog=data.questionnaires||[];const select=document.getElementById('questionnaireSelect');select.innerHTML='';questionnaireCatalog.forEach(q=>select.add(new Option(`${q.title} · ${q.code} v${q.version} · ${languageLabel(q.primary_language)}`,`${q.questionnaire_id}:${q.version}`)));const params=new URLSearchParams(location.search),requested=params.get('questionnaire'),version=params.get('version'),requestedLanguage=params.get('lang');if(requested){const value=`${requested}:${version||questionnaireCatalog.find(q=>q.questionnaire_id===requested)?.version||''}`;if([...select.options].some(option=>option.value===value))select.value=value;}onSavedQuestionnaireSelection();if(requestedLanguage&&[...document.getElementById('savedQuestionnaireLanguage').options].some(option=>option.value===requestedLanguage))document.getElementById('savedQuestionnaireLanguage').value=requestedLanguage;if(!initialQuestionnaireOpened&&requested){initialQuestionnaireOpened=true;await loadSavedQuestionnaire();}}catch(e){setStatus(e.message,'error');}
+ try{const visibility=RC.researcherToken()?'all':'active';const data=await RC.requestJson(`/questionnaires?status=${visibility}`);questionnaireCatalog=data.questionnaires||[];const select=document.getElementById('questionnaireSelect');select.innerHTML='';questionnaireCatalog.forEach(q=>(q.available_languages||[{language:q.primary_language,is_source:true}]).filter(row=>row.is_source||(row.coverage_complete!==false&&row.verification_status==='verified')).forEach(row=>select.add(new Option(`${q.title} · ${q.code} v${q.version} · ${languageLabel(row.language)} · ${row.is_source?'Source':'Verified translation'}`,`${q.questionnaire_id}:${q.version}:${row.language}`))));const params=new URLSearchParams(location.search),requested=params.get('questionnaire'),version=params.get('version'),requestedLanguage=params.get('lang');if(requested){const requestedQuestionnaire=questionnaireCatalog.find(q=>q.questionnaire_id===requested&&(!version||Number(q.version)===Number(version)))||questionnaireCatalog.find(q=>q.questionnaire_id===requested);const language=requestedLanguage||requestedQuestionnaire?.primary_language;const value=`${requested}:${version||requestedQuestionnaire?.version||''}:${language||''}`;if([...select.options].some(option=>option.value===value))select.value=value;}onSavedQuestionnaireSelection();if(!initialQuestionnaireOpened&&requested){initialQuestionnaireOpened=true;await loadSavedQuestionnaire();}}catch(e){setStatus(e.message,'error');}
 }
 async function loadConsentCatalog(){
  try{const data=await RC.requestJson('/consents?status=all');consentCatalog=data.consents||[];renderConsentSelection();}catch(e){consentCatalog=[];renderConsentSelection();setStatus(e.message,'error');}
@@ -323,14 +327,14 @@ async function loadQuestionnaireFile(input){
  finally{if(input)input.value='';}
 }
 async function loadSavedQuestionnaire(){
- const value=document.getElementById('questionnaireSelect').value;if(!value)return;const [id,version]=value.split(':');
- const selectedLanguage=document.getElementById('savedQuestionnaireLanguage').value;
+ const value=document.getElementById('questionnaireSelect').value;if(!value)return;const {id,version,language}=selectedVariantValue('questionnaireSelect');
+ const selectedLanguage=language||document.getElementById('savedQuestionnaireLanguage').value;
  try{const data=await RC.requestJson(`/questionnaires/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}&lang=${encodeURIComponent(selectedLanguage)}`);applyQuestionnairePackage(data.questionnaire||data);}
  catch(e){setStatus(e.message,'error');}
 }
 async function loadSelectedBank(){
- const value=document.getElementById('bankSelect').value;if(!value)return;const [id,version]=value.split(':');
- const selectedLanguage=document.getElementById('bankLanguage').value;
+ const value=document.getElementById('bankSelect').value;if(!value)return;const {id,version,language}=selectedVariantValue('bankSelect');
+ const selectedLanguage=language||document.getElementById('bankLanguage').value;
  try{if(!selectedLanguage)throw new Error('A complete Language variant is required');if(state.items.length&&String(state.primary_language).toLowerCase()!==String(selectedLanguage).toLowerCase())throw new Error(`Question Bank Language ${selectedLanguage} does not match Questionnaire Language ${state.primary_language}`);state.primary_language=selectedLanguage;renderIdentity();const data=await RC.requestJson(`/question-banks/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}&lang=${encodeURIComponent(selectedLanguage)}`);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();RC.writeJson(DRAFT_KEY,state);setStatus(`${data.title} · ${languageLabel(data.primary_language)} · ${sourceQuestions.length}`,'ok');}catch(e){sourceQuestions=[];renderQuestions();setStatus(e.message,'error');}
 }
 function buildPackage(){

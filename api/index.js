@@ -115,6 +115,135 @@ function translatedQuestionEntries(documentValue) {
     return [];
 }
 
+const LANGUAGE_MARKERS = Object.freeze({
+    'es-MX': new Set([
+        'que', 'qué', 'como', 'cómo', 'cual', 'cuál', 'cuando', 'cuándo', 'donde', 'dónde',
+        'usted', 'ustedes', 'tu', 'tú', 'su', 'sus', 'se', 'siente', 'sentir', 'tiene', 'tener',
+        'con', 'sin', 'para', 'por', 'del', 'desde', 'hasta', 'muy', 'poco', 'nunca', 'siempre',
+        'frecuencia', 'acuerdo', 'desacuerdo', 'respuesta', 'pregunta', 'apoyo', 'durante'
+    ]),
+    'en-US': new Set([
+        'what', 'how', 'when', 'where', 'which', 'who', 'why', 'you', 'your', 'yours', 'do',
+        'does', 'did', 'are', 'were', 'have', 'has', 'feel', 'felt', 'with', 'without', 'for',
+        'from', 'very', 'never', 'always', 'often', 'sometimes', 'agree', 'disagree', 'answer',
+        'question', 'support', 'during', 'much', 'many'
+    ])
+});
+
+function translatableOptionStrings(option) {
+    if (typeof option === 'string') return [option];
+    if (!option || typeof option !== 'object' || Array.isArray(option)) return [];
+    return ['text', 'label']
+        .filter(field => typeof option[field] === 'string')
+        .map(field => option[field]);
+}
+
+function questionTranslatableStrings(question) {
+    const values = [];
+    for (const field of TRANSLATABLE_QUESTION_FIELDS) {
+        if (typeof question?.[field] === 'string') values.push(question[field]);
+    }
+    for (const option of Array.isArray(question?.options) ? question.options : []) {
+        values.push(...translatableOptionStrings(option));
+    }
+    for (const field of ['explanation', 'domain_title']) {
+        if (typeof question?.source_context?.[field] === 'string') {
+            values.push(question.source_context[field]);
+        }
+    }
+    for (const field of ['anchors', 'labels']) {
+        for (const option of Array.isArray(question?.scale?.[field]) ? question.scale[field] : []) {
+            values.push(...translatableOptionStrings(option));
+        }
+    }
+    return values;
+}
+
+function normalizedLanguageText(value) {
+    return String(value || '').normalize('NFKC').toLocaleLowerCase()
+        .replace(/\s+/g, ' ').trim();
+}
+
+function languageEvidence(strings) {
+    const text = strings.map(normalizedLanguageText).filter(Boolean).join(' ');
+    const letters = [...text].filter(character => /\p{L}/u.test(character));
+    const cyrillic = letters.filter(character => /\p{Script=Cyrillic}/u.test(character)).length;
+    const latin = letters.filter(character => /\p{Script=Latin}/u.test(character)).length;
+    const tokens = text.split(/[^\p{L}]+/u).filter(Boolean);
+    const spanishScore = tokens.reduce((score, token) =>
+        score + (LANGUAGE_MARKERS['es-MX'].has(token) ? 1 : 0), 0) +
+        ((text.match(/[¿¡ñáéíóúü]/g) || []).length * 2);
+    const englishScore = tokens.reduce((score, token) =>
+        score + (LANGUAGE_MARKERS['en-US'].has(token) ? 1 : 0), 0);
+    return {
+        letter_count: letters.length,
+        cyrillic_ratio: letters.length ? cyrillic / letters.length : 0,
+        latin_ratio: letters.length ? latin / letters.length : 0,
+        spanish_score: spanishScore,
+        english_score: englishScore
+    };
+}
+
+function verifyTranslationLanguage(sourceDefinitions, translatedEntries, targetLanguage) {
+    const sourceByKey = sourceDefinitions || {};
+    const sourceStrings = [];
+    const translatedStrings = [];
+    let comparableLetterWeight = 0;
+    let unchangedLetterWeight = 0;
+    for (const entry of translatedEntries) {
+        const key = `${entry.question_id}:${entry.question_version}`;
+        const sourceValues = questionTranslatableStrings(sourceByKey[key]);
+        const targetValues = questionTranslatableStrings(entry.definition);
+        sourceStrings.push(...sourceValues);
+        translatedStrings.push(...targetValues);
+        const pairCount = Math.min(sourceValues.length, targetValues.length);
+        for (let index = 0; index < pairCount; index += 1) {
+            const sourceValue = normalizedLanguageText(sourceValues[index]);
+            const targetValue = normalizedLanguageText(targetValues[index]);
+            const weight = [...sourceValue].filter(character => /\p{L}/u.test(character)).length;
+            if (!weight) continue;
+            comparableLetterWeight += weight;
+            if (sourceValue === targetValue) unchangedLetterWeight += weight;
+        }
+    }
+    const evidence = languageEvidence(translatedStrings);
+    const unchangedRatio = comparableLetterWeight
+        ? unchangedLetterWeight / comparableLetterWeight
+        : 1;
+    const failures = [];
+    if (comparableLetterWeight < 8 || evidence.letter_count < 8) {
+        failures.push('There is not enough natural-language text to verify the target language');
+    }
+    if (unchangedRatio > 0.85) {
+        failures.push('The translated text is substantially unchanged from the source text');
+    }
+    if (targetLanguage === 'ru-RU') {
+        if (evidence.cyrillic_ratio < 0.6) failures.push('The translated text is not predominantly Russian');
+    } else {
+        if (evidence.latin_ratio < 0.75 || evidence.cyrillic_ratio > 0.1) {
+            failures.push(`The translated text does not use the expected ${targetLanguage} writing system`);
+        }
+        if (targetLanguage === 'es-MX' &&
+            (evidence.spanish_score < 2 || evidence.spanish_score <= evidence.english_score)) {
+            failures.push('The translated text does not contain sufficient Spanish language evidence');
+        }
+        if (targetLanguage === 'en-US' &&
+            (evidence.english_score < 2 || evidence.english_score <= evidence.spanish_score)) {
+            failures.push('The translated text does not contain sufficient English language evidence');
+        }
+    }
+    return {
+        status: failures.length ? 'rejected' : 'verified',
+        method: 'research_os_language_evidence_v1',
+        checked_at: new Date().toISOString(),
+        target_language: targetLanguage,
+        comparable_letter_count: comparableLetterWeight,
+        unchanged_ratio: Math.round(unchangedRatio * 10000) / 10000,
+        evidence,
+        failures
+    };
+}
+
 function applyAcceptedQuestionTranslation(sourceQuestion, translatedDefinition, reference, targetLanguage) {
     const translated = cloneJson(sourceQuestion);
     TRANSLATABLE_QUESTION_FIELDS.forEach(field => {
@@ -2251,6 +2380,102 @@ export default async function handler(req, res) {
         }
     }
 
+    if (path === '/question-translations/draft' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const sourceSha256 = String(requestUrl.searchParams.get('source_sha256') || '').toLowerCase();
+        const targetLanguage = String(requestUrl.searchParams.get('target_language') || '');
+        const promptVersion = String(requestUrl.searchParams.get('prompt_version') || '');
+        const provider = String(requestUrl.searchParams.get('provider') || '');
+        const model = String(requestUrl.searchParams.get('model') || '');
+        if (!/^[0-9a-f]{64}$/.test(sourceSha256) || !TRANSLATION_LANGUAGES.has(targetLanguage) ||
+            !promptVersion || !provider || !model) {
+            return res.status(400).json({ ok: false, error: 'Complete translation draft identity is required' });
+        }
+        try {
+            const draftResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_question_translation_draft',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_source_sha256: sourceSha256,
+                    p_target_language: targetLanguage,
+                    p_prompt_version: promptVersion,
+                    p_provider: provider,
+                    p_model: model
+                }
+            );
+            return res.status(200).json({
+                ok: true,
+                draft: Array.isArray(draftResult) ? draftResult[0] || null : draftResult || null
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/question-translations/draft' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const draft = req.body;
+        if (!['research_os.question_bank', 'research_os.questionnaire'].includes(draft?.source_schema) ||
+            !UUID_V4.test(draft?.source_entity_id || '') ||
+            !Number.isInteger(draft?.source_version) || draft.source_version < 1 ||
+            !/^[0-9a-f]{64}$/.test(String(draft?.source_sha256 || '')) ||
+            !TRANSLATION_LANGUAGES.has(draft?.target_language) ||
+            !String(draft?.source_primary_language || '') ||
+            String(draft.source_primary_language).toLowerCase() === String(draft.target_language).toLowerCase() ||
+            !String(draft?.provider || '') || !String(draft?.model || '') ||
+            !String(draft?.prompt_version || '') || !Array.isArray(draft?.translated_items) ||
+            !Number.isInteger(draft?.total_field_count) || draft.total_field_count < 1 ||
+            !Number.isInteger(draft?.completed_field_count) || draft.completed_field_count < 0 ||
+            draft.completed_field_count > draft.total_field_count ||
+            !['in_progress', 'paused', 'completed'].includes(draft?.status)) {
+            return res.status(400).json({ ok: false, error: 'A valid account-owned translation draft is required' });
+        }
+        try {
+            const savedResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_question_translation_draft',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_draft: draft
+                }
+            );
+            return res.status(200).json({
+                ok: true,
+                draft: Array.isArray(savedResult) ? savedResult[0] : savedResult
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/question-translations/draft' && method === 'DELETE') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const draftId = String(requestUrl.searchParams.get('draft_id') || '');
+        if (!UUID_V4.test(draftId)) {
+            return res.status(400).json({ ok: false, error: 'Valid translation draft UUID is required' });
+        }
+        try {
+            const deletedResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'delete_question_translation_draft',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_draft_id: draftId
+                }
+            );
+            return res.status(200).json({ ok: true, deleted: deletedResult === true });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
     if (url.split('?')[0] === '/question-translations' && method === 'GET') {
         const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
         if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
@@ -2273,6 +2498,51 @@ export default async function handler(req, res) {
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
+    }
+
+    if (path === '/question-translations/verify' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const sourceDocument = req.body?.source_document;
+        const translatedDocument = req.body?.translated_document;
+        const targetLanguage = String(translatedDocument?.primary_language || '');
+        const sourceEntries = translatedQuestionEntries(sourceDocument);
+        const translatedEntries = translatedQuestionEntries(translatedDocument);
+        if (!['research_os.question_bank', 'research_os.questionnaire'].includes(sourceDocument?.schema) ||
+            translatedDocument?.schema !== sourceDocument.schema ||
+            !TRANSLATION_LANGUAGES.has(targetLanguage) ||
+            String(sourceDocument?.primary_language || '').toLowerCase() === targetLanguage.toLowerCase() ||
+            !sourceEntries.length || sourceEntries.length !== translatedEntries.length) {
+            return res.status(400).json({ ok: false, error: 'Distinct canonical source and translated documents are required' });
+        }
+        const sourceDefinitions = Object.fromEntries(sourceEntries.map(entry => [
+            `${entry.question_id}:${entry.question_version}`,
+            entry.definition
+        ]));
+        for (let index = 0; index < translatedEntries.length; index += 1) {
+            const sourceEntry = sourceEntries[index];
+            const translatedEntry = translatedEntries[index];
+            if (sourceEntry.question_id !== translatedEntry.question_id ||
+                sourceEntry.question_version !== translatedEntry.question_version ||
+                !jsonSubsetMatches(
+                    questionTranslationStructure(sourceEntry.definition),
+                    questionTranslationStructure(translatedEntry.definition)
+                )) {
+                return res.status(409).json({ ok: false, error: 'Translation changes immutable identity or structure' });
+            }
+        }
+        const languageVerification = verifyTranslationLanguage(
+            sourceDefinitions,
+            translatedEntries,
+            targetLanguage
+        );
+        return res.status(languageVerification.status === 'verified' ? 200 : 422).json({
+            ok: languageVerification.status === 'verified',
+            language_verification: languageVerification,
+            error: languageVerification.status === 'verified'
+                ? undefined
+                : `Translation language verification failed: ${languageVerification.failures.join('; ')}`
+        });
     }
 
     if (url.split('?')[0] === '/question-translations/save' && method === 'POST') {
@@ -2335,12 +2605,27 @@ export default async function handler(req, res) {
                     });
                 }
             }
+            const languageVerification = verifyTranslationLanguage(
+                definitions,
+                entries,
+                targetLanguage
+            );
+            if (languageVerification.status !== 'verified') {
+                return res.status(422).json({
+                    ok: false,
+                    error: `Translation language verification failed: ${languageVerification.failures.join('; ')}`,
+                    language_verification: languageVerification
+                });
+            }
+            const verifiedTranslationData = cloneJson(translationData);
+            verifiedTranslationData.translation_provenance.language_verification =
+                languageVerification;
             const savedResult = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
                 'save_accepted_question_translation_package',
                 {
-                    translation_data: translationData,
+                    translation_data: verifiedTranslationData,
                     p_researcher_account_id: access.principal.account_id
                 }
             );

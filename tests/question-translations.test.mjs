@@ -157,6 +157,123 @@ test('translation cannot change scale values or response structure', async () =>
   }
 });
 
+test('server rejects a target-language label when AI returned substantially unchanged source text', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = researcherAccessThen(async (url, options, call) => {
+    assert.equal(call, 3);
+    assert.match(url, /rpc\/load_question_definitions_for_translation$/);
+    return jsonFetch({ [`${questionId}:1`]: sourceQuestion });
+  });
+  try {
+    const untranslated = translationDocument();
+    untranslated.title = 'Support';
+    untranslated.questions.Q_SUPPORT = structuredClone(sourceQuestion);
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/save', body: untranslated,
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 422);
+    assert.match(res.payload.error, /substantially unchanged/i);
+    assert.equal(res.payload.language_verification.status, 'rejected');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('server rejects English text saved under a Spanish target language', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = researcherAccessThen(async (url, options, call) => {
+    assert.equal(call, 3);
+    return jsonFetch({ [`${questionId}:1`]: sourceQuestion });
+  });
+  try {
+    const wrongLanguage = translationDocument();
+    wrongLanguage.title = 'Daily support';
+    wrongLanguage.questions.Q_SUPPORT.prompt = 'How much support do you experience every day?';
+    wrongLanguage.questions.Q_SUPPORT.options = sourceQuestion.options.map(option => ({
+      ...option, text: `Choice number ${option.value}`
+    }));
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/save', body: wrongLanguage,
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 422);
+    assert.match(res.payload.error, /Spanish language evidence/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('pre-acceptance verification blocks the wrong actual language', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = researcherAccessThen(async () => {
+    throw new Error('No database call is expected after account verification');
+  });
+  try {
+    const source = {
+      ...translationDocument(), primary_language: 'en-US',
+      questions: { Q_SUPPORT: sourceQuestion }
+    };
+    delete source.translation_provenance;
+    const translated = translationDocument();
+    translated.questions.Q_SUPPORT.prompt = 'How much support do you experience every day?';
+    translated.questions.Q_SUPPORT.options = sourceQuestion.options.map(option => ({
+      ...option, text: `Choice number ${option.value}`
+    }));
+    delete translated.translation_provenance;
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/verify',
+      body: { source_document: source, translated_document: translated },
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 422);
+    assert.equal(res.payload.language_verification.target_language, 'es-MX');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('translation batch progress is saved as an account-owned resumable draft', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = researcherAccessThen(async (url, options, call) => {
+    assert.equal(call, 3);
+    assert.match(url, /rpc\/save_question_translation_draft$/);
+    rpcBody = JSON.parse(options.body);
+    return jsonFetch({
+      draft_id: '4fe6d4b3-acde-4e8f-a8a5-6b3ad9b06430',
+      researcher_account_id: researcherId,
+      status: 'in_progress', completed_field_count: 1, total_field_count: 2
+    });
+  });
+  try {
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/draft',
+      body: {
+        source_schema: 'research_os.question_bank', source_entity_id: bankId,
+        source_version: 1, source_sha256: 'b'.repeat(64),
+        source_primary_language: 'en-US', target_language: 'es-MX',
+        provider: 'groq', model: 'openai/gpt-oss-20b',
+        prompt_version: 'canonical_questionnaire_translation_v2',
+        translated_items: [{ id: 'T1', text: 'Apoyo', confidence: 0.9, notes: null }],
+        completed_field_count: 1, total_field_count: 2,
+        status: 'in_progress', last_error: null
+      },
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(rpcBody.p_researcher_account_id, researcherId);
+    assert.equal(rpcBody.p_draft.translated_items.length, 1);
+    assert.equal(res.payload.draft.status, 'in_progress');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('bank language loading requires a complete accepted translation set', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = researcherAccessThen(async (url, options, call) => {
@@ -333,9 +450,10 @@ test('accepted questionnaire language loads translated snapshots without changin
 });
 
 test('translation migration and UI retain immutable source and provenance', async () => {
-  const [migration, catalogMigration, translator, constructor, assessment, vercel] = await Promise.all([
+  const [migration, catalogMigration, integrityMigration, translator, constructor, assessment, vercel] = await Promise.all([
     fs.readFile(new URL('../supabase/question_translation_variants_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../supabase/question_translation_catalog_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../supabase/question_translation_integrity_v2.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../translator.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../assessment.html', import.meta.url), 'utf8'),
@@ -350,9 +468,17 @@ test('translation migration and UI retain immutable source and provenance', asyn
   assert.match(translator, /Translation Registry/);
   assert.match(translator, /loadTranslationRegistry\(\)/);
   assert.match(translator, /Coverage:/);
+  assert.match(translator, /Load from database/);
+  assert.match(translator, /Translate \/ Resume/);
+  assert.match(translator, /question-translations\/draft/);
+  assert.match(translator, /question-translations\/verify/);
+  assert.match(translator, /Verified translation/);
   assert.match(catalogMigration, /list_question_translation_catalog/);
   assert.match(catalogMigration, /coverage_complete/);
   assert.match(catalogMigration, /having count\(distinct/);
+  assert.match(integrityMigration, /question_translation_drafts/);
+  assert.match(integrityMigration, /verification_status = 'verified'/);
+  assert.match(integrityMigration, /require_verified_question_translation_package/);
   assert.match(constructor, /questionnaireLanguage/);
   assert.match(constructor, /id="bankLanguage"/);
   assert.match(constructor, /id="savedQuestionnaireLanguage"/);
@@ -361,4 +487,5 @@ test('translation migration and UI retain immutable source and provenance', asyn
   assert.match(assessment, /question_translation_references/);
   assert.match(assessment, /questionnaire_primary_language/);
   assert.match(vercel, /"source": "\/question-translations"/);
+  assert.match(vercel, /"source": "\/question-translations\/\(\.\*\)"/);
 });
