@@ -28,6 +28,7 @@ const context = vm.createContext({
   Uint8Array,
   Blob,
   URL,
+  URLSearchParams,
   setTimeout,
   clearTimeout,
   alert() {},
@@ -47,6 +48,23 @@ const context = vm.createContext({
     QuestionBankImport: {
       parseStructuredText() {},
       canonicalOrConverted(value) { return value; }
+    },
+    ResearchContracts: {
+      async requestJson(url) {
+        if (url.startsWith('/question-translations/draft?')) return { draft: null };
+        if (url === '/question-translations/draft') {
+          return { draft: { draft_id: '19d2b819-dd71-4f27-a108-a24705a5a914' } };
+        }
+        if (url === '/question-translations/verify') {
+          return {
+            language_verification: {
+              status: 'verified', method: 'research_os_language_evidence_v1',
+              checked_at: '2026-08-10T04:25:38.127Z', failures: []
+            }
+          };
+        }
+        return { ok: true };
+      }
     }
   },
   AIRouter: {
@@ -269,6 +287,42 @@ test('AI translation result must cover every requested field exactly once', () =
   );
 });
 
+test('translation batches retain complete question and response-scale context', () => {
+  const bank = {
+    schema: 'research_os.question_bank', primary_language: 'es-MX', title: 'Decisiones',
+    questions: {
+      CONTROL: {
+        prompt: '¿Lo que ocurre en su vida depende de usted?', type: 'single_select',
+        options: [{ value: 1, text: 'Nunca' }, { value: 5, text: 'Siempre' }],
+        scale: { id: 'frequency_scale', min: 1, max: 5, step: 1 }
+      }
+    }
+  };
+  const entries = plain(run('collectTranslationEntries(bank)', { bank }));
+  const batches = plain(run('translationBatches(entries)', { entries }));
+  const questionItems = batches.flat().filter(item => item.question_code === 'CONTROL');
+  assert.ok(questionItems.length >= 3);
+  assert.ok(questionItems.every(item => item.context.prompt === bank.questions.CONTROL.prompt));
+  assert.deepEqual(questionItems[0].context.response_options, bank.questions.CONTROL.options);
+  assert.deepEqual(questionItems[0].context.scale, bank.questions.CONTROL.scale);
+});
+
+test('translation is blocked when source option values contradict declared scale bounds', () => {
+  const bank = {
+    schema: 'research_os.question_bank', primary_language: 'es-MX',
+    questions: {
+      OPTIMISM: {
+        prompt: '¿Con qué frecuencia?', type: 'single_select',
+        options: [1, 2, 3, 4, 5].map(value => ({ value, text: String(value) })),
+        scale: { id: 'frequency_scale', min: 0, max: 10, step: 1 }
+      }
+    }
+  };
+  const issues = plain(run('validateSourceMeasurementContracts(bank)', { bank }));
+  assert.deepEqual(issues.map(issue => issue.code), ['scale_option_bounds_mismatch']);
+  assert.match(issues[0].message, /1–5.*0–10/);
+});
+
 test('plain-text fallback is limited to TXT and returns a canonical bank', () => {
   let fallbackCalls = 0;
   context.window.QuestionBankImport = {
@@ -324,7 +378,7 @@ test('download remains blocked until an authenticated researcher accepts the AI 
         version: 1,
         prompt: 'Review question?',
         type: 'single_select',
-        options: [{ value: 1, text: 'Yes' }],
+        options: [{ value: 0, text: 'No' }, { value: 1, text: 'Yes' }],
         scale: { id: 'binary', min: 0, max: 1, step: 1 }
       }
     }
@@ -343,7 +397,7 @@ test('download remains blocked until an authenticated researcher accepts the AI 
   await run('loadedDocument = bank; currentFileName = "bank.json"; startTranslation()', { bank });
 
   const pending = plain(run('translatedDocument.translation_provenance'));
-  assert.equal(pending.prompt_version, 'canonical_questionnaire_translation_v1');
+  assert.equal(pending.prompt_version, 'canonical_questionnaire_translation_v3');
   assert.equal(pending.provider, 'groq');
   assert.equal(pending.model, 'openai/gpt-oss-20b');
   assert.equal(pending.source_identity.bank_id, bank.bank_id);
@@ -353,19 +407,24 @@ test('download remains blocked until an authenticated researcher accepts the AI 
   assert.equal(pending.human_disposition.status, 'pending');
   assert.equal(element('downloadBtn').disabled, true);
 
-  run('approveTranslation()');
+  await run('approveTranslation()');
   assert.equal(run('translatedDocument.translation_provenance.human_disposition.status'), 'pending');
   assert.equal(element('downloadBtn').disabled, true);
+
+  run(`translatedEntries.forEach(entry => reviewTranslationField(entry.id, 'accepted'))`);
+  await run('approveTranslation()');
+  assert.equal(run('translatedDocument.translation_provenance.human_disposition.status'), 'pending');
 
   storedSession = JSON.stringify({
     role: 'researcher',
     account_id: 'a22cb0be-acde-42c4-86aa-a1c023b0c329'
   });
-  run('approveTranslation()');
+  await run('approveTranslation()');
   assert.equal(run('translatedDocument.translation_provenance.human_disposition.status'), 'accepted');
   assert.equal(
     run('translatedDocument.translation_provenance.human_disposition.researcher_account_id'),
     'a22cb0be-acde-42c4-86aa-a1c023b0c329'
   );
+  assert.ok(run('translatedDocument.translation_provenance.human_disposition.field_reviews.every(review => review.status === "accepted")'));
   assert.equal(element('downloadBtn').disabled, false);
 });

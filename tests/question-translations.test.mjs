@@ -72,6 +72,10 @@ const sourceQuestion = {
 };
 
 function translationDocument() {
+  const translatedPaths = [
+    ['title'], ['questions', 'Q_SUPPORT', 'prompt'],
+    ...[0, 1, 2, 3, 4].map(index => ['questions', 'Q_SUPPORT', 'options', index, 'text'])
+  ];
   return {
     schema: 'research_os.question_bank',
     schema_version: 2,
@@ -96,10 +100,18 @@ function translationDocument() {
       source_primary_language: 'en-US',
       target_language: 'es-MX',
       source_sha256: 'a'.repeat(64),
+      scoped_input: {
+        translated_field_count: translatedPaths.length,
+        translated_paths: translatedPaths
+      },
       human_disposition: {
         status: 'accepted',
         researcher_account_id: researcherId,
-        decided_at: '2026-08-09T20:00:00.000Z'
+        decided_at: '2026-08-09T20:00:00.000Z',
+        field_reviews: translatedPaths.map((path, index) => ({
+          field_id: `T${index + 1}`, path, status: 'accepted', edited: false,
+          reviewed_at: '2026-08-09T19:59:00.000Z'
+        }))
       }
     }
   };
@@ -139,6 +151,26 @@ test('accepted translation is structurally verified and saved beside the source'
   }
 });
 
+test('server rejects package acceptance without complete field-by-field researcher review', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = researcherAccessThen(async () => {
+    throw new Error('No translation database call is allowed for incomplete human review');
+  });
+  try {
+    const incomplete = translationDocument();
+    incomplete.translation_provenance.human_disposition.field_reviews.pop();
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/save', body: incomplete,
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.payload.error, /complete field-by-field researcher review/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('accepted questionnaire translation normalizes every nested snapshot language before storage', async () => {
   const originalFetch = globalThis.fetch;
   let saveBody;
@@ -167,7 +199,24 @@ test('accepted questionnaire translation normalizes every nested snapshot langua
       schema: 'research_os.ai_translation_provenance', schema_version: 1,
       source_identity: { schema: 'research_os.questionnaire', questionnaire_id: questionnaireId, code: 'SUPPORT_SURVEY', version: 1 },
       source_primary_language: 'en-US', target_language: 'es-MX', source_sha256: 'c'.repeat(64),
-      human_disposition: { status: 'accepted', researcher_account_id: researcherId, decided_at: '2026-08-09T20:00:00.000Z' }
+      scoped_input: {
+        translated_field_count: 7,
+        translated_paths: [
+          ['title'], ['items', 0, 'definition_snapshot', 'prompt'],
+          ...[0, 1, 2, 3, 4].map(index => ['items', 0, 'definition_snapshot', 'options', index, 'text'])
+        ]
+      },
+      human_disposition: {
+        status: 'accepted', researcher_account_id: researcherId,
+        decided_at: '2026-08-09T20:00:00.000Z',
+        field_reviews: [
+          ['title'], ['items', 0, 'definition_snapshot', 'prompt'],
+          ...[0, 1, 2, 3, 4].map(index => ['items', 0, 'definition_snapshot', 'options', index, 'text'])
+        ].map((path, index) => ({
+          field_id: `T${index + 1}`, path, status: 'accepted', edited: false,
+          reviewed_at: '2026-08-09T19:59:00.000Z'
+        }))
+      }
     }
   };
   try {
@@ -556,12 +605,14 @@ test('translation migration and UI retain immutable source and provenance', asyn
   assert.match(translator, /\/question-translations\/save/);
   assert.match(translator, /Translation Registry/);
   assert.match(translator, /loadTranslationRegistry\(\)/);
-  assert.match(translator, /Coverage:/);
+  assert.match(translator, /registry_coverage|Cobertura/);
   assert.match(translator, /Load from database/);
   assert.match(translator, /Translate \/ Resume/);
   assert.match(translator, /question-translations\/draft/);
   assert.match(translator, /question-translations\/verify/);
-  assert.match(translator, /Verified translation/);
+  assert.match(translator, /researcher accepted/i);
+  assert.match(translator, /Automated language check/);
+  assert.match(translator, /field-by-field translation review|Revisión campo por campo/i);
   assert.match(catalogMigration, /list_question_translation_catalog/);
   assert.match(catalogMigration, /coverage_complete/);
   assert.match(catalogMigration, /having count\(distinct/);

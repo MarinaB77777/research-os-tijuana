@@ -2613,6 +2613,25 @@ export default async function handler(req, res) {
         const targetLanguage = String(provenance?.target_language || '');
         const sourceLanguage = String(provenance?.source_primary_language || '');
         const disposition = provenance?.human_disposition;
+        const translatedPaths = provenance?.scoped_input?.translated_paths;
+        const fieldReviews = disposition?.field_reviews;
+        const pathSignatures = Array.isArray(translatedPaths)
+            ? translatedPaths.map(pathValue => JSON.stringify(pathValue))
+            : [];
+        const reviewPathSignatures = Array.isArray(fieldReviews)
+            ? fieldReviews.map(review => JSON.stringify(review?.path))
+            : [];
+        const completeFieldReview = pathSignatures.length > 0 &&
+            provenance?.scoped_input?.translated_field_count === pathSignatures.length &&
+            Array.isArray(fieldReviews) && fieldReviews.length === pathSignatures.length &&
+            new Set(pathSignatures).size === pathSignatures.length &&
+            new Set(reviewPathSignatures).size === reviewPathSignatures.length &&
+            fieldReviews.every((review, index) =>
+                review?.field_id === `T${index + 1}` && review?.status === 'accepted' &&
+                typeof review?.edited === 'boolean' &&
+                review?.reviewed_at && !Number.isNaN(Date.parse(review.reviewed_at)) &&
+                reviewPathSignatures[index] === pathSignatures[index]
+            );
         const entries = translatedQuestionEntries(translationData);
         if (!['research_os.question_bank', 'research_os.questionnaire'].includes(translationData?.schema) ||
             provenance?.schema !== 'research_os.ai_translation_provenance' ||
@@ -2620,13 +2639,14 @@ export default async function handler(req, res) {
             disposition?.status !== 'accepted' ||
             disposition?.researcher_account_id !== access.principal.account_id ||
             !disposition?.decided_at || Number.isNaN(Date.parse(disposition.decided_at)) ||
+            !completeFieldReview ||
             !/^[0-9a-f]{64}$/.test(String(provenance?.source_sha256 || '')) ||
             !TRANSLATION_LANGUAGES.has(targetLanguage) || !sourceLanguage ||
             sourceLanguage.toLowerCase() === targetLanguage.toLowerCase() ||
             translationData?.primary_language !== targetLanguage || !entries.length) {
             return res.status(400).json({
                 ok: false,
-                error: 'Accepted canonical translation, distinct supported languages, source digest, and researcher disposition are required'
+                error: 'Accepted canonical translation, complete field-by-field researcher review, distinct supported languages, source digest, and researcher disposition are required'
             });
         }
         const uniqueReferences = [];
