@@ -296,6 +296,67 @@ function applyAcceptedQuestionTranslation(sourceQuestion, translatedDefinition, 
     translated.translation_reference = reference;
     return translated;
 }
+
+function normalizeTranslatedDocumentLanguageMetadata(documentValue, targetLanguage) {
+    const normalized = cloneJson(documentValue);
+    normalized.primary_language = targetLanguage;
+    if (normalized.schema === 'research_os.question_bank') {
+        normalized.questions = Object.fromEntries(
+            Object.entries(normalized.questions || {}).map(([code, question]) => [
+                code,
+                {
+                    ...question,
+                    definition_language: targetLanguage,
+                    translation_reference: null
+                }
+            ])
+        );
+    } else if (normalized.schema === 'research_os.questionnaire') {
+        normalized.items = (normalized.items || []).map(item => ({
+            ...item,
+            definition_snapshot: {
+                ...(item.definition_snapshot || {}),
+                definition_language: targetLanguage,
+                translation_reference: null
+            }
+        }));
+    }
+    return normalized;
+}
+
+function exactCatalogVariants(catalog, sourceSchema, sourceEntityId, sourceVersion, sourceLanguage) {
+    const source = {
+        source_entity_id: sourceEntityId,
+        source_version: sourceVersion,
+        language: sourceLanguage,
+        is_source: true,
+        coverage_complete: true,
+        verification_status: 'source',
+        translation_package_id: null,
+        translation_version: null
+    };
+    const translations = (Array.isArray(catalog?.packages) ? catalog.packages : [])
+        .filter(row =>
+            row.source_schema === sourceSchema &&
+            row.source_entity_id === sourceEntityId &&
+            Number(row.source_version) === Number(sourceVersion) &&
+            row.coverage_complete === true &&
+            row.verification_status === 'verified'
+        )
+        .map(row => ({
+            source_entity_id: row.source_entity_id,
+            source_version: row.source_version,
+            language: row.target_language,
+            is_source: false,
+            coverage_complete: true,
+            verification_status: row.verification_status,
+            translation_package_id: row.translation_package_id,
+            translation_version: row.translation_version,
+            accepted_at: row.accepted_at,
+            source_sha256: row.source_sha256
+        }));
+    return [source, ...translations];
+}
 const UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 8000;
@@ -1845,7 +1906,7 @@ export default async function handler(req, res) {
                     (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
                 );
             }
-            let languageRows = [];
+            let translationCatalog = null;
             if (access) {
                 const catalogResult = await callSupabaseRpc(
                     supabaseUrl,
@@ -1853,25 +1914,16 @@ export default async function handler(req, res) {
                     'list_question_translation_catalog',
                     { p_researcher_account_id: access.principal.account_id }
                 );
-                const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
-                languageRows = Array.isArray(catalog?.bank_languages) ? catalog.bank_languages : [];
+                translationCatalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
             }
             banks = banks.map(bank => {
-                const available = languageRows.filter(row =>
-                    row.source_entity_id === bank.bank_id &&
-                    Number(row.source_version) === Number(bank.version)
+                const available = exactCatalogVariants(
+                    translationCatalog,
+                    'research_os.question_bank',
+                    bank.bank_id,
+                    bank.version,
+                    bank.primary_language
                 );
-                if (!available.some(row =>
-                    String(row.language).toLowerCase() === String(bank.primary_language).toLowerCase()
-                )) {
-                    available.unshift({
-                        source_entity_id: bank.bank_id,
-                        source_version: bank.version,
-                        language: bank.primary_language,
-                        is_source: true,
-                        coverage_complete: true
-                    });
-                }
                 return { ...bank, source_language: bank.primary_language, available_languages: available };
             });
             return res.status(200).json({ ok: true, banks });
@@ -2197,7 +2249,7 @@ export default async function handler(req, res) {
             } else {
                 questionnaires = questionnaires.filter(questionnaire => questionnaire.status === 'active');
             }
-            let languageRows = [];
+            let translationCatalog = null;
             if (access) {
                 const catalogResult = await callSupabaseRpc(
                     supabaseUrl,
@@ -2205,27 +2257,16 @@ export default async function handler(req, res) {
                     'list_question_translation_catalog',
                     { p_researcher_account_id: access.principal.account_id }
                 );
-                const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
-                languageRows = Array.isArray(catalog?.questionnaire_languages)
-                    ? catalog.questionnaire_languages
-                    : [];
+                translationCatalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
             }
             questionnaires = questionnaires.map(questionnaire => {
-                const available = languageRows.filter(row =>
-                    row.source_entity_id === questionnaire.questionnaire_id &&
-                    Number(row.source_version) === Number(questionnaire.version)
+                const available = exactCatalogVariants(
+                    translationCatalog,
+                    'research_os.questionnaire',
+                    questionnaire.questionnaire_id,
+                    questionnaire.version,
+                    questionnaire.primary_language
                 );
-                if (!available.some(row =>
-                    String(row.language).toLowerCase() === String(questionnaire.primary_language).toLowerCase()
-                )) {
-                    available.unshift({
-                        source_entity_id: questionnaire.questionnaire_id,
-                        source_version: questionnaire.version,
-                        language: questionnaire.primary_language,
-                        is_source: true,
-                        coverage_complete: true
-                    });
-                }
                 return {
                     ...questionnaire,
                     source_language: questionnaire.primary_language,
@@ -2246,8 +2287,14 @@ export default async function handler(req, res) {
         const questionnaireReference = decodeURIComponent(urlObj.pathname.slice('/questionnaires/'.length));
         const requestedVersion = urlObj.searchParams.get('version');
         const requestedLanguage = urlObj.searchParams.get('lang');
-        if (requestedLanguage && !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
-            return res.status(400).json({ ok: false, error: 'Requested questionnaire language is not supported' });
+        const requestedTranslationPackageId = urlObj.searchParams.get('translation_package_id');
+        const requestedTranslationVersion = urlObj.searchParams.get('translation_version');
+        if (!requestedVersion || !Number.isInteger(Number(requestedVersion)) || Number(requestedVersion) < 1 ||
+            !requestedLanguage || !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Exact questionnaire version and supported language are required'
+            });
         }
         if (!questionnaireReference || questionnaireReference === 'save') {
             return res.status(400).json({ ok: false, error: 'Questionnaire UUID or code is required' });
@@ -2259,7 +2306,7 @@ export default async function handler(req, res) {
                 'load_questionnaire_package',
                 {
                     questionnaire_reference: questionnaireReference,
-                    requested_version: requestedVersion ? Number(requestedVersion) : null
+                    requested_version: Number(requestedVersion)
                 }
             );
             let questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
@@ -2281,6 +2328,12 @@ export default async function handler(req, res) {
                 const sourceLanguage = questionnaire.primary_language;
                 const items = Array.isArray(questionnaire.items) ? questionnaire.items : [];
                 if (requestedLanguage.toLowerCase() === String(sourceLanguage || '').toLowerCase()) {
+                    if (requestedTranslationPackageId || requestedTranslationVersion) {
+                        return res.status(400).json({
+                            ok: false,
+                            error: 'A source questionnaire variant cannot use a translation package'
+                        });
+                    }
                     questionnaire = {
                         ...questionnaire,
                         items: items.map(item => ({
@@ -2299,23 +2352,42 @@ export default async function handler(req, res) {
                             error: 'Researcher login is required to load accepted translations'
                         });
                     }
+                    if (!UUID_V4.test(requestedTranslationPackageId || '') ||
+                        !Number.isInteger(Number(requestedTranslationVersion)) ||
+                        Number(requestedTranslationVersion) < 1) {
+                        return res.status(400).json({
+                            ok: false,
+                            error: 'Exact translation package and translation version are required'
+                        });
+                    }
                     const references = [...new Map(items.map(item => [
                         `${item.question_id}:${item.question_version}`,
                         { question_id: item.question_id, question_version: item.question_version }
                     ])).values()];
-                    const translationResult = await callSupabaseRpc(
+                    const exactPackageResult = await callSupabaseRpc(
                         supabaseUrl,
                         supabaseAdminKey,
-                        'load_question_translation_variants',
+                        'load_exact_question_translation_package',
                         {
                             p_researcher_account_id: access.principal.account_id,
+                            p_translation_package_id: requestedTranslationPackageId,
+                            p_source_schema: 'research_os.questionnaire',
+                            p_source_entity_id: questionnaire.questionnaire_id,
+                            p_source_version: questionnaire.version,
                             p_target_language: requestedLanguage,
-                            p_question_references: references
+                            p_translation_version: Number(requestedTranslationVersion)
                         }
                     );
-                    const translations = Array.isArray(translationResult)
-                        ? translationResult[0]
-                        : translationResult;
+                    const exactPackage = Array.isArray(exactPackageResult)
+                        ? exactPackageResult[0]
+                        : exactPackageResult;
+                    if (!exactPackage) {
+                        return res.status(404).json({
+                            ok: false,
+                            error: 'Exact accepted questionnaire translation package was not found'
+                        });
+                    }
+                    const translations = exactPackage.translations || {};
                     const missing = items.filter(item =>
                         !translations?.[`${item.question_id}:${item.question_version}`]
                     ).map(item => item.code);
@@ -2328,21 +2400,7 @@ export default async function handler(req, res) {
                             source_language: sourceLanguage
                         });
                     }
-                    const documentResult = await callSupabaseRpc(
-                        supabaseUrl,
-                        supabaseAdminKey,
-                        'load_question_translation_document',
-                        {
-                            p_researcher_account_id: access.principal.account_id,
-                            p_source_schema: 'research_os.questionnaire',
-                            p_source_entity_id: questionnaire.questionnaire_id,
-                            p_source_version: questionnaire.version,
-                            p_target_language: requestedLanguage
-                        }
-                    );
-                    const translatedDocument = Array.isArray(documentResult)
-                        ? documentResult[0]
-                        : documentResult;
+                    const translatedDocument = exactPackage.translated_document;
                     const translatedTopLevel = {};
                     for (const field of ['title', 'description', 'instructions', 'introduction', 'completion_message']) {
                         if (Object.prototype.hasOwnProperty.call(translatedDocument || {}, field)) {
@@ -2369,7 +2427,9 @@ export default async function handler(req, res) {
                         translation_set: {
                             status: 'accepted',
                             target_language: requestedLanguage,
-                            question_count: references.length
+                            question_count: references.length,
+                            translation_package_id: requestedTranslationPackageId,
+                            translation_version: Number(requestedTranslationVersion)
                         }
                     };
                 }
@@ -2617,7 +2677,10 @@ export default async function handler(req, res) {
                     language_verification: languageVerification
                 });
             }
-            const verifiedTranslationData = cloneJson(translationData);
+            const verifiedTranslationData = normalizeTranslatedDocumentLanguageMetadata(
+                translationData,
+                targetLanguage
+            );
             verifiedTranslationData.translation_provenance.language_verification =
                 languageVerification;
             const savedResult = await callSupabaseRpc(
@@ -2786,8 +2849,14 @@ export default async function handler(req, res) {
         const bankReference = decodeURIComponent(urlObj.pathname.slice('/question-banks/'.length));
         const requestedVersion = urlObj.searchParams.get('version');
         const requestedLanguage = urlObj.searchParams.get('lang');
-        if (requestedLanguage && !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
-            return res.status(400).json({ ok: false, error: 'Requested question language is not supported' });
+        const requestedTranslationPackageId = urlObj.searchParams.get('translation_package_id');
+        const requestedTranslationVersion = urlObj.searchParams.get('translation_version');
+        if (!requestedVersion || !Number.isInteger(Number(requestedVersion)) || Number(requestedVersion) < 1 ||
+            !requestedLanguage || !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Exact question-bank version and supported language are required'
+            });
         }
         if (!bankReference || bankReference === 'save') {
             return res.status(400).json({ ok: false, error: 'Bank UUID or code is required' });
@@ -2803,7 +2872,7 @@ export default async function handler(req, res) {
                 : 'load_question_bank_package';
             const requestBody = {
                 bank_reference: bankReference,
-                requested_version: requestedVersion ? Number(requestedVersion) : null
+                requested_version: Number(requestedVersion)
             };
             if (access) requestBody.p_researcher_account_id = access.principal.account_id;
             const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${loadFunction}`, {
@@ -2835,6 +2904,12 @@ export default async function handler(req, res) {
                 const sourceLanguage = packageData.primary_language;
                 const questionEntries = Object.entries(packageData.questions || {});
                 if (requestedLanguage.toLowerCase() === String(sourceLanguage || '').toLowerCase()) {
+                    if (requestedTranslationPackageId || requestedTranslationVersion) {
+                        return res.status(400).json({
+                            ok: false,
+                            error: 'A source question-bank variant cannot use a translation package'
+                        });
+                    }
                     packageData.questions = Object.fromEntries(questionEntries.map(([code, question]) => [
                         code,
                         { ...question, definition_language: sourceLanguage, translation_reference: null }
@@ -2843,21 +2918,38 @@ export default async function handler(req, res) {
                     if (!access) {
                         return res.status(401).json({ ok: false, error: 'Researcher login is required to load accepted translations' });
                     }
-                    const references = questionEntries.map(([, question]) => ({
-                        question_id: question.question_id,
-                        question_version: question.version
-                    }));
-                    const translationResult = await callSupabaseRpc(
+                    if (!UUID_V4.test(requestedTranslationPackageId || '') ||
+                        !Number.isInteger(Number(requestedTranslationVersion)) ||
+                        Number(requestedTranslationVersion) < 1) {
+                        return res.status(400).json({
+                            ok: false,
+                            error: 'Exact translation package and translation version are required'
+                        });
+                    }
+                    const exactPackageResult = await callSupabaseRpc(
                         supabaseUrl,
                         supabaseAdminKey,
-                        'load_question_translation_variants',
+                        'load_exact_question_translation_package',
                         {
                             p_researcher_account_id: access.principal.account_id,
+                            p_translation_package_id: requestedTranslationPackageId,
+                            p_source_schema: 'research_os.question_bank',
+                            p_source_entity_id: packageData.bank_id,
+                            p_source_version: packageData.version,
                             p_target_language: requestedLanguage,
-                            p_question_references: references
+                            p_translation_version: Number(requestedTranslationVersion)
                         }
                     );
-                    const translations = Array.isArray(translationResult) ? translationResult[0] : translationResult;
+                    const exactPackage = Array.isArray(exactPackageResult)
+                        ? exactPackageResult[0]
+                        : exactPackageResult;
+                    if (!exactPackage) {
+                        return res.status(404).json({
+                            ok: false,
+                            error: 'Exact accepted question-bank translation package was not found'
+                        });
+                    }
+                    const translations = exactPackage.translations || {};
                     const missing = questionEntries.filter(([, question]) =>
                         !translations?.[`${question.question_id}:${question.version}`]
                     ).map(([code]) => code);
@@ -2881,10 +2973,17 @@ export default async function handler(req, res) {
                     }));
                     packageData.source_primary_language = sourceLanguage;
                     packageData.primary_language = requestedLanguage;
+                    for (const field of ['title', 'description', 'instructions', 'introduction']) {
+                        if (Object.prototype.hasOwnProperty.call(exactPackage.translated_document || {}, field)) {
+                            packageData[field] = exactPackage.translated_document[field];
+                        }
+                    }
                     packageData.translation_set = {
                         status: 'accepted',
                         target_language: requestedLanguage,
-                        question_count: questionEntries.length
+                        question_count: questionEntries.length,
+                        translation_package_id: requestedTranslationPackageId,
+                        translation_version: Number(requestedTranslationVersion)
                     };
                 }
             }
