@@ -42,6 +42,32 @@ function validQuestionScaleContract(question) {
 }
 
 const TRANSLATION_LANGUAGES = new Set(['es-MX', 'en-US', 'ru-RU']);
+const RESEARCH_OS_TABLE_CONTRACT = Object.freeze([
+    'app_users',
+    'question_banks', 'question_definitions', 'question_bank_items',
+    'research_response_records',
+    'parameter_definitions', 'questionnaires', 'questionnaire_items',
+    'questionnaire_routes',
+    'question_translation_packages', 'question_translation_variants',
+    'question_translation_drafts',
+    'research_os_accounts', 'research_os_auth_sessions',
+    'research_os_entity_ownership', 'research_os_ai_preferences',
+    'research_os_collection_sessions',
+    'consent_documents', 'questionnaire_consent_bindings', 'consent_acceptances',
+    'research_studies', 'research_study_groups', 'research_study_timepoints',
+    'research_study_invitations', 'research_study_questionnaire_assignments',
+    'research_study_enrollments', 'research_study_group_memberships',
+    'research_participant_measurements'
+]);
+const RESEARCH_OS_CRITICAL_RPC_CONTRACT = Object.freeze([
+    'list_question_banks', 'load_question_bank_package',
+    'load_question_bank_package_for_account', 'save_owned_question_bank_package',
+    'list_questionnaires', 'load_questionnaire_package',
+    'save_owned_questionnaire_with_consent',
+    'list_question_translation_catalog', 'load_exact_question_translation_package',
+    'list_studies_for_account', 'load_study_package_for_account',
+    'list_respondent_study_sessions', 'load_respondent_collection_session'
+]);
 const TRANSLATABLE_QUESTION_FIELDS = Object.freeze([
     'prompt', 'instruction', 'instructions', 'help_text', 'description'
 ]);
@@ -1874,6 +1900,54 @@ export default async function handler(req, res) {
                 }
             );
             return res.status(200).json({ ok: true, result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/database/contract-audit' && method === 'GET') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const tableResults = await Promise.all(RESEARCH_OS_TABLE_CONTRACT.map(async table => {
+                const response = await fetchWithTimeout(
+                    `${supabaseUrl}/rest/v1/${encodeURIComponent(table)}?select=*&limit=0`,
+                    { headers: serviceHeaders(supabaseAdminKey) }
+                );
+                return {
+                    table,
+                    status: response.ok ? 'available' : 'missing_or_unavailable',
+                    http_status: response.status
+                };
+            }));
+            const schemaResponse = await fetchWithTimeout(`${supabaseUrl}/rest/v1/`, {
+                headers: serviceHeaders(supabaseAdminKey, {
+                    'Accept': 'application/openapi+json'
+                })
+            });
+            const schema = schemaResponse.ok ? await schemaResponse.json() : null;
+            const rpcResults = RESEARCH_OS_CRITICAL_RPC_CONTRACT.map(rpc => ({
+                rpc,
+                status: schema?.paths?.[`/rpc/${rpc}`] ? 'available' : 'missing_or_unavailable'
+            }));
+            const missingTables = tableResults.filter(row => row.status !== 'available');
+            const missingRpcs = rpcResults.filter(row => row.status !== 'available');
+            return res.status(200).json({
+                ok: true,
+                checked_at: new Date().toISOString(),
+                table_contract: tableResults,
+                critical_rpc_contract: rpcResults,
+                expected_table_count: RESEARCH_OS_TABLE_CONTRACT.length,
+                available_table_count: tableResults.length - missingTables.length,
+                expected_rpc_count: RESEARCH_OS_CRITICAL_RPC_CONTRACT.length,
+                available_rpc_count: rpcResults.length - missingRpcs.length,
+                missing_tables: missingTables.map(row => row.table),
+                missing_rpcs: missingRpcs.map(row => row.rpc),
+                all_available: missingTables.length === 0 && missingRpcs.length === 0
+            });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
