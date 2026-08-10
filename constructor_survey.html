@@ -71,6 +71,14 @@
       <label data-i18n="questionnaireFile">Abrir cuestionario desde archivo JSON</label>
       <input id="questionnaireFile" type="file" accept=".json,.questionnaire.json,application/json" onchange="loadQuestionnaireFile(this)">
     </div>
+    <div class="field">
+      <label data-i18n="questionnaireLanguage">Idioma del cuestionario</label>
+      <select id="questionnaireLanguage" onchange="onQuestionnaireLanguage()">
+        <option value="es-MX">Español (México)</option>
+        <option value="en-US">English (United States)</option>
+        <option value="ru-RU">Русский</option>
+      </select>
+    </div>
     <div class="field"><label data-i18n="name">Nombre</label><input id="name" oninput="onName()"></div>
     <div class="grid2">
       <div class="field"><label data-i18n="code">Código</label><input id="code" readonly></div>
@@ -138,6 +146,12 @@ const completionTexts={
  ru:{requiredItem:'Обязательный ответ на этом маршруте',minimumAnswers:'Минимум ответов для завершения',requiredMissing:'Ответьте на обязательный вопрос перед продолжением.',routingCycle:'В переходах обнаружен цикл.',unreachableItems:'Некоторые элементы недостижимы из первого элемента.',minimumTooHigh:'Минимальный порог ответов превышает самый короткий допустимый маршрут.'}
 };
 Object.keys(completionTexts).forEach(key=>Object.assign(texts[key],completionTexts[key]));
+const languageTexts={
+ es:{questionnaireLanguage:'Idioma del cuestionario',selectLanguageBank:'Idioma cambiado. Abra de nuevo cada banco para cargar preguntas aceptadas en este idioma.',languageMismatch:'El banco importado no coincide con el idioma del cuestionario.'},
+ en:{questionnaireLanguage:'Questionnaire language',selectLanguageBank:'Language changed. Open each bank again to load accepted questions in this language.',languageMismatch:'The imported bank does not match the questionnaire language.'},
+ ru:{questionnaireLanguage:'Язык анкеты',selectLanguageBank:'Язык изменён. Заново откройте каждый банк, чтобы загрузить принятые вопросы на этом языке.',languageMismatch:'Язык импортированного банка не совпадает с языком анкеты.'}
+};
+Object.keys(languageTexts).forEach(key=>Object.assign(texts[key],languageTexts[key]));
 const STANDARD_CONSENT_ID='00000000-0000-4000-8000-000000000001';
 let lang='es', bankCatalog=[], questionnaireCatalog=[], consentCatalog=[], sourceQuestions=[], state,initialBankOpened=false,initialQuestionnaireOpened=false;
 
@@ -152,6 +166,10 @@ function setLanguage(value){
  document.getElementById('lang').value=lang; renderQuestions(); renderItems(); renderIdentity();
 }
 function onName(){state.name=document.getElementById('name').value;state.code=RC.normalizeCode(state.name,'QUESTIONNAIRE');renderIdentity(false);saveDraft();}
+function onQuestionnaireLanguage(){
+ state.primary_language=document.getElementById('questionnaireLanguage').value;
+ sourceQuestions=[];renderQuestions();RC.writeJson(DRAFT_KEY,state);setStatus(texts[lang].selectLanguageBank,'');
+}
 function saveDraft(){
  readIdentity();
  RC.writeJson(DRAFT_KEY,state);
@@ -161,6 +179,7 @@ function readIdentity(){
  if(!state)return;
  state.name=document.getElementById('name').value.trim();state.code=RC.normalizeCode(state.name,'QUESTIONNAIRE');
  state.version=Number(document.getElementById('version').value);state.status=document.getElementById('status').value;
+ state.primary_language=document.getElementById('questionnaireLanguage').value;
  state.description=document.getElementById('description').value.trim();state.start_item_id=document.getElementById('start').value||null;
  state.completion_policy={minimum_answered_items:Number(document.getElementById('minimumAnswers').value),require_terminal_route:true};
  const mode=document.getElementById('consentMode').value;
@@ -174,6 +193,7 @@ function readIdentity(){
 }
 function renderIdentity(writeValues=true){
  if(writeValues){document.getElementById('name').value=state.name;document.getElementById('version').value=state.version;document.getElementById('status').value=state.status;document.getElementById('description').value=state.description;}
+ document.getElementById('questionnaireLanguage').value=state.primary_language||'es-MX';
  document.getElementById('code').value=state.code;document.getElementById('uuid').value=state.questionnaire_id;document.getElementById('gtr').value=state.global_time_reference;
  state.completion_policy=state.completion_policy||{minimum_answered_items:1,require_terminal_route:true};document.getElementById('minimumAnswers').value=state.completion_policy.minimum_answered_items||1;
  state.consent=state.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};
@@ -241,7 +261,8 @@ function renderItems(){
  renderIdentity(false);
 }
 function addQuestion(q){
- state.items.push({item_id:RC.createUuid(),source_bank_id:q.source_bank_id,source_bank_version:q.source_bank_version,source_bank_code:q.source_bank_code,question_id:q.question_id,question_version:q.question_version,code:q.code,definition_snapshot:{prompt:q.prompt,type:q.type,scale:q.scale,options:q.options,domain:q.domain,parameter:q.parameter,status:q.status},required:true,default_target:'next',rules:[]});
+ const snapshot=q.definition_snapshot?JSON.parse(JSON.stringify(q.definition_snapshot)):{prompt:q.prompt,type:q.type,scale:q.scale,options:q.options,domain:q.domain,parameter:q.parameter,status:q.status,definition_language:q.definition_language||state.primary_language,translation_reference:q.translation_reference||null};
+ state.items.push({item_id:RC.createUuid(),source_bank_id:q.source_bank_id,source_bank_version:q.source_bank_version,source_bank_code:q.source_bank_code,question_id:q.question_id,question_version:q.question_version,code:q.code,definition_snapshot:snapshot,required:true,default_target:'next',rules:[]});
  if(!state.start_item_id)state.start_item_id=state.items[0].item_id;renderItems();saveDraft();
 }
 function addAllQuestions(){sourceQuestions.forEach(addQuestion);}
@@ -251,7 +272,7 @@ function consumeImportedBank(){
  const key='research_os.imported_question_bank.v1',raw=sessionStorage.getItem(key);
  if(!raw)return false;
  sessionStorage.removeItem(key);
- try{const data=JSON.parse(raw);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${texts[lang].imported}\n${data.title} · ${sourceQuestions.length}`,'ok');return true;}
+ try{const data=JSON.parse(raw);if(String(data.primary_language||'').toLowerCase()!==String(state.primary_language||'').toLowerCase())throw new Error(`${texts[lang].languageMismatch} ${data.primary_language||'Unknown'} → ${state.primary_language}`);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${texts[lang].imported}\n${data.title} · ${sourceQuestions.length}`,'ok');return true;}
  catch(e){setStatus(e.message,'error');return false;}
 }
 async function loadBankCatalog(){
@@ -285,7 +306,7 @@ async function loadSavedQuestionnaire(){
 }
 async function loadSelectedBank(){
  const value=document.getElementById('bankSelect').value;if(!value)return;const [id,version]=value.split(':');
- try{const data=await RC.requestJson(`/question-banks/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}`);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${data.title} · ${sourceQuestions.length}`,'ok');}catch(e){setStatus(e.message,'error');}
+ try{const data=await RC.requestJson(`/question-banks/${encodeURIComponent(id)}?version=${encodeURIComponent(version)}&lang=${encodeURIComponent(state.primary_language)}`);sourceQuestions=RC.flattenQuestionBank(data);renderQuestions();setStatus(`${data.title} · ${data.primary_language} · ${sourceQuestions.length}`,'ok');}catch(e){sourceQuestions=[];renderQuestions();setStatus(e.message,'error');}
 }
 function buildPackage(){
  readIdentity();const errors=[];
@@ -295,6 +316,7 @@ function buildPackage(){
  if(!state.items.length)errors.push('At least one questionnaire item is required');const ids=new Set(state.items.map(x=>x.item_id));if(!ids.has(state.start_item_id))errors.push('Start item is missing');
  const minimumAnswered=state.completion_policy?.minimum_answered_items;if(!Number.isInteger(minimumAnswered)||minimumAnswered<1)errors.push('Minimum answered items must be a positive integer');
  state.items.forEach((item,index)=>{if(!RC.isUuid(item.item_id)||!RC.isUuid(item.source_bank_id)||!RC.isUuid(item.question_id))errors.push(`Invalid identity at item ${index+1}`);if(!Number.isInteger(item.source_bank_version)||!Number.isInteger(item.question_version))errors.push(`Invalid version at item ${index+1}`);
+  if(item.definition_snapshot.definition_language&&String(item.definition_snapshot.definition_language).toLowerCase()!==String(state.primary_language).toLowerCase())errors.push(`Question language does not match questionnaire language at item ${index+1}: ${item.code}`);
   if(state.status==='active'&&item.definition_snapshot.status!=='active')errors.push(`Active questionnaire contains non-active question ${item.code}`);if(state.status==='trial'&&item.definition_snapshot.status==='draft')errors.push(`Trial questionnaire contains draft question ${item.code}`);
   const ruleValues=new Set();item.rules.forEach(rule=>{const valueKey=JSON.stringify(rule.value);if(!RC.isUuid(rule.rule_id)||rule.operator!=='equals'||!Object.prototype.hasOwnProperty.call(rule,'value'))errors.push(`Invalid routing rule in ${item.code}`);if(ruleValues.has(valueKey))errors.push(`Duplicate routing condition in ${item.code}: ${valueKey}`);ruleValues.add(valueKey);});
   [item.default_target,...item.rules.map(r=>r.target)].forEach(target=>{if(!['next','end'].includes(target)&&!ids.has(target))errors.push(`Missing route target from ${item.code}`);});

@@ -10,6 +10,7 @@
     <script src="question-bank-import.js"></script>
     <script src="question-bank-file-reader.js"></script>
     <script src="ai-router.js"></script>
+    <script src="research-contracts.js"></script>
     <style>
         body { font-family: system-ui, -apple-system, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 0; }
         .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
@@ -100,6 +101,7 @@
             <h3 data-i18n="col_translated">Propuesta de traducción canónica</h3>
             <div id="translatedView" class="code-box" data-i18n="wait_result">// Aquí aparecerá la propuesta traducida...</div>
             <button id="downloadBtn" class="btn" style="display:none;" disabled onclick="downloadResult()" data-i18n="download_json">💾 Descargar JSON revisado</button>
+            <button id="saveTranslationBtn" class="btn" style="display:none;" disabled onclick="saveAcceptedTranslation()" data-i18n="save_translation">🗄 Guardar traducción aceptada en BD</button>
         </div>
     </div>
 
@@ -145,6 +147,9 @@ const i18n = {
         wait_upload: "// Ожидание загрузки файла...",
         wait_result: "// Здесь появится переведенный словарь...",
         download_json: "💾 Скачать проверенный JSON",
+        save_translation: "🗄 Сохранить принятый перевод в БД",
+        saving_translation: "Сохранение принятого перевода...",
+        translation_saved: "Перевод сохранён отдельно от оригинала",
         review_notice: "ИИ предлагает текст. Он не валидирует методику научно и не может менять идентификаторы, шкалы, формулы или маршрутизацию. Проверьте предложение перед скачиванием.",
         review_pending: "Статус: предложение ИИ ожидает решения исследователя.",
         integrity_ok: "Структурная целостность подтверждена: идентичность, порядок, шкалы, значения и маршрутизация сохранены.",
@@ -173,6 +178,9 @@ const i18n = {
         wait_upload: "// Esperando carga de archivo...",
         wait_result: "// El diccionario traducido aparecerá aquí...",
         download_json: "💾 Descargar JSON revisado",
+        save_translation: "🗄 Guardar traducción aceptada en BD",
+        saving_translation: "Guardando la traducción aceptada...",
+        translation_saved: "Traducción guardada por separado del original",
         review_notice: "La IA propone texto. No valida científicamente el instrumento y no puede cambiar identificadores, escalas, fórmulas ni rutas. Revise la propuesta antes de descargarla.",
         review_pending: "Estado: la propuesta de IA espera la decisión del investigador.",
         integrity_ok: "Integridad estructural confirmada: se conservaron identidad, orden, escalas, valores y rutas.",
@@ -201,6 +209,9 @@ const i18n = {
         wait_upload: "// Waiting for file upload...",
         wait_result: "// Translated dictionary will appear here...",
         download_json: "💾 Download reviewed JSON",
+        save_translation: "🗄 Save accepted translation to database",
+        saving_translation: "Saving the accepted translation...",
+        translation_saved: "Translation saved separately from the original",
         review_notice: "AI proposes text. It does not scientifically validate the instrument and cannot change identifiers, scales, formulas, or routing. Review the proposal before downloading it.",
         review_pending: "Status: the AI proposal is awaiting the researcher's decision.",
         integrity_ok: "Structural integrity confirmed: identity, order, scales, values, and routing were preserved.",
@@ -390,6 +401,7 @@ async function startTranslation() {
         const config = AIRouter.getTaskConfig('translator');
         const startedAt = new Date().toISOString();
         document.getElementById('downloadBtn').style.display = 'none';
+        document.getElementById('saveTranslationBtn').style.display = 'none';
         document.getElementById('reviewBox').style.display = 'none';
         document.getElementById('progressBox').style.display = 'block';
 
@@ -526,7 +538,9 @@ Return every input id exactly once, keep each id unchanged, and use confidence f
         document.getElementById('progressBox').style.display = 'none';
         renderReview(uncertain);
         document.getElementById('downloadBtn').style.display = 'block';
+        document.getElementById('saveTranslationBtn').style.display = 'block';
         document.getElementById('downloadBtn').disabled = true;
+        document.getElementById('saveTranslationBtn').disabled = true;
     }
 
 function renderReview(uncertain) {
@@ -570,6 +584,7 @@ function approveTranslation() {
     document.getElementById('reviewStatus').innerText = (i18n[currentLang] || i18n.es).approved;
     document.getElementById('approveBtn').disabled = true;
     document.getElementById('downloadBtn').disabled = false;
+    document.getElementById('saveTranslationBtn').disabled = false;
 }
 
 function rejectTranslation() {
@@ -583,6 +598,36 @@ function rejectTranslation() {
     document.getElementById('reviewStatus').innerText = (i18n[currentLang] || i18n.es).rejected;
     document.getElementById('approveBtn').disabled = true;
     document.getElementById('downloadBtn').disabled = true;
+    document.getElementById('saveTranslationBtn').disabled = true;
+}
+
+async function saveAcceptedTranslation() {
+    if (translatedDocument?.translation_provenance?.human_disposition?.status !== 'accepted') return;
+    const button = document.getElementById('saveTranslationBtn');
+    const dict = i18n[currentLang] || i18n.es;
+    button.disabled = true;
+    document.getElementById('reviewStatus').innerText = dict.saving_translation;
+    try {
+        const saved = await window.ResearchContracts.requestJson('/question-translations/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(translatedDocument)
+        });
+        translatedDocument.translation_provenance.database_registration = {
+            status: 'saved',
+            translation_package_id: saved.translation_package_id,
+            translation_version: saved.translation_version,
+            target_language: saved.target_language,
+            saved_question_count: saved.saved_question_count,
+            registered_at: new Date().toISOString()
+        };
+        document.getElementById('translatedView').innerText = JSON.stringify(translatedDocument, null, 2);
+        document.getElementById('reviewStatus').innerText =
+            `${dict.translation_saved}: v${saved.translation_version} · ${saved.saved_question_count}.`;
+    } catch (error) {
+        document.getElementById('reviewStatus').innerText = error.message;
+        button.disabled = false;
+    }
 }
 
 function downloadResult() {

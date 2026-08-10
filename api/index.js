@@ -40,6 +40,133 @@ function validQuestionScaleContract(question) {
     if (scale.id === 'frequency_scale' && (values.length < 2 || values.some((value, index) => !Number.isFinite(value) || index > 0 && value <= values[index - 1]))) return false;
     return true;
 }
+
+const TRANSLATION_LANGUAGES = new Set(['es-MX', 'en-US', 'ru-RU']);
+const TRANSLATABLE_QUESTION_FIELDS = Object.freeze([
+    'prompt', 'instruction', 'instructions', 'help_text', 'description'
+]);
+
+function cloneJson(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+function translationOptionProjection(option) {
+    if (typeof option === 'string') return '__TRANSLATABLE_TEXT__';
+    if (!option || typeof option !== 'object' || Array.isArray(option)) return option;
+    const projected = cloneJson(option);
+    delete projected.text;
+    delete projected.label;
+    return projected;
+}
+
+function questionTranslationStructure(question) {
+    const projected = cloneJson(question || {});
+    TRANSLATABLE_QUESTION_FIELDS.forEach(field => delete projected[field]);
+    delete projected.definition_language;
+    delete projected.translation_reference;
+    if (Array.isArray(projected.options)) {
+        projected.options = projected.options.map(translationOptionProjection);
+    }
+    if (projected.source_context && typeof projected.source_context === 'object' &&
+        !Array.isArray(projected.source_context)) {
+        delete projected.source_context.explanation;
+        delete projected.source_context.domain_title;
+    }
+    if (projected.scale && typeof projected.scale === 'object' && !Array.isArray(projected.scale)) {
+        if (Array.isArray(projected.scale.anchors)) {
+            projected.scale.anchors = projected.scale.anchors.map(translationOptionProjection);
+        }
+        if (Array.isArray(projected.scale.labels)) {
+            projected.scale.labels = projected.scale.labels.map(translationOptionProjection);
+        }
+    }
+    return projected;
+}
+
+function jsonSubsetMatches(reference, candidate) {
+    if (Array.isArray(candidate)) {
+        return Array.isArray(reference) && reference.length === candidate.length &&
+            candidate.every((value, index) => jsonSubsetMatches(reference[index], value));
+    }
+    if (candidate && typeof candidate === 'object') {
+        return reference && typeof reference === 'object' && !Array.isArray(reference) &&
+            Object.entries(candidate).every(([key, value]) =>
+                Object.prototype.hasOwnProperty.call(reference, key) &&
+                jsonSubsetMatches(reference[key], value));
+    }
+    return Object.is(reference, candidate);
+}
+
+function translatedQuestionEntries(documentValue) {
+    if (documentValue?.schema === 'research_os.question_bank') {
+        return Object.values(documentValue.questions || {}).map(question => ({
+            question_id: question?.question_id,
+            question_version: question?.version,
+            definition: question
+        }));
+    }
+    if (documentValue?.schema === 'research_os.questionnaire') {
+        return (documentValue.items || []).map(item => ({
+            question_id: item?.question_id,
+            question_version: item?.question_version,
+            definition: item?.definition_snapshot
+        }));
+    }
+    return [];
+}
+
+function applyAcceptedQuestionTranslation(sourceQuestion, translatedDefinition, reference, targetLanguage) {
+    const translated = cloneJson(sourceQuestion);
+    TRANSLATABLE_QUESTION_FIELDS.forEach(field => {
+        if (Object.prototype.hasOwnProperty.call(translatedDefinition || {}, field)) {
+            translated[field] = translatedDefinition[field];
+        }
+    });
+    if (Array.isArray(translated.options) && Array.isArray(translatedDefinition?.options)) {
+        translated.options = translated.options.map((option, index) => {
+            const translatedOption = translatedDefinition.options[index];
+            if (typeof option === 'string') return translatedOption;
+            const merged = cloneJson(option);
+            if (translatedOption && typeof translatedOption === 'object') {
+                for (const field of ['text', 'label']) {
+                    if (Object.prototype.hasOwnProperty.call(translatedOption, field)) {
+                        merged[field] = translatedOption[field];
+                    }
+                }
+            }
+            return merged;
+        });
+    }
+    if (translated.source_context && translatedDefinition?.source_context) {
+        for (const field of ['explanation', 'domain_title']) {
+            if (Object.prototype.hasOwnProperty.call(translatedDefinition.source_context, field)) {
+                translated.source_context[field] = translatedDefinition.source_context[field];
+            }
+        }
+    }
+    if (translated.scale && translatedDefinition?.scale) {
+        for (const field of ['anchors', 'labels']) {
+            if (Array.isArray(translated.scale[field]) && Array.isArray(translatedDefinition.scale[field])) {
+                translated.scale[field] = translated.scale[field].map((option, index) => {
+                    const translatedOption = translatedDefinition.scale[field][index];
+                    if (typeof option === 'string') return translatedOption;
+                    const merged = cloneJson(option);
+                    if (translatedOption && typeof translatedOption === 'object') {
+                        for (const textField of ['text', 'label']) {
+                            if (Object.prototype.hasOwnProperty.call(translatedOption, textField)) {
+                                merged[textField] = translatedOption[textField];
+                            }
+                        }
+                    }
+                    return merged;
+                });
+            }
+        }
+    }
+    translated.definition_language = targetLanguage;
+    translated.translation_reference = reference;
+    return translated;
+}
 const UPSTREAM_TIMEOUT_MS = (() => {
     const configured = Number.parseInt(process.env.UPSTREAM_TIMEOUT_MS || '8000', 10);
     return Number.isFinite(configured) && configured > 0 ? configured : 8000;
@@ -135,6 +262,11 @@ function validateQuestionnaireGraph(questionnaire) {
         }
         if (item.required !== undefined && typeof item.required !== 'boolean') {
             throw new Error(`Questionnaire item ${item.item_id} has an invalid required flag`);
+        }
+        const definitionLanguage = item?.definition_snapshot?.definition_language;
+        if (definitionLanguage && String(definitionLanguage).toLowerCase() !==
+            String(questionnaire?.primary_language || '').toLowerCase()) {
+            throw new Error(`Questionnaire item ${item.item_id} language does not match the questionnaire primary language`);
         }
         itemById.set(item.item_id, item);
     }
@@ -1948,6 +2080,82 @@ export default async function handler(req, res) {
         }
     }
 
+    if (url.split('?')[0] === '/question-translations/save' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const translationData = req.body;
+        const provenance = translationData?.translation_provenance;
+        const targetLanguage = String(provenance?.target_language || '');
+        const sourceLanguage = String(provenance?.source_primary_language || '');
+        const disposition = provenance?.human_disposition;
+        const entries = translatedQuestionEntries(translationData);
+        if (!['research_os.question_bank', 'research_os.questionnaire'].includes(translationData?.schema) ||
+            provenance?.schema !== 'research_os.ai_translation_provenance' ||
+            provenance?.schema_version !== 1 ||
+            disposition?.status !== 'accepted' ||
+            disposition?.researcher_account_id !== access.principal.account_id ||
+            !disposition?.decided_at || Number.isNaN(Date.parse(disposition.decided_at)) ||
+            !/^[0-9a-f]{64}$/.test(String(provenance?.source_sha256 || '')) ||
+            !TRANSLATION_LANGUAGES.has(targetLanguage) || !sourceLanguage ||
+            sourceLanguage.toLowerCase() === targetLanguage.toLowerCase() ||
+            translationData?.primary_language !== targetLanguage || !entries.length) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Accepted canonical translation, distinct supported languages, source digest, and researcher disposition are required'
+            });
+        }
+        const uniqueReferences = [];
+        const referenceKeys = new Set();
+        for (const entry of entries) {
+            if (!UUID_V4.test(entry.question_id || '') ||
+                !Number.isInteger(entry.question_version) || entry.question_version < 1 ||
+                !entry.definition || typeof entry.definition !== 'object' ||
+                !String(entry.definition.prompt || '').trim()) {
+                return res.status(400).json({ ok: false, error: 'Every translated question requires its immutable identity and non-empty prompt' });
+            }
+            const key = `${entry.question_id}:${entry.question_version}`;
+            if (!referenceKeys.has(key)) {
+                referenceKeys.add(key);
+                uniqueReferences.push({ question_id: entry.question_id, question_version: entry.question_version });
+            }
+        }
+        try {
+            const definitionsResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'load_question_definitions_for_translation',
+                { p_question_references: uniqueReferences }
+            );
+            const definitions = Array.isArray(definitionsResult) ? definitionsResult[0] : definitionsResult;
+            for (const entry of entries) {
+                const key = `${entry.question_id}:${entry.question_version}`;
+                const sourceDefinition = definitions?.[key];
+                if (!sourceDefinition || !jsonSubsetMatches(
+                    questionTranslationStructure(sourceDefinition),
+                    questionTranslationStructure(entry.definition)
+                )) {
+                    return res.status(409).json({
+                        ok: false,
+                        error: `Translation changes or omits an immutable structure for question ${key}`
+                    });
+                }
+            }
+            const savedResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'save_accepted_question_translation_package',
+                {
+                    translation_data: translationData,
+                    p_researcher_account_id: access.principal.account_id
+                }
+            );
+            const saved = Array.isArray(savedResult) ? savedResult[0] : savedResult;
+            return res.status(200).json({ ok: true, ...saved });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
     // Сохранение канонического банка вопросов в Supabase.
     // RPC выполняет запись банка, независимых версий вопросов и таблицы связей
     // в одной транзакции; вопрос не принадлежит эксклюзивно одному банку.
@@ -2097,6 +2305,10 @@ export default async function handler(req, res) {
         const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
         const bankReference = decodeURIComponent(urlObj.pathname.slice('/question-banks/'.length));
         const requestedVersion = urlObj.searchParams.get('version');
+        const requestedLanguage = urlObj.searchParams.get('lang');
+        if (requestedLanguage && !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
+            return res.status(400).json({ ok: false, error: 'Requested question language is not supported' });
+        }
         if (!bankReference || bankReference === 'save') {
             return res.status(400).json({ ok: false, error: 'Bank UUID or code is required' });
         }
@@ -2138,6 +2350,63 @@ export default async function handler(req, res) {
             if (packageData.status !== 'active') {
                 const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(404).json({ ok: false, error: 'Question bank not found' });
+            }
+            if (requestedLanguage) {
+                const sourceLanguage = packageData.primary_language;
+                const questionEntries = Object.entries(packageData.questions || {});
+                if (requestedLanguage.toLowerCase() === String(sourceLanguage || '').toLowerCase()) {
+                    packageData.questions = Object.fromEntries(questionEntries.map(([code, question]) => [
+                        code,
+                        { ...question, definition_language: sourceLanguage, translation_reference: null }
+                    ]));
+                } else {
+                    if (!access) {
+                        return res.status(401).json({ ok: false, error: 'Researcher login is required to load accepted translations' });
+                    }
+                    const references = questionEntries.map(([, question]) => ({
+                        question_id: question.question_id,
+                        question_version: question.version
+                    }));
+                    const translationResult = await callSupabaseRpc(
+                        supabaseUrl,
+                        supabaseAdminKey,
+                        'load_question_translation_variants',
+                        {
+                            p_researcher_account_id: access.principal.account_id,
+                            p_target_language: requestedLanguage,
+                            p_question_references: references
+                        }
+                    );
+                    const translations = Array.isArray(translationResult) ? translationResult[0] : translationResult;
+                    const missing = questionEntries.filter(([, question]) =>
+                        !translations?.[`${question.question_id}:${question.version}`]
+                    ).map(([code]) => code);
+                    if (missing.length) {
+                        return res.status(409).json({
+                            ok: false,
+                            error: `Accepted ${requestedLanguage} translation is missing for: ${missing.join(', ')}`,
+                            missing_question_codes: missing,
+                            requested_language: requestedLanguage,
+                            source_language: sourceLanguage
+                        });
+                    }
+                    packageData.questions = Object.fromEntries(questionEntries.map(([code, question]) => {
+                        const variant = translations[`${question.question_id}:${question.version}`];
+                        return [code, applyAcceptedQuestionTranslation(
+                            question,
+                            variant.translated_definition,
+                            variant.translation_reference,
+                            requestedLanguage
+                        )];
+                    }));
+                    packageData.source_primary_language = sourceLanguage;
+                    packageData.primary_language = requestedLanguage;
+                    packageData.translation_set = {
+                        status: 'accepted',
+                        target_language: requestedLanguage,
+                        question_count: questionEntries.length
+                    };
+                }
             }
             return res.status(200).json({ ok: true, ...packageData });
         } catch (error) {
