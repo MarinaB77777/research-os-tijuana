@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <title>Research OS | Settings</title>
@@ -41,9 +41,9 @@
         <span class="page-title">🔬 Research OS</span>
     </div>
     <div class="lang-picker">
-        <button class="lang-btn" onclick="setLang('ru', event)">🇷🇺 RU</button>
-        <button class="lang-btn" onclick="setLang('es', event)">🇲🇽 ES</button>
-        <button class="lang-btn" onclick="setLang('en', event)">🇬🇧 EN</button>
+        <button class="lang-btn" data-lang="es" onclick="setLang('es', event)">🇲🇽 ES</button>
+        <button class="lang-btn" data-lang="en" onclick="setLang('en', event)">🇺🇸 EN</button>
+        <button class="lang-btn" data-lang="ru" onclick="setLang('ru', event)">RU</button>
     </div>
 </div>
 
@@ -245,12 +245,13 @@ function translatedText(key) {
     return (i18n[lang] || i18n.es)[key] || i18n.es[key] || key;
 }
 
-function setLang(lang, e) {
+function setLang(lang) {
+    lang = i18n[lang] ? lang : 'es';
     localStorage.setItem('app_language', lang);
-    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
-    if (e && e.target) e.target.classList.add('active');
+    document.documentElement.lang = lang;
+    document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.lang === lang));
 
-    const dict = i18n[lang] || i18n.ru;
+    const dict = i18n[lang] || i18n.es;
     document.querySelectorAll('[data-i18n]').forEach(elem => {
         const key = elem.getAttribute('data-i18n');
         if (dict[key]) elem.innerText = dict[key];
@@ -372,14 +373,13 @@ async function deleteResearcherAccount() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
+    const savedLang = localStorage.getItem('app_language') || 'es';
+    setLang(i18n[savedLang] ? savedLang : 'es');
     accountManagerSession = await ResearchAuth.verify('researcher');
     if (accountManagerSession) {
         document.getElementById('deleteAccountSection').style.display = 'block';
         await loadSettings();
     }
-    const savedLang = localStorage.getItem('app_language') || 'ru';
-    const btn = Array.from(document.querySelectorAll('.lang-btn')).find(b => b.innerText.toLowerCase().includes(savedLang));
-    if (btn) btn.click();
 });
 </script>
 
