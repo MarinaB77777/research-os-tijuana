@@ -43,6 +43,16 @@
         .btn-secondary { background: #334155; }
         .integrity-ok { color: #34d399; }
         .integrity-error { color: #f87171; }
+        .translation-registry { background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; margin:20px 0; }
+        .registry-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+        .registry-head h2 { margin:0; color:#38bdf8; font-size:18px; }
+        .registry-refresh { width:auto; margin:0; padding:8px 14px; background:#334155; }
+        .registry-list { display:grid; gap:10px; }
+        .registry-entry { background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; }
+        .registry-title { color:#f8fafc; font-weight:700; margin-bottom:7px; }
+        .registry-meta { color:#cbd5e1; font-size:12px; line-height:1.65; }
+        .registry-entry a { color:#38bdf8; font-weight:700; }
+        .coverage-incomplete { color:#fbbf24; }
         @media (max-width: 760px) {
             .editor-grid, .review-actions { grid-template-columns: 1fr; }
         }
@@ -115,6 +125,14 @@
             <button id="approveBtn" class="btn" onclick="approveTranslation()" data-i18n="approve_translation">He revisado y acepto la traducción</button>
         </div>
     </div>
+
+    <section class="translation-registry">
+        <div class="registry-head">
+            <h2>Translation Registry</h2>
+            <button class="btn registry-refresh" onclick="loadTranslationRegistry()" data-i18n="refresh_registry">Actualizar</button>
+        </div>
+        <div id="translationRegistry" class="registry-list" data-i18n="registry_empty">No hay traducciones guardadas.</div>
+    </section>
 </div>
 
 <script>
@@ -150,6 +168,9 @@ const i18n = {
         save_translation: "🗄 Сохранить принятый перевод в БД",
         saving_translation: "Сохранение принятого перевода...",
         translation_saved: "Перевод сохранён отдельно от оригинала",
+        refresh_registry: "Обновить",
+        registry_empty: "Сохранённых переводов нет.",
+        open_variant: "Открыть вариант",
         review_notice: "ИИ предлагает текст. Он не валидирует методику научно и не может менять идентификаторы, шкалы, формулы или маршрутизацию. Проверьте предложение перед скачиванием.",
         review_pending: "Статус: предложение ИИ ожидает решения исследователя.",
         integrity_ok: "Структурная целостность подтверждена: идентичность, порядок, шкалы, значения и маршрутизация сохранены.",
@@ -181,6 +202,9 @@ const i18n = {
         save_translation: "🗄 Guardar traducción aceptada en BD",
         saving_translation: "Guardando la traducción aceptada...",
         translation_saved: "Traducción guardada por separado del original",
+        refresh_registry: "Actualizar",
+        registry_empty: "No hay traducciones guardadas.",
+        open_variant: "Abrir variante",
         review_notice: "La IA propone texto. No valida científicamente el instrumento y no puede cambiar identificadores, escalas, fórmulas ni rutas. Revise la propuesta antes de descargarla.",
         review_pending: "Estado: la propuesta de IA espera la decisión del investigador.",
         integrity_ok: "Integridad estructural confirmada: se conservaron identidad, orden, escalas, valores y rutas.",
@@ -212,6 +236,9 @@ const i18n = {
         save_translation: "🗄 Save accepted translation to database",
         saving_translation: "Saving the accepted translation...",
         translation_saved: "Translation saved separately from the original",
+        refresh_registry: "Refresh",
+        registry_empty: "No saved translations.",
+        open_variant: "Open variant",
         review_notice: "AI proposes text. It does not scientifically validate the instrument and cannot change identifiers, scales, formulas, or routing. Review the proposal before downloading it.",
         review_pending: "Status: the AI proposal is awaiting the researcher's decision.",
         integrity_ok: "Structural integrity confirmed: identity, order, scales, values, and routing were preserved.",
@@ -564,6 +591,54 @@ function readResearcherSession() {
     }
 }
 
+function escapeRegistryHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, character => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[character]));
+}
+
+function registrySourceLabel(sourceSchema) {
+    return sourceSchema === 'research_os.question_bank' ? 'Question Bank' : 'Questionnaire';
+}
+
+async function loadTranslationRegistry() {
+    const container = document.getElementById('translationRegistry');
+    const dict = i18n[currentLang] || i18n.es;
+    if (!readResearcherSession()) {
+        container.textContent = 'Researcher login is required.';
+        return;
+    }
+    try {
+        const data = await window.ResearchContracts.requestJson('/question-translations');
+        const packages = Array.isArray(data.packages) ? data.packages : [];
+        if (!packages.length) {
+            container.textContent = dict.registry_empty;
+            return;
+        }
+        container.innerHTML = packages.map(item => {
+            const expected = Number(item.expected_question_count) || 0;
+            const translated = Number(item.translated_question_count) || 0;
+            const coverage = expected > 0 ? Math.round(translated * 10000 / expected) / 100 : 0;
+            const complete = item.coverage_complete === true;
+            const parameter = item.source_schema === 'research_os.question_bank' ? 'bank' : 'questionnaire';
+            const href = `constructor_survey.html?${parameter}=${encodeURIComponent(item.source_entity_id)}` +
+                `&version=${encodeURIComponent(item.source_version)}&lang=${encodeURIComponent(item.target_language)}`;
+            return `<article class="registry-entry">
+                <div class="registry-title">${escapeRegistryHtml(registrySourceLabel(item.source_schema))} · ${escapeRegistryHtml(item.translated_title || item.source_code || item.source_entity_id)}</div>
+                <div class="registry-meta">
+                    Source language: ${escapeRegistryHtml(item.source_language)} · Target language: ${escapeRegistryHtml(item.target_language)}<br>
+                    Translation version: ${escapeRegistryHtml(item.translation_version)} · Coverage: <span class="${complete ? '' : 'coverage-incomplete'}">${translated}/${expected} (${coverage}%)</span><br>
+                    UUID: ${escapeRegistryHtml(item.source_entity_id)} · Version: ${escapeRegistryHtml(item.source_version)}<br>
+                    Accepted at: ${escapeRegistryHtml(item.accepted_at || '')}
+                </div>
+                ${complete ? `<a href="${href}">${escapeRegistryHtml(dict.open_variant)}</a>` : ''}
+            </article>`;
+        }).join('');
+    } catch (error) {
+        container.textContent = error.message;
+    }
+}
+
 function approveTranslation() {
     if (!translatedDocument?.translation_provenance ||
         !structuralIntegrityPreserved(loadedDocument, translatedDocument, translatedEntries)) {
@@ -624,6 +699,7 @@ async function saveAcceptedTranslation() {
         document.getElementById('translatedView').innerText = JSON.stringify(translatedDocument, null, 2);
         document.getElementById('reviewStatus').innerText =
             `${dict.translation_saved}: v${saved.translation_version} · ${saved.saved_question_count}.`;
+        await loadTranslationRegistry();
     } catch (error) {
         document.getElementById('reviewStatus').innerText = error.message;
         button.disabled = false;
@@ -650,7 +726,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btn) btn.click();
     if (readResearcherSession()) {
         try {
-            await AIRouter.loadPreferences();
+            await Promise.all([AIRouter.loadPreferences(), loadTranslationRegistry()]);
         } catch (error) {
             setStatus(error.message, true);
         }

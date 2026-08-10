@@ -1698,8 +1698,9 @@ export default async function handler(req, res) {
         try {
             const rows = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'list_question_banks', {});
             let banks = Array.isArray(rows) ? rows : [];
+            let access = null;
             if (bearerToken(req)) {
-                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
                 const owned = await ownedEntityIds('question_bank', access.principal.account_id, supabaseUrl, supabaseAdminKey);
                 banks = banks.filter(bank =>
@@ -1715,6 +1716,35 @@ export default async function handler(req, res) {
                     (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
                 );
             }
+            let languageRows = [];
+            if (access) {
+                const catalogResult = await callSupabaseRpc(
+                    supabaseUrl,
+                    supabaseAdminKey,
+                    'list_question_translation_catalog',
+                    { p_researcher_account_id: access.principal.account_id }
+                );
+                const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
+                languageRows = Array.isArray(catalog?.bank_languages) ? catalog.bank_languages : [];
+            }
+            banks = banks.map(bank => {
+                const available = languageRows.filter(row =>
+                    row.source_entity_id === bank.bank_id &&
+                    Number(row.source_version) === Number(bank.version)
+                );
+                if (!available.some(row =>
+                    String(row.language).toLowerCase() === String(bank.primary_language).toLowerCase()
+                )) {
+                    available.unshift({
+                        source_entity_id: bank.bank_id,
+                        source_version: bank.version,
+                        language: bank.primary_language,
+                        is_source: true,
+                        coverage_complete: true
+                    });
+                }
+                return { ...bank, source_language: bank.primary_language, available_languages: available };
+            });
             return res.status(200).json({ ok: true, banks });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
@@ -2038,6 +2068,41 @@ export default async function handler(req, res) {
             } else {
                 questionnaires = questionnaires.filter(questionnaire => questionnaire.status === 'active');
             }
+            let languageRows = [];
+            if (access) {
+                const catalogResult = await callSupabaseRpc(
+                    supabaseUrl,
+                    supabaseAdminKey,
+                    'list_question_translation_catalog',
+                    { p_researcher_account_id: access.principal.account_id }
+                );
+                const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
+                languageRows = Array.isArray(catalog?.questionnaire_languages)
+                    ? catalog.questionnaire_languages
+                    : [];
+            }
+            questionnaires = questionnaires.map(questionnaire => {
+                const available = languageRows.filter(row =>
+                    row.source_entity_id === questionnaire.questionnaire_id &&
+                    Number(row.source_version) === Number(questionnaire.version)
+                );
+                if (!available.some(row =>
+                    String(row.language).toLowerCase() === String(questionnaire.primary_language).toLowerCase()
+                )) {
+                    available.unshift({
+                        source_entity_id: questionnaire.questionnaire_id,
+                        source_version: questionnaire.version,
+                        language: questionnaire.primary_language,
+                        is_source: true,
+                        coverage_complete: true
+                    });
+                }
+                return {
+                    ...questionnaire,
+                    source_language: questionnaire.primary_language,
+                    available_languages: available
+                };
+            });
             return res.status(200).json({ ok: true, questionnaires });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
@@ -2051,6 +2116,10 @@ export default async function handler(req, res) {
         const urlObj = new URL(url, `http://${req.headers.host || 'localhost'}`);
         const questionnaireReference = decodeURIComponent(urlObj.pathname.slice('/questionnaires/'.length));
         const requestedVersion = urlObj.searchParams.get('version');
+        const requestedLanguage = urlObj.searchParams.get('lang');
+        if (requestedLanguage && !TRANSLATION_LANGUAGES.has(requestedLanguage)) {
+            return res.status(400).json({ ok: false, error: 'Requested questionnaire language is not supported' });
+        }
         if (!questionnaireReference || questionnaireReference === 'save') {
             return res.status(400).json({ ok: false, error: 'Questionnaire UUID or code is required' });
         }
@@ -2064,17 +2133,143 @@ export default async function handler(req, res) {
                     requested_version: requestedVersion ? Number(requestedVersion) : null
                 }
             );
-            const questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
+            let questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
             if (!questionnaire) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
+            let access = null;
+            if (bearerToken(req)) {
+                access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+            }
             if (questionnaire.status !== 'active') {
-                const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+                if (!access) access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
                 const owned = await ownedEntityIds('questionnaire', access.principal.account_id, supabaseUrl, supabaseAdminKey);
                 if (!owned.has(questionnaire.questionnaire_id)) {
                     return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
                 }
             }
+            if (requestedLanguage) {
+                const sourceLanguage = questionnaire.primary_language;
+                const items = Array.isArray(questionnaire.items) ? questionnaire.items : [];
+                if (requestedLanguage.toLowerCase() === String(sourceLanguage || '').toLowerCase()) {
+                    questionnaire = {
+                        ...questionnaire,
+                        items: items.map(item => ({
+                            ...item,
+                            definition_snapshot: {
+                                ...(item.definition_snapshot || {}),
+                                definition_language: sourceLanguage,
+                                translation_reference: null
+                            }
+                        }))
+                    };
+                } else {
+                    if (!access) {
+                        return res.status(401).json({
+                            ok: false,
+                            error: 'Researcher login is required to load accepted translations'
+                        });
+                    }
+                    const references = [...new Map(items.map(item => [
+                        `${item.question_id}:${item.question_version}`,
+                        { question_id: item.question_id, question_version: item.question_version }
+                    ])).values()];
+                    const translationResult = await callSupabaseRpc(
+                        supabaseUrl,
+                        supabaseAdminKey,
+                        'load_question_translation_variants',
+                        {
+                            p_researcher_account_id: access.principal.account_id,
+                            p_target_language: requestedLanguage,
+                            p_question_references: references
+                        }
+                    );
+                    const translations = Array.isArray(translationResult)
+                        ? translationResult[0]
+                        : translationResult;
+                    const missing = items.filter(item =>
+                        !translations?.[`${item.question_id}:${item.question_version}`]
+                    ).map(item => item.code);
+                    if (missing.length) {
+                        return res.status(409).json({
+                            ok: false,
+                            error: `Accepted ${requestedLanguage} translation is missing for: ${missing.join(', ')}`,
+                            missing_question_codes: [...new Set(missing)],
+                            requested_language: requestedLanguage,
+                            source_language: sourceLanguage
+                        });
+                    }
+                    const documentResult = await callSupabaseRpc(
+                        supabaseUrl,
+                        supabaseAdminKey,
+                        'load_question_translation_document',
+                        {
+                            p_researcher_account_id: access.principal.account_id,
+                            p_source_schema: 'research_os.questionnaire',
+                            p_source_entity_id: questionnaire.questionnaire_id,
+                            p_source_version: questionnaire.version,
+                            p_target_language: requestedLanguage
+                        }
+                    );
+                    const translatedDocument = Array.isArray(documentResult)
+                        ? documentResult[0]
+                        : documentResult;
+                    const translatedTopLevel = {};
+                    for (const field of ['title', 'description', 'instructions', 'introduction', 'completion_message']) {
+                        if (Object.prototype.hasOwnProperty.call(translatedDocument || {}, field)) {
+                            translatedTopLevel[field] = translatedDocument[field];
+                        }
+                    }
+                    questionnaire = {
+                        ...questionnaire,
+                        ...translatedTopLevel,
+                        source_primary_language: sourceLanguage,
+                        primary_language: requestedLanguage,
+                        items: items.map(item => {
+                            const variant = translations[`${item.question_id}:${item.question_version}`];
+                            return {
+                                ...item,
+                                definition_snapshot: applyAcceptedQuestionTranslation(
+                                    item.definition_snapshot || {},
+                                    variant.translated_definition,
+                                    variant.translation_reference,
+                                    requestedLanguage
+                                )
+                            };
+                        }),
+                        translation_set: {
+                            status: 'accepted',
+                            target_language: requestedLanguage,
+                            question_count: references.length
+                        }
+                    };
+                }
+            }
             return res.status(200).json({ ok: true, questionnaire });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (url.split('?')[0] === '/question-translations' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const catalogResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_question_translation_catalog',
+                { p_researcher_account_id: access.principal.account_id }
+            );
+            const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
+            return res.status(200).json({
+                ok: true,
+                packages: Array.isArray(catalog?.packages) ? catalog.packages : [],
+                bank_languages: Array.isArray(catalog?.bank_languages) ? catalog.bank_languages : [],
+                questionnaire_languages: Array.isArray(catalog?.questionnaire_languages)
+                    ? catalog.questionnaire_languages
+                    : []
+            });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }

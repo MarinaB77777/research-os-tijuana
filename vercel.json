@@ -8,6 +8,7 @@
     { "source": "/respondent/(.*)", "destination": "/api/index.js" },
     { "source": "/question-banks", "destination": "/api/index.js" },
     { "source": "/question-banks/(.*)", "destination": "/api/index.js" },
+    { "source": "/question-translations", "destination": "/api/index.js" },
     { "source": "/question-translations/(.*)", "destination": "/api/index.js" },
     { "source": "/parameters", "destination": "/api/index.js" },
     { "source": "/parameters/(.*)", "destination": "/api/index.js" },
