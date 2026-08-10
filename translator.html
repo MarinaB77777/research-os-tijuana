@@ -60,6 +60,17 @@
         .contract-box.ok { display:block; border-color:#047857; color:#a7f3d0; }
         .contract-box.error { display:block; border-color:#b91c1c; color:#fecaca; }
         .contract-box ul { margin:8px 0 0; padding-left:20px; color:inherit; }
+        .contract-navigation { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
+        .contract-navigation .btn { width:auto; margin:0; padding:8px 12px; }
+        .contract-position { color:#cbd5e1; font-size:12px; font-weight:700; }
+        .source-contract-editor { margin-top:14px; padding:14px; border:1px solid #7f1d1d; border-radius:8px; background:#0f172a; }
+        .source-contract-editor h3 { margin:0 0 8px; color:#fda4af; font-size:15px; }
+        .contract-field-grid { display:grid; grid-template-columns:repeat(3,minmax(110px,1fr)); gap:10px; margin:12px 0; }
+        .contract-field label { display:block; color:#94a3b8; font-size:11px; font-weight:700; margin-bottom:5px; }
+        .contract-field input { width:100%; box-sizing:border-box; background:#020617; color:#f8fafc; border:1px solid #475569; border-radius:6px; padding:8px; }
+        .contract-option-row { display:grid; grid-template-columns:110px 1fr; gap:10px; margin-top:8px; }
+        .contract-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+        .contract-actions .btn { width:auto; margin:0; padding:9px 12px; }
         .translation-review { display:none; margin:20px 0; }
         .review-summary { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:12px; }
         .review-summary h2 { margin:0; color:#38bdf8; font-size:18px; }
@@ -84,7 +95,8 @@
         .technical-details summary { cursor:pointer; color:#94a3b8; font-weight:700; }
         @media (max-width: 760px) {
             .editor-grid, .review-actions, .field-columns { grid-template-columns: 1fr; }
-            .control-panel { grid-template-columns:1fr; }
+            .control-panel, .contract-field-grid { grid-template-columns:1fr; }
+            .contract-option-row { grid-template-columns:1fr; }
         }
     </style>
 </head>
@@ -211,6 +223,9 @@ let questionnaireCatalog = [];
 let currentDraftId = null;
 let translationRunning = false;
 let sourceContractIssues = [];
+let sourceContractIssueIndex = 0;
+let loadedSourceOrigin = { kind: 'file' };
+let correctedQuestionCodes = new Set();
 let translationFieldReviews = new Map();
 const TRANSLATION_PROMPT_VERSION = 'canonical_questionnaire_translation_v3';
 const TARGET_LANGUAGES = Object.freeze({
@@ -308,6 +323,19 @@ const i18n = {
         contract_scale_option_bounds_mismatch: "{code}: значения вариантов занимают диапазон {option_min}–{option_max}, но шкала объявлена как {scale_min}–{scale_max}.",
         contract_scale_step_mismatch: "{code}: значение варианта не соответствует шагу шкалы {step}.",
         contract_missing_ordered_question: "{code}: question_order ссылается на отсутствующий вопрос.",
+        contract_position: "Ошибка {current} из {total}",
+        previous_error: "← Предыдущая ошибка",
+        next_error: "Следующая ошибка →",
+        source_fix_title: "Исправление исходного контракта: {code}",
+        scale_min: "Минимум шкалы", scale_max: "Максимум шкалы", scale_step: "Шаг шкалы",
+        option_value: "Значение варианта", option_text: "Текст варианта",
+        recheck_next: "Проверить исправление и перейти дальше",
+        save_corrected_source: "Сохранить исправленный банк новой версией",
+        download_corrected_source: "Скачать исправленный исходник",
+        corrected_source_saved: "Исправленный банк сохранён новой версией и загружен как источник перевода.",
+        corrected_source_ready: "Все обнаруженные ошибки исправлены. Исходник готов к переводу.",
+        source_correction_save_required: "Ошибки исправлены. Сначала сохраните исправленный банк новой версией; перевод будет привязан именно к ней.",
+        source_fix_unavailable: "Эта ошибка требует восстановления отсутствующей структуры в конструкторе исходного документа.",
         reject_translation: "Отклонить предложение",
         approve_translation: "Я проверил(а) и принимаю перевод",
         rejected: "Предложение отклонено. Исходный документ не изменён.",
@@ -383,6 +411,19 @@ const i18n = {
         contract_scale_option_bounds_mismatch: "{code}: los valores de las opciones abarcan {option_min}–{option_max}, pero la escala declara {scale_min}–{scale_max}.",
         contract_scale_step_mismatch: "{code}: un valor de opción no coincide con el paso de escala {step}.",
         contract_missing_ordered_question: "{code}: question_order hace referencia a una pregunta inexistente.",
+        contract_position: "Error {current} de {total}",
+        previous_error: "← Error anterior",
+        next_error: "Siguiente error →",
+        source_fix_title: "Corrección del contrato de origen: {code}",
+        scale_min: "Mínimo de escala", scale_max: "Máximo de escala", scale_step: "Paso de escala",
+        option_value: "Valor de opción", option_text: "Texto de opción",
+        recheck_next: "Comprobar la corrección y avanzar",
+        save_corrected_source: "Guardar el banco corregido como nueva versión",
+        download_corrected_source: "Descargar el origen corregido",
+        corrected_source_saved: "El banco corregido se guardó como nueva versión y se cargó como origen de traducción.",
+        corrected_source_ready: "Se corrigieron todos los errores detectados. El origen está listo para traducir.",
+        source_correction_save_required: "Los errores están corregidos. Primero guarde el banco como nueva versión; la traducción quedará vinculada exactamente a ella.",
+        source_fix_unavailable: "Este error requiere restaurar la estructura ausente en el constructor del documento de origen.",
         reject_translation: "Rechazar propuesta",
         approve_translation: "He revisado y acepto la traducción",
         rejected: "Propuesta rechazada. El documento original no fue modificado.",
@@ -458,6 +499,19 @@ const i18n = {
         contract_scale_option_bounds_mismatch: "{code}: option values span {option_min}–{option_max}, but the scale declares {scale_min}–{scale_max}.",
         contract_scale_step_mismatch: "{code}: an option value does not align with scale step {step}.",
         contract_missing_ordered_question: "{code}: question_order references a missing question.",
+        contract_position: "Error {current} of {total}",
+        previous_error: "← Previous error",
+        next_error: "Next error →",
+        source_fix_title: "Correct source contract: {code}",
+        scale_min: "Scale minimum", scale_max: "Scale maximum", scale_step: "Scale step",
+        option_value: "Option value", option_text: "Option text",
+        recheck_next: "Check correction and move forward",
+        save_corrected_source: "Save corrected bank as a new version",
+        download_corrected_source: "Download corrected source",
+        corrected_source_saved: "The corrected bank was saved as a new version and loaded as the translation source.",
+        corrected_source_ready: "All detected errors were corrected. The source is ready for translation.",
+        source_correction_save_required: "The errors are corrected. Save the bank as a new version first so the translation is bound to that exact source.",
+        source_fix_unavailable: "This error requires restoring missing structure in the source document constructor.",
         reject_translation: "Reject proposal",
         approve_translation: "I reviewed and accept the translation",
         rejected: "Proposal rejected. The source document was not changed.",
@@ -519,7 +573,7 @@ async function loadFile(file) {
         const result=await QuestionBankFileReader.readQuestionnaireFile(file),content=result.content;
         currentFileName = file.name || '';
         const canonical = QuestionBankFileReader.toCanonicalQuestionBank(result,{interface_language:currentLang});
-        setLoadedDocument(canonical, file.name || 'Imported file');
+        setLoadedDocument(canonical, file.name || 'Imported file', { kind: 'file' });
     } catch (err) {
         alert(i18n[currentLang].error_file + err.message);
     } finally {
@@ -575,11 +629,14 @@ function validateSourceMeasurementContracts(documentValue) {
             issues.push({ code: 'missing_option_text', question_code: code, message: `${code}: at least one response option has no text.` });
         }
         const scale = question.scale;
-        if (!scale || comparableValues.length !== options.length || !options.length) return;
-        const minimum = Number(scale.min);
-        const maximum = Number(scale.max);
-        const step = Number(scale.step);
-        if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum > maximum) {
+        const orderedMeasurement = ['ordinal', 'interval_ratio'].includes(scale?.psychometric_level) ||
+            ['likert_5', 'likert_7', 'frequency_scale', 'nps_scale', 'discrete_count',
+             'continuous_slider', 'currency_metric', 'percentage_share'].includes(scale?.id);
+        if (!scale || !orderedMeasurement || comparableValues.length !== options.length || !options.length) return;
+        const minimum = scale.min;
+        const maximum = scale.max;
+        const step = scale.step;
+        if (!Number.isFinite(minimum) || !Number.isFinite(maximum) || minimum >= maximum) {
             issues.push({ code: 'invalid_scale_bounds', question_code: code, message: `${code}: scale min/max are missing or invalid.` });
             return;
         }
@@ -608,6 +665,45 @@ function validateSourceMeasurementContracts(documentValue) {
     return issues;
 }
 
+function sourceQuestionRecord(questionCode) {
+    if (loadedDocument?.schema === 'research_os.question_bank') {
+        const question = loadedDocument.questions?.[questionCode];
+        return question ? { question, path: ['questions', questionCode] } : null;
+    }
+    if (loadedDocument?.schema === 'research_os.questionnaire') {
+        const index = (loadedDocument.items || []).findIndex((item, itemIndex) =>
+            (item?.code || `ITEM_${itemIndex + 1}`) === questionCode
+        );
+        const question = index >= 0 ? loadedDocument.items[index]?.definition_snapshot : null;
+        return question ? { question, path: ['items', index, 'definition_snapshot'] } : null;
+    }
+    return null;
+}
+
+function contractInputValue(value) {
+    return value === null || value === undefined ? '' : String(value);
+}
+
+function renderSourceContractEditor(issue, dict) {
+    const record = sourceQuestionRecord(issue.question_code);
+    if (!record) return `<div class="source-contract-editor">${escapeReviewHtml(dict.source_fix_unavailable)}</div>`;
+    const question = record.question;
+    const scale = question.scale && typeof question.scale === 'object' ? question.scale : {};
+    const scaleFields = ['min', 'max', 'step'].map(field => `<div class="contract-field">
+        <label>${escapeReviewHtml(dict[`scale_${field}`])}</label>
+        <input type="number" step="any" value="${escapeReviewHtml(contractInputValue(scale[field]))}" onchange="editSourceScaleField('${field}',this.value)">
+    </div>`).join('');
+    const options = (Array.isArray(question.options) ? question.options : []).map((option, index) => `<div class="contract-option-row">
+        <div class="contract-field"><label>${escapeReviewHtml(dict.option_value)} ${index + 1}</label><input type="number" step="any" value="${escapeReviewHtml(contractInputValue(option?.value))}" onchange="editSourceOptionValue(${index},this.value)"></div>
+        <div class="contract-field"><label>${escapeReviewHtml(dict.option_text)} ${index + 1}</label><input type="text" value="${escapeReviewHtml(contractInputValue(option?.text ?? option?.label))}" onchange="editSourceOptionText(${index},this.value)"></div>
+    </div>`).join('');
+    return `<div class="source-contract-editor">
+        <h3>${escapeReviewHtml(dict.source_fix_title.replace('{code}', issue.question_code || ''))}</h3>
+        <div class="contract-field-grid">${scaleFields}</div>${options}
+        <div class="contract-actions"><button class="btn" onclick="recheckSourceContract()">${escapeReviewHtml(dict.recheck_next)}</button></div>
+    </div>`;
+}
+
 function renderSourceContractStatus() {
     const box = document.getElementById('sourceContractBox');
     const dict = i18n[currentLang] || i18n.es;
@@ -617,12 +713,29 @@ function renderSourceContractStatus() {
     }
     if (!sourceContractIssues.length) {
         box.className = 'contract-box ok';
-        box.textContent = dict.source_contract_ok;
+        const databaseSaveRequired = loadedSourceOrigin.kind === 'database' &&
+          loadedSourceOrigin.isSource === true && loadedDocument?.schema === 'research_os.question_bank' &&
+          correctedQuestionCodes.size > 0;
+        const actions = correctedQuestionCodes.size
+          ? `<div class="contract-actions"><button class="btn btn-secondary" onclick="downloadCorrectedSource()">${escapeReviewHtml(dict.download_corrected_source)}</button>` +
+            (databaseSaveRequired
+              ? `<button class="btn" onclick="saveCorrectedDatabaseSource()">${escapeReviewHtml(dict.save_corrected_source)}</button>` : '') + '</div>'
+          : '';
+        box.innerHTML = `${escapeReviewHtml(databaseSaveRequired ? dict.source_correction_save_required :
+          (correctedQuestionCodes.size ? dict.corrected_source_ready : dict.source_contract_ok))}${actions}`;
         return;
     }
+    sourceContractIssueIndex = Math.max(0, Math.min(sourceContractIssueIndex, sourceContractIssues.length - 1));
+    const issue = sourceContractIssues[sourceContractIssueIndex];
     box.className = 'contract-box error';
-    box.innerHTML = `<strong>${escapeReviewHtml(dict.source_contract_error)}</strong><ul>${sourceContractIssues
-        .map(issue => `<li>${escapeReviewHtml(sourceContractIssueMessage(issue, dict))}</li>`).join('')}</ul>`;
+    box.innerHTML = `<strong>${escapeReviewHtml(dict.source_contract_error)}</strong>
+        <div class="contract-navigation">
+          <button class="btn btn-secondary" onclick="goToSourceContractIssue(-1)"${sourceContractIssueIndex === 0 ? ' disabled' : ''}>${escapeReviewHtml(dict.previous_error)}</button>
+          <span class="contract-position">${escapeReviewHtml(dict.contract_position.replace('{current}', sourceContractIssueIndex + 1).replace('{total}', sourceContractIssues.length))}</span>
+          <button class="btn btn-secondary" onclick="goToSourceContractIssue(1)"${sourceContractIssueIndex >= sourceContractIssues.length - 1 ? ' disabled' : ''}>${escapeReviewHtml(dict.next_error)}</button>
+        </div>
+        <ul><li>${escapeReviewHtml(sourceContractIssueMessage(issue, dict))}</li></ul>
+        ${renderSourceContractEditor(issue, dict)}`;
 }
 
 function sourceContractIssueMessage(issue, dict) {
@@ -636,8 +749,144 @@ function sourceContractIssueMessage(issue, dict) {
         .replace('{step}', issue.step ?? '');
 }
 
-function setLoadedDocument(documentValue, sourceLabel) {
+function markSourceQuestionCorrected(questionCode) {
+    if (questionCode) correctedQuestionCodes.add(questionCode);
+    resetTranslationResult();
+    document.getElementById('translateBtn').disabled = true;
+    document.getElementById('originalView').innerText = JSON.stringify(loadedDocument, null, 2);
+}
+
+function editSourceScaleField(field, rawValue) {
+    const issue = sourceContractIssues[sourceContractIssueIndex];
+    const record = issue && sourceQuestionRecord(issue.question_code);
+    if (!record) return;
+    if (!record.question.scale || typeof record.question.scale !== 'object') record.question.scale = {};
+    const value = String(rawValue).trim() === '' ? null : Number(rawValue);
+    if (value !== null && !Number.isFinite(value)) return;
+    record.question.scale[field] = value;
+    markSourceQuestionCorrected(issue.question_code);
+}
+
+function editSourceOptionValue(optionIndex, rawValue) {
+    const issue = sourceContractIssues[sourceContractIssueIndex];
+    const record = issue && sourceQuestionRecord(issue.question_code);
+    const option = record?.question?.options?.[optionIndex];
+    if (!option || typeof option !== 'object') return;
+    const value = String(rawValue).trim() === '' ? null : Number(rawValue);
+    if (value !== null && !Number.isFinite(value)) return;
+    option.value = value;
+    markSourceQuestionCorrected(issue.question_code);
+}
+
+function editSourceOptionText(optionIndex, value) {
+    const issue = sourceContractIssues[sourceContractIssueIndex];
+    const record = issue && sourceQuestionRecord(issue.question_code);
+    const option = record?.question?.options?.[optionIndex];
+    if (!option || typeof option !== 'object') return;
+    if (Object.prototype.hasOwnProperty.call(option, 'text') || !Object.prototype.hasOwnProperty.call(option, 'label')) option.text = value;
+    else option.label = value;
+    markSourceQuestionCorrected(issue.question_code);
+}
+
+function goToSourceContractIssue(delta) {
+    sourceContractIssueIndex = Math.max(0, Math.min(
+        sourceContractIssues.length - 1,
+        sourceContractIssueIndex + delta
+    ));
+    renderSourceContractStatus();
+    document.getElementById('sourceContractBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function recheckSourceContract() {
+    const previousIssue = sourceContractIssues[sourceContractIssueIndex];
+    const previousSignature = previousIssue
+      ? `${previousIssue.code}:${previousIssue.question_code || ''}`
+      : '';
+    sourceContractIssues = validateSourceMeasurementContracts(loadedDocument);
+    const unresolvedIndex = sourceContractIssues.findIndex(issue =>
+        `${issue.code}:${issue.question_code || ''}` === previousSignature
+    );
+    sourceContractIssueIndex = unresolvedIndex >= 0
+      ? unresolvedIndex
+      : Math.min(sourceContractIssueIndex, Math.max(0, sourceContractIssues.length - 1));
+    const databaseSaveRequired = loadedSourceOrigin.kind === 'database' && loadedSourceOrigin.isSource === true &&
+      loadedDocument?.schema === 'research_os.question_bank' && correctedQuestionCodes.size > 0;
+    document.getElementById('translateBtn').disabled = sourceContractIssues.length > 0 || databaseSaveRequired;
+    document.getElementById('originalView').innerText = JSON.stringify(loadedDocument, null, 2);
+    renderSourceContractStatus();
+    document.getElementById('sourceContractBox').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function downloadJsonDocument(documentValue, fileName) {
+    const blob = new Blob([JSON.stringify(documentValue, null, 2)], { type: 'application/json;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
+
+function downloadCorrectedSource() {
+    if (!loadedDocument || sourceContractIssues.length || !correctedQuestionCodes.size) return;
+    const base = String(currentFileName || loadedDocument.code || 'corrected_source').replace(/\.[^.]+$/, '');
+    downloadJsonDocument(loadedDocument, `${base}_corrected.json`);
+}
+
+function correctedDatabaseBankPackage() {
+    const corrected = JSON.parse(JSON.stringify(loadedDocument));
+    const existingVersions = questionBankCatalog
+      .filter(item => item.bank_id === corrected.bank_id)
+      .map(item => Number(item.version))
+      .filter(Number.isInteger);
+    corrected.version = Math.max(Number(corrected.version) || 1, ...existingVersions, 0) + 1;
+    corrected.status = 'draft';
+    corrected.generated_at = new Date().toISOString();
+    correctedQuestionCodes.forEach(code => {
+        const question = corrected.questions?.[code];
+        if (!question) return;
+        question.version = (Number(question.version) || 1) + 1;
+        question.status = 'draft';
+    });
+    delete corrected.translation_provenance;
+    return corrected;
+}
+
+async function saveCorrectedDatabaseSource() {
+    if (loadedSourceOrigin.kind !== 'database' || loadedSourceOrigin.isSource !== true ||
+        loadedDocument?.schema !== 'research_os.question_bank' ||
+        sourceContractIssues.length || !correctedQuestionCodes.size) return;
+    const session = readResearcherSession();
+    if (!session) {
+        alert('Researcher login is required.');
+        return;
+    }
+    const corrected = correctedDatabaseBankPackage();
+    try {
+        await window.ResearchContracts.requestJson('/question-banks/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.token}` },
+            body: JSON.stringify(corrected)
+        });
+        questionBankCatalog.push({
+            bank_id: corrected.bank_id, version: corrected.version, code: corrected.code,
+            title: corrected.title, status: corrected.status,
+            available_languages: [{ language: corrected.primary_language, is_source: true }]
+        });
+        setLoadedDocument(corrected, `${corrected.code}_v${corrected.version}_${corrected.primary_language}`, {
+            kind: 'database', sourceType: 'question_bank', entityId: corrected.bank_id,
+            version: corrected.version, language: corrected.primary_language, isSource: true
+        });
+        alert((i18n[currentLang] || i18n.es).corrected_source_saved);
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+function setLoadedDocument(documentValue, sourceLabel, origin = { kind: 'file' }) {
     loadedDocument = JSON.parse(JSON.stringify(documentValue));
+    loadedSourceOrigin = origin;
+    correctedQuestionCodes = new Set();
+    sourceContractIssueIndex = 0;
     currentFileName = sourceLabel || documentValue.code || 'translation_source';
     resetTranslationResult();
     sourceContractIssues = validateSourceMeasurementContracts(loadedDocument);
@@ -749,7 +998,11 @@ async function loadDatabaseSource() {
     try {
         const data = await window.ResearchContracts.requestJson(endpoint);
         const canonical = isQuestionnaire ? (data.questionnaire || data) : data;
-        setLoadedDocument(canonical, `${canonical.code || 'source'}_v${canonical.version}_${variant.language}`);
+        setLoadedDocument(canonical, `${canonical.code || 'source'}_v${canonical.version}_${variant.language}`, {
+            kind: 'database', sourceType: isQuestionnaire ? 'questionnaire' : 'question_bank',
+            entityId: identity.id, version: identity.version, language: variant.language,
+            isSource: variant.isSource === true
+        });
     } catch (error) {
         alert(error.message);
     }
@@ -1017,6 +1270,11 @@ async function startTranslation() {
     renderSourceContractStatus();
     if (sourceContractIssues.length) {
         alert((i18n[currentLang] || i18n.es).source_contract_error);
+        return;
+    }
+    if (loadedSourceOrigin.kind === 'database' && loadedSourceOrigin.isSource === true &&
+        loadedDocument.schema === 'research_os.question_bank' && correctedQuestionCodes.size) {
+        alert((i18n[currentLang] || i18n.es).source_correction_save_required);
         return;
     }
     const targetLanguage = document.getElementById('targetLang').value;

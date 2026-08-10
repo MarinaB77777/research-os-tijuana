@@ -456,6 +456,55 @@ test('saved translation catalog is discoverable and enriches the bank language s
   }
 });
 
+test('catalog recovers the exact source language when an older list RPC omits it', async () => {
+  const originalFetch = globalThis.fetch;
+  let call = 0;
+  globalThis.fetch = async (url) => {
+    call += 1;
+    if (call === 1) {
+      assert.match(url, /rpc\/list_question_banks$/);
+      return jsonFetch([{
+        bank_id: bankId, version: 1, code: 'SUPPORT', title: 'Support',
+        status: 'draft', reuse_permission: 'attribution_permitted'
+      }]);
+    }
+    if (call === 2) return jsonFetch([{
+      session_id: 'e3ce976f-acde-47a7-8247-ef92986ca3da', account_id: researcherId,
+      expires_at: '2099-01-01T00:00:00.000Z', revoked_at: null
+    }]);
+    if (call === 3) return jsonFetch([{
+      account_id: researcherId, username: 'researcher', user_identifier: 'RESEARCHER-001',
+      role: 'researcher', status: 'active', created_by_account_id: null
+    }]);
+    if (call === 4) return jsonFetch([{ entity_id: bankId }]);
+    assert.equal(call, 5);
+    assert.match(url, /rpc\/list_question_translation_catalog$/);
+    return jsonFetch({
+      packages: [],
+      bank_languages: [{
+        source_entity_id: bankId, source_version: 1,
+        language: 'ru-RU', is_source: true, coverage_complete: true,
+        verification_status: 'source'
+      }],
+      questionnaire_languages: []
+    });
+  };
+  try {
+    const res = response();
+    await handler({
+      method: 'GET', url: '/question-banks',
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.payload.banks[0].primary_language, 'ru-RU');
+    assert.equal(res.payload.banks[0].source_language, 'ru-RU');
+    assert.equal(res.payload.banks[0].catalog_integrity, 'valid');
+    assert.deepEqual(res.payload.banks[0].available_languages.map(row => row.language), ['ru-RU']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('translation registry endpoint returns the researcher-scoped saved package', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = researcherAccessThen(async (url, options, call) => {

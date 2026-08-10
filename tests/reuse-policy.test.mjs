@@ -134,6 +134,45 @@ test('server binds authorship to the authenticated owner and never trusts a brow
   }
 });
 
+test('server rejects stale frequency-scale bounds even when option values are ordered', async () => {
+  process.env.SUPABASE_URL = 'https://supabase.test';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+  const handler = (await import(
+    `data:text/javascript;base64,${Buffer.from(apiSource).toString('base64')}#frequency-contract`
+  )).default;
+  const originalFetch = globalThis.fetch;
+  let callIndex = 0;
+  globalThis.fetch = async () => {
+    callIndex += 1;
+    if (callIndex === 1) return jsonFetch([{
+      session_id: '83ca8b34-acde-45be-a279-8188edaa8a05',
+      account_id: 'a22cb0be-acde-42c4-86aa-a1c023b0c329',
+      expires_at: '2099-01-01T00:00:00.000Z', revoked_at: null
+    }]);
+    return jsonFetch([{
+      account_id: 'a22cb0be-acde-42c4-86aa-a1c023b0c329', username: 'owner',
+      user_identifier: 'OWNER-001', role: 'researcher', status: 'active'
+    }]);
+  };
+  try {
+    const body = canonicalBank('attribution_permitted');
+    body.questions.Q_1.scale = {
+      id: 'frequency_scale', psychometric_level: 'ordinal', min: 0, max: 10, step: 1
+    };
+    body.questions.Q_1.options = [1, 2, 3, 4, 5].map(value => ({ value, text: String(value) }));
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-banks/save',
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-session' }, body
+    }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.payload.error, /measurement contract/);
+    assert.equal(callIndex, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('database contracts expose freely reusable active banks and keep restricted banks owner-only', () => {
   assert.match(bankSql, /reuse_policy,permission/);
   assert.match(bankSql, /attribution_required/);

@@ -727,6 +727,19 @@ test('question-bank editor reopens and rebuilds canonical identity without chang
       field
     );
   }
+
+  const staleFrequencyBank = JSON.parse(JSON.stringify(bank));
+  staleFrequencyBank.questions.Q_1.type = 'single_select';
+  staleFrequencyBank.questions.Q_1.scale = {
+    id: 'frequency_scale', psychometric_level: 'ordinal', min: 0, max: 10, step: 1,
+    unit: null, direction: 'direct'
+  };
+  staleFrequencyBank.questions.Q_1.options = [1, 2, 3, 4, 5].map(value => ({ value, text: String(value) }));
+  const correctedFrequencyBank = roundTripContext.roundTripBank(staleFrequencyBank);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(correctedFrequencyBank.questions.Q_1.scale)),
+    { id: 'frequency_scale', psychometric_level: 'ordinal', min: 1, max: 5, step: 1, unit: null, direction: 'direct' }
+  );
 });
 
 test('questionnaire JSON reopening preserves item identities, routing, consent, and time reference', async () => {

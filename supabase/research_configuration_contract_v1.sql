@@ -269,18 +269,24 @@ begin
         if (v_item ->> 'position')::integer <> v_position then
             raise exception 'Questionnaire positions must be contiguous and ordered';
         end if;
-        select jsonb_build_object(
-            'prompt', qd.definition -> 'prompt',
-            'type', qd.definition -> 'type',
-            'scale', qd.definition -> 'scale',
-            'options', qd.definition -> 'options',
-            'domain', qd.definition -> 'domain',
-            'parameter', qd.definition -> 'parameter',
-            'status', qd.definition -> 'status'
-        ) into v_snapshot
+        -- A questionnaire pins the complete immutable scientific definition,
+        -- not a lossy hand-written subset. Identity belongs to the item
+        -- reference; every other registered field (time, family, direction,
+        -- provenance-bearing source context, and future compatible fields)
+        -- remains in the snapshot.
+        select (qd.definition - 'question_id' - 'version' - 'code') ||
+               jsonb_build_object(
+                   'definition_language', coalesce(
+                       qd.definition ->> 'definition_language',
+                       qb.primary_language
+                   )
+               )
+          into v_snapshot
           from public.question_bank_items qbi
           join public.question_definitions qd
             on qd.question_id = qbi.question_id and qd.version = qbi.question_version
+          join public.question_banks qb
+            on qb.bank_id = qbi.bank_id and qb.version = qbi.bank_version
          where qbi.bank_id = (v_item ->> 'source_bank_id')::uuid
            and qbi.bank_version = (v_item ->> 'source_bank_version')::integer
            and qbi.question_id = (v_item ->> 'question_id')::uuid
@@ -384,17 +390,24 @@ drop function if exists public.list_question_banks();
 create function public.list_question_banks()
 returns table (
     bank_id uuid, version integer, code text, title text, status text,
-    reuse_permission text, global_time_reference timestamptz, updated_at timestamptz
+    primary_language text, question_count bigint, reuse_permission text,
+    global_time_reference timestamptz, updated_at timestamptz
 )
 language sql stable security definer set search_path = public, pg_temp
 as $$
     select qb.bank_id, qb.version, qb.code, qb.title, qb.status,
+           qb.primary_language, count(qbi.question_id) as question_count,
            coalesce(
                qb.package_data #>> '{reuse_policy,permission}',
                'attribution_permitted'
            ) as reuse_permission,
            qb.global_time_reference, qb.updated_at
       from public.question_banks qb
+      left join public.question_bank_items qbi
+        on qbi.bank_id = qb.bank_id and qbi.bank_version = qb.version
+     group by qb.bank_id, qb.version, qb.code, qb.title, qb.status,
+              qb.primary_language, qb.package_data, qb.global_time_reference,
+              qb.updated_at
      order by qb.title, qb.version desc;
 $$;
 
@@ -432,14 +445,17 @@ as $$
      order by pd.version desc limit 1;
 $$;
 
-create or replace function public.list_questionnaires(requested_status text default 'all')
+drop function if exists public.list_questionnaires(text);
+create function public.list_questionnaires(requested_status text default 'all')
 returns table (
     questionnaire_id uuid, version integer, code text, title text, status text,
-    item_count bigint, global_time_reference timestamptz, updated_at timestamptz
+    primary_language text, item_count bigint,
+    global_time_reference timestamptz, updated_at timestamptz
 )
 language sql stable security definer set search_path = public, pg_temp
 as $$
     select q.questionnaire_id, q.version, q.code, q.title, q.status,
+           q.primary_language,
            count(qi.item_id) as item_count,
            q.global_time_reference, q.updated_at
       from public.questionnaires q
@@ -448,6 +464,7 @@ as $$
        and qi.questionnaire_version = q.version
      where requested_status = 'all' or q.status = requested_status
      group by q.questionnaire_id, q.version, q.code, q.title, q.status,
+              q.primary_language,
               q.global_time_reference, q.updated_at
      order by q.title, q.version desc;
 $$;

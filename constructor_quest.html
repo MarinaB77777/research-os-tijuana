@@ -276,6 +276,7 @@
       <h1 id="uiTitle">Research OS · Strict Cyan Protocol Engine</h1>
       <div class="header-controls">
         <a href="index.html" class="btn btn-secondary" id="homeBtn">🔬 Inicio</a>
+        <a href="question_catalog.html" class="btn btn-secondary" id="catalogBtn">☷ Catálogo</a>
         <select class="lang-select" id="langSelect" onchange="changeLanguage(this.value)">
           <option value="es-MX">🇲🇽 Español (México)</option>
           <option value="en-US">🇺🇸 English (US)</option>
@@ -507,6 +508,7 @@
           lagLabel: "Retraso (Δ)",
           exportBtn: "Exportar JSON",
           homeBtn: "🔬 Inicio",
+          catalogBtn: "☷ Catálogo",
           modeStatic: "📌 Estático (T0)",
           modeDynamic: "⚡ Longitudinal",
           typeNominal: "Nominal",
@@ -590,6 +592,7 @@
           lagLabel: "Time-Lag (Δ)",
           exportBtn: "Export JSON",
           homeBtn: "🔬 Research OS",
+          catalogBtn: "☷ Catalog",
           modeStatic: "📌 Static (T0)",
           modeDynamic: "⚡ Longitudinal",
           typeNominal: "Nominal",
@@ -673,6 +676,7 @@
           lagLabel: "Лаг (Δ)",
           exportBtn: "Экспорт JSON",
           homeBtn: "🔬 Research OS",
+          catalogBtn: "☷ Каталог",
           modeStatic: "📌 Статика (T0)",
           modeDynamic: "⚡ Лонгитюд",
           typeNominal: "Nominal (Номинальный)",
@@ -1246,9 +1250,30 @@
         const bankId = params.get('bank');
         if (!bankId) return;
         const version = params.get('version');
+        const requestedLanguage = params.get('lang');
+        const translationPackageId = params.get('translation_package_id');
+        const translationVersion = params.get('translation_version');
         try {
+          if (!version || !Number.isInteger(Number(version)) || Number(version) < 1) {
+            throw new Error('An exact Question Bank version is required for editing');
+          }
+          if (!requestedLanguage || !['es-MX', 'en-US', 'ru-RU'].includes(requestedLanguage)) {
+            throw new Error('An exact Question Bank language is required for editing');
+          }
+          const exact = new URLSearchParams({
+            version: String(Number(version)),
+            lang: requestedLanguage
+          });
+          if (translationPackageId || translationVersion) {
+            if (!translationPackageId || !translationVersion ||
+                !Number.isInteger(Number(translationVersion)) || Number(translationVersion) < 1) {
+              throw new Error('An exact translation package and version are required together');
+            }
+            exact.set('translation_package_id', translationPackageId);
+            exact.set('translation_version', String(Number(translationVersion)));
+          }
           const packageData = await ResearchContracts.requestJson(
-            `/question-banks/${encodeURIComponent(bankId)}${version ? `?version=${encodeURIComponent(version)}` : ''}`
+            `/question-banks/${encodeURIComponent(bankId)}?${exact}`
           );
           const restored = questionBankPackageToEditor(packageData);
           bank = restored.questions;
@@ -1285,6 +1310,7 @@
         document.getElementById('addVarBtn').textContent = dict.addVarBtn;
         document.getElementById('delVarBtn').textContent = dict.delVarBtn;
         document.getElementById('homeBtn').textContent = dict.homeBtn;
+        document.getElementById('catalogBtn').textContent = dict.catalogBtn;
         document.getElementById('btnModeStatic').textContent = dict.modeStatic;
         document.getElementById('btnModeDynamic').textContent = dict.modeDynamic;
 
@@ -1603,6 +1629,7 @@
         const nextVal = lastOpt && !isNaN(Number(lastOpt.s)) ? Number(lastOpt.s) + 1 : 1;
         const defaultLabel = currentLang === 'es-MX' ? `Opción ${v.options.length + 1}` : (currentLang === 'ru' ? `Вариант ${v.options.length + 1}` : `Option ${v.options.length + 1}`);
         v.options.push({ l: defaultLabel, s: nextVal });
+        synchronizeVariableScaleContract(v);
         saveBank();
         updateUI();
       }
@@ -1616,6 +1643,7 @@
           return;
         }
         v.options.splice(optIndex, 1);
+        synchronizeVariableScaleContract(v);
         saveBank();
         updateUI();
       }
@@ -1633,7 +1661,9 @@
         if (!v || !v.options[optIdx]) return;
         const parsed = Number(val);
         v.options[optIdx].s = val === '' ? null : (v.type === 'ordinal' ? (Number.isFinite(parsed) ? parsed : null) : val);
+        synchronizeVariableScaleContract(v);
         saveBank();
+        validateAllInvariants();
         renderPreview();
       }
 
@@ -1825,6 +1855,46 @@
         }[scaleId] || null;
       }
 
+      function numericOptionSequence(variable) {
+        if (!Array.isArray(variable?.options) || variable.options.length < 2) return null;
+        const values = variable.options.map(option => Number(option?.s));
+        if (values.some(value => !Number.isFinite(value)) ||
+            values.some((value, index) => index > 0 && value <= values[index - 1])) return null;
+        const differences = values.slice(1).map((value, index) => value - values[index]);
+        const uniformStep = differences.every(value => Math.abs(value - differences[0]) < 1e-9)
+          ? differences[0]
+          : null;
+        return { min: values[0], max: values[values.length - 1], step: uniformStep };
+      }
+
+      function synchronizeVariableScaleContract(variable) {
+        if (!variable || typeof variable !== 'object') return;
+        if (!variable.config || typeof variable.config !== 'object') variable.config = {};
+        const defaults = registeredScaleDefaults(variable.scale);
+        if (defaults) {
+          Object.assign(variable.config, defaults);
+          return;
+        }
+        if (variable.scale === 'frequency_scale') {
+          const sequence = numericOptionSequence(variable);
+          variable.config.min = sequence?.min ?? null;
+          variable.config.max = sequence?.max ?? null;
+          variable.config.step = sequence?.step ?? null;
+          variable.config.unit = '';
+          return;
+        }
+        if (variable.scale === 'dichotomous') {
+          Object.assign(variable.config, { min: 0, max: 1, step: 1, unit: '' });
+          return;
+        }
+        if (['single_choice', 'multiple_choice', 'short_string', 'long_paragraph'].includes(variable.scale)) {
+          variable.config.min = null;
+          variable.config.max = null;
+          variable.config.step = null;
+          variable.config.unit = '';
+        }
+      }
+
       function fixedScaleOptionValues(scaleId) {
         if (scaleId === 'dichotomous') return [1, 0];
         if (scaleId === 'likert_5') return [1, 2, 3, 4, 5];
@@ -1834,10 +1904,7 @@
       }
 
       function applyRegisteredScaleDefaults(variable) {
-        const defaults = registeredScaleDefaults(variable?.scale);
-        if (!defaults) return;
-        if (!variable.config || typeof variable.config !== 'object') variable.config = {};
-        Object.assign(variable.config, defaults);
+        synchronizeVariableScaleContract(variable);
       }
 
       function semanticToken(value) {
@@ -1890,7 +1957,7 @@
                 text: option.l
               }))
             : [];
-          applyRegisteredScaleDefaults(variable);
+          synchronizeVariableScaleContract(variable);
 
           questions[code] = {
             question_id: variable.question_id,

@@ -161,20 +161,39 @@ test('coverage is the union of approved subconstructs and never a question count
   assert.doesNotMatch(html, /is_standard_mapping|standard_methodology/);
 });
 
-test('standard-method search is restricted to recognized methods that are free to use', () => {
+test('standard-method search retains every recognized method while preserving exact access status', () => {
   assert.match(html, /id="methodAccessInput"/);
-  assert.match(html, /type="hidden" value="open_only"/);
+  assert.match(html, /type="hidden" value="include_all_recognized"/);
   assert.doesNotMatch(html, /<option value="include_licensed"/);
   assert.match(promptSource, /published, recognized standard\s+method/i);
-  assert.match(promptSource, /without\s+purchase, subscription, or case-by-case permission/i);
-  assert.match(promptSource, /Article access alone is not evidence/i);
+  assert.match(promptSource, /Do not suppress a recognized\s+method merely because it is paid/i);
+  assert.match(promptSource, /Never reproduce or link to unauthorized\s+copies/i);
+  assert.match(promptSource, /Never convert\s+unknown into free, paid, safe, or unavailable/i);
 
-  const openCandidate = { rights_and_access: { status: 'open' } };
-  const paidCandidate = { rights_and_access: { status: 'purchase_required' } };
-  assert.equal(run('candidateAllowedByAccess(openCandidate, "open_only")', { openCandidate }), true);
-  assert.equal(run('candidateAllowedByAccess(paidCandidate, "open_only")', { paidCandidate }), false);
-  assert.equal(run('candidateAllowedByAccess(paidCandidate, "include_licensed")'), false);
-  assert.equal(run('mappingSpec().standard_method_access_scope'), 'open_only');
+  const targets = [{ node_id: 'node-1', label: 'Target' }];
+  const freeCandidate = plain(run('normalizeCandidate(raw, targets)', {
+    targets,
+    raw: { method_name: 'Free method', method_access: {
+      status: 'free', access_url: 'https://official.example/free', access_url_type: 'manual'
+    } }
+  }));
+  const paidCandidate = plain(run('normalizeCandidate(raw, targets)', {
+    targets,
+    raw: { method_name: 'Paid method', method_access: {
+      status: 'purchase_required', access_url: 'https://unauthorized.example/copy'
+    } }
+  }));
+  const unknownCandidate = plain(run('normalizeCandidate(raw, targets)', {
+    targets,
+    raw: { method_name: 'Unknown access', method_access: { status: 'unknown' } }
+  }));
+  assert.equal(freeCandidate.method_access.status, 'free');
+  assert.equal(freeCandidate.method_access.access_url, 'https://official.example/free');
+  assert.equal(paidCandidate.method_access.status, 'purchase_required');
+  assert.equal(paidCandidate.method_access.access_url, null);
+  assert.equal(unknownCandidate.method_access.status, 'unknown');
+  assert.equal(unknownCandidate.method_access.access_url, null);
+  assert.equal(run('mappingSpec().standard_method_access_scope'), 'include_all_recognized');
 });
 
 test('bank loading uses the active interface language and results are grouped by deep research question', () => {
@@ -585,7 +604,8 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
   );
   assert.equal(result.ai_provenance.provider, 'groq');
   assert.equal(result.ai_provenance.model, 'openai/gpt-oss-20b');
-  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_open_methods_v4');
+  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_standard_methods_v5');
+  assert.equal(result.context.standard_method_access_scope, 'include_all_recognized');
   assert.equal(result.ai_provenance.human_authority, false);
   assert.equal(result.potentially_unique_constructs[0].separate_validation_required, true);
   assert.equal(result.methodology_basis.length, 5);

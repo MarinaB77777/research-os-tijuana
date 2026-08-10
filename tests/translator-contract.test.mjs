@@ -14,8 +14,10 @@ function element(id) {
       style: {},
       classList: { add() {}, remove() {} },
       innerText: '',
+      innerHTML: '',
       value: id === 'targetLang' ? 'es-MX' : '',
-      disabled: false
+      disabled: false,
+      scrollIntoView() {}
     });
   }
   return elements.get(id);
@@ -321,6 +323,31 @@ test('translation is blocked when source option values contradict declared scale
   const issues = plain(run('validateSourceMeasurementContracts(bank)', { bank }));
   assert.deepEqual(issues.map(issue => issue.code), ['scale_option_bounds_mismatch']);
   assert.match(issues[0].message, /1–5.*0–10/);
+});
+
+test('source contract errors can be corrected in place and rechecked before translation', () => {
+  const bank = {
+    schema: 'research_os.question_bank', primary_language: 'es-MX',
+    questions: {
+      OPTIMISM: {
+        prompt: '¿Con qué frecuencia?', type: 'single_select',
+        options: [1, 2, 3, 4, 5].map(value => ({ value, text: String(value) })),
+        scale: { id: 'frequency_scale', psychometric_level: 'ordinal', min: 0, max: 10, step: 1 }
+      }
+    }
+  };
+  run(`loadedDocument=bank;
+    sourceContractIssues=validateSourceMeasurementContracts(loadedDocument);
+    sourceContractIssueIndex=0;
+    correctedQuestionCodes=new Set();`, { bank });
+  assert.equal(run('sourceContractIssues.length'), 1);
+  run("editSourceScaleField('min','1'); editSourceScaleField('max','5'); recheckSourceContract();");
+  assert.equal(run('sourceContractIssues.length'), 0);
+  assert.equal(run("correctedQuestionCodes.has('OPTIMISM')"), true);
+  assert.equal(run('document.getElementById("translateBtn").disabled'), false);
+  assert.deepEqual(plain(run('loadedDocument.questions.OPTIMISM.scale')), {
+    id: 'frequency_scale', psychometric_level: 'ordinal', min: 1, max: 5, step: 1
+  });
 });
 
 test('plain-text fallback is limited to TXT and returns a canonical bank', () => {
