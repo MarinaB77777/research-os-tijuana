@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -371,9 +371,9 @@
       <span class="brand-title">Research OS</span>
     </div>
     <div class="lang-selector">
-      <button onclick="setLanguage('es')" id="lang-es">🇲🇽 ES</button>
+      <button onclick="setLanguage('es')" id="lang-es" class="active">🇲🇽 ES</button>
       <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
-      <button onclick="setLanguage('ru')" id="lang-ru" class="active">RU</button>
+      <button onclick="setLanguage('ru')" id="lang-ru">RU</button>
     </div>
   </header>
 
@@ -449,7 +449,7 @@
     }
   };
 
-  let currentLang = 'ru';
+  let currentLang = 'es';
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, function(char) {
@@ -458,11 +458,13 @@
   }
 
   function setLanguage(lang) {
-    currentLang = lang;
+    currentLang = i18n[lang] ? lang : 'es';
+    localStorage.setItem('app_language', currentLang);
+    document.documentElement.lang = currentLang;
     document.querySelectorAll('.lang-selector button').forEach(btn => btn.classList.remove('active'));
-    document.getElementById('lang-' + lang).classList.add('active');
+    document.getElementById('lang-' + currentLang).classList.add('active');
 
-    const t = i18n[lang];
+    const t = i18n[currentLang];
     document.getElementById('ui-title').innerText = t.title;
     document.getElementById('ui-input-label').innerText = t.inputLabel;
     document.getElementById('ui-output-label').innerText = t.outputLabel;
@@ -1126,7 +1128,14 @@
 
   function clearAll() {
     document.getElementById('input-data').value = '';
-    document.getElementById('validation-report').innerHTML = '<span style="color: var(--text-muted);">Ожидание данных для проверки...</span>';
+    document.getElementById('validation-report').innerHTML = '<span style="color: var(--text-muted);">' + escapeHtml(i18n[currentLang].waiting) + '</span>';
+  }
+
+  if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', function() {
+      const savedLanguage = (localStorage.getItem('app_language') || 'es').replace('-MX', '').replace('-US', '');
+      setLanguage(i18n[savedLanguage] ? savedLanguage : 'es');
+    });
   }
 
   window.ResearchOsValidator = Object.freeze({

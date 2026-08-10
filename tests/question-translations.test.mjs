@@ -15,6 +15,7 @@ const bankId = '7010261c-acde-4f36-9ee5-25c038bd607a';
 const questionId = '7dc963f0-acde-4816-9935-b6c0b39035f4';
 const questionnaireId = '24b68c24-acde-49d0-8a16-6cfd95d19328';
 const itemId = 'e7023349-acde-4c83-93cc-63845a15d766';
+const translationPackageId = '3e66454f-acde-437b-9ae2-fd3529b977ba';
 
 function response() {
   return {
@@ -131,6 +132,53 @@ test('accepted translation is structurally verified and saved beside the source'
     assert.equal(res.statusCode, 200);
     assert.equal(saveBody.p_researcher_account_id, researcherId);
     assert.equal(saveBody.translation_data.questions.Q_SUPPORT.prompt, '¿Qué tanto apoyo siente?');
+    assert.equal(saveBody.translation_data.questions.Q_SUPPORT.definition_language, 'es-MX');
+    assert.equal(saveBody.translation_data.questions.Q_SUPPORT.translation_reference, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('accepted questionnaire translation normalizes every nested snapshot language before storage', async () => {
+  const originalFetch = globalThis.fetch;
+  let saveBody;
+  globalThis.fetch = researcherAccessThen(async (url, options, call) => {
+    if (call === 3) return jsonFetch({ [`${questionId}:1`]: sourceQuestion });
+    assert.equal(call, 4);
+    assert.match(url, /rpc\/save_accepted_question_translation_package$/);
+    saveBody = JSON.parse(options.body);
+    return jsonFetch({ translation_package_id: translationPackageId, translation_version: 1 });
+  });
+  const translated = {
+    schema: 'research_os.questionnaire', schema_version: 1,
+    questionnaire_id: questionnaireId, version: 1, code: 'SUPPORT_SURVEY',
+    title: 'Encuesta de apoyo', primary_language: 'es-MX',
+    items: [{
+      item_id: itemId, question_id: questionId, question_version: 1,
+      source_bank_id: bankId, source_bank_version: 1, code: 'Q_SUPPORT',
+      definition_snapshot: {
+        ...sourceQuestion,
+        prompt: '¿Qué tanto apoyo siente durante el día?',
+        options: sourceQuestion.options.map(option => ({ ...option, text: `Opción ${option.value}` })),
+        definition_language: 'en-US'
+      }
+    }],
+    translation_provenance: {
+      schema: 'research_os.ai_translation_provenance', schema_version: 1,
+      source_identity: { schema: 'research_os.questionnaire', questionnaire_id: questionnaireId, code: 'SUPPORT_SURVEY', version: 1 },
+      source_primary_language: 'en-US', target_language: 'es-MX', source_sha256: 'c'.repeat(64),
+      human_disposition: { status: 'accepted', researcher_account_id: researcherId, decided_at: '2026-08-09T20:00:00.000Z' }
+    }
+  };
+  try {
+    const res = response();
+    await handler({
+      method: 'POST', url: '/question-translations/save', body: translated,
+      headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
+    }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal(saveBody.translation_data.items[0].definition_snapshot.definition_language, 'es-MX');
+    assert.equal(saveBody.translation_data.items[0].definition_snapshot.translation_reference, null);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -284,13 +332,19 @@ test('bank language loading requires a complete accepted translation set', async
       question_order: ['Q_SUPPORT']
     });
     assert.equal(call, 4);
-    return jsonFetch({});
+    assert.match(url, /rpc\/load_exact_question_translation_package$/);
+    return jsonFetch({
+      translation_package_id: translationPackageId,
+      translation_version: 1,
+      translated_document: { title: 'Apoyo' },
+      translations: {}
+    });
   });
   try {
     const res = response();
     await handler({
       method: 'GET',
-      url: `/question-banks/${bankId}?version=1&lang=es-MX`,
+      url: `/question-banks/${bankId}?version=1&lang=es-MX&translation_package_id=${translationPackageId}&translation_version=1`,
       headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
     }, res);
     assert.equal(res.statusCode, 409);
@@ -327,12 +381,14 @@ test('saved translation catalog is discoverable and enriches the bank language s
     assert.equal(call, 5);
     assert.match(url, /rpc\/list_question_translation_catalog$/);
     return jsonFetch({
-      packages: [],
-      bank_languages: [
-        { source_entity_id: bankId, source_version: 1, language: 'en-US', is_source: true },
-        { source_entity_id: bankId, source_version: 1, language: 'es-MX', is_source: false,
-          expected_question_count: 1, translated_question_count: 1 }
-      ],
+      packages: [{
+        translation_package_id: translationPackageId,
+        source_schema: 'research_os.question_bank', source_entity_id: bankId,
+        source_version: 1, target_language: 'es-MX', translation_version: 1,
+        expected_question_count: 1, translated_question_count: 1,
+        coverage_complete: true, verification_status: 'verified'
+      }],
+      bank_languages: [],
       questionnaire_languages: []
     });
   };
@@ -345,6 +401,7 @@ test('saved translation catalog is discoverable and enriches the bank language s
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.payload.banks[0].available_languages.map(row => row.language), ['en-US', 'es-MX']);
     assert.equal(res.payload.banks[0].source_language, 'en-US');
+    assert.equal(res.payload.banks[0].available_languages[1].translation_package_id, translationPackageId);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -382,7 +439,33 @@ test('translation registry endpoint returns the researcher-scoped saved package'
   }
 });
 
-test('accepted questionnaire language loads translated snapshots without changing routing identity', async () => {
+test('content endpoints reject ambiguous loads without an exact entity version and language', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('No database call is allowed for an ambiguous content request');
+  };
+  try {
+    const bankResponse = response();
+    await handler({
+      method: 'GET', url: `/question-banks/${bankId}`,
+      headers: { host: 'research-os.test' }
+    }, bankResponse);
+    assert.equal(bankResponse.statusCode, 400);
+    assert.match(bankResponse.payload.error, /Exact question-bank version and supported language/);
+
+    const questionnaireResponse = response();
+    await handler({
+      method: 'GET', url: `/questionnaires/${questionnaireId}?version=1`,
+      headers: { host: 'research-os.test' }
+    }, questionnaireResponse);
+    assert.equal(questionnaireResponse.statusCode, 400);
+    assert.match(questionnaireResponse.payload.error, /Exact questionnaire version and supported language/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('an exact accepted questionnaire package loads translated snapshots without changing routing identity', async () => {
   const originalFetch = globalThis.fetch;
   let call = 0;
   const sourceQuestionnaire = {
@@ -412,36 +495,41 @@ test('accepted questionnaire language loads translated snapshots without changin
       role: 'researcher', status: 'active', created_by_account_id: null
     }]);
     if (call === 4) {
-      assert.match(url, /rpc\/load_question_translation_variants$/);
+      assert.match(url, /rpc\/load_exact_question_translation_package$/);
       return jsonFetch({
-        [`${questionId}:1`]: {
-          translated_definition: {
-            ...sourceQuestion,
-            prompt: '¿Qué tanto apoyo siente?',
-            options: sourceQuestion.options.map(option => ({ ...option, text: `Opción ${option.value}` }))
-          },
-          translation_reference: {
-            translation_package_id: '3e66454f-acde-437b-9ae2-fd3529b977ba',
-            translation_version: 1, target_language: 'es-MX'
+        translation_package_id: translationPackageId,
+        translation_version: 1,
+        translated_document: { title: 'Encuesta de apoyo', description: 'Descripción traducida' },
+        translations: {
+          [`${questionId}:1`]: {
+            translated_definition: {
+              ...sourceQuestion,
+              prompt: '¿Qué tanto apoyo siente?',
+              options: sourceQuestion.options.map(option => ({ ...option, text: `Opción ${option.value}` }))
+            },
+            translation_reference: {
+              translation_package_id: translationPackageId,
+              translation_version: 1, package_translation_version: 1, target_language: 'es-MX'
+            }
           }
         }
       });
     }
-    assert.equal(call, 5);
-    assert.match(url, /rpc\/load_question_translation_document$/);
-    return jsonFetch({ title: 'Encuesta de apoyo', description: 'Descripción traducida' });
+    throw new Error(`Unexpected fetch call ${call}: ${url}`);
   };
   try {
     const res = response();
     await handler({
       method: 'GET',
-      url: `/questionnaires/${questionnaireId}?version=1&lang=es-MX`,
+      url: `/questionnaires/${questionnaireId}?version=1&lang=es-MX&translation_package_id=${translationPackageId}&translation_version=1`,
       headers: { host: 'research-os.test', authorization: 'Bearer researcher-token' }
     }, res);
     assert.equal(res.statusCode, 200);
     assert.equal(res.payload.questionnaire.primary_language, 'es-MX');
     assert.equal(res.payload.questionnaire.title, 'Encuesta de apoyo');
     assert.equal(res.payload.questionnaire.items[0].definition_snapshot.prompt, '¿Qué tanto apoyo siente?');
+    assert.equal(res.payload.questionnaire.items[0].definition_snapshot.definition_language, 'es-MX');
+    assert.equal(res.payload.questionnaire.translation_set.translation_package_id, translationPackageId);
     assert.equal(res.payload.questionnaire.items[0].item_id, itemId);
     assert.deepEqual(res.payload.questionnaire.routing, sourceQuestionnaire.routing);
   } finally {
@@ -450,10 +538,11 @@ test('accepted questionnaire language loads translated snapshots without changin
 });
 
 test('translation migration and UI retain immutable source and provenance', async () => {
-  const [migration, catalogMigration, integrityMigration, translator, constructor, assessment, vercel] = await Promise.all([
+  const [migration, catalogMigration, integrityMigration, exactLoadingMigration, translator, constructor, assessment, vercel] = await Promise.all([
     fs.readFile(new URL('../supabase/question_translation_variants_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../supabase/question_translation_catalog_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../supabase/question_translation_integrity_v2.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../supabase/question_translation_exact_loading_v3.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../translator.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../assessment.html', import.meta.url), 'utf8'),
@@ -479,13 +568,28 @@ test('translation migration and UI retain immutable source and provenance', asyn
   assert.match(integrityMigration, /question_translation_drafts/);
   assert.match(integrityMigration, /verification_status = 'verified'/);
   assert.match(integrityMigration, /require_verified_question_translation_package/);
+  assert.match(exactLoadingMigration, /load_exact_question_translation_package/);
+  assert.match(exactLoadingMigration, /translation_package_id = p_translation_package_id/);
   assert.match(constructor, /questionnaireLanguage/);
   assert.match(constructor, /id="bankLanguage"/);
   assert.match(constructor, /id="savedQuestionnaireLanguage"/);
   assert.match(constructor, /available_languages/);
-  assert.match(constructor, /&lang=/);
+  assert.match(constructor, /translation_package_id/);
+  assert.match(constructor, /translation_version/);
+  assert.match(translator, /definition_snapshot\.definition_language = targetLanguage/);
   assert.match(assessment, /question_translation_references/);
   assert.match(assessment, /questionnaire_primary_language/);
   assert.match(vercel, /"source": "\/question-translations"/);
   assert.match(vercel, /"source": "\/question-translations\/\(\.\*\)"/);
+});
+
+test('ordinary constructor catalogs keep one entity row and select its exact language separately', async () => {
+  const constructor = await fs.readFile(new URL('../constructor_survey.html', import.meta.url), 'utf8');
+  assert.match(constructor, /bankCatalog\.forEach\(b=>select\.add\(new Option\([^\n]*entityToken\(b\.bank_id,b\.version\)/);
+  assert.match(constructor, /questionnaireCatalog\.forEach\(q=>select\.add\(new Option\([^\n]*entityToken\(q\.questionnaire_id,q\.version\)/);
+  assert.doesNotMatch(constructor, /bankCatalog\.forEach\(b=>\(b\.available_languages/);
+  assert.doesNotMatch(constructor, /questionnaireCatalog\.forEach\(q=>\(q\.available_languages/);
+  assert.match(constructor, /const entity=selectedVariantValue\('bankSelect'\),variant=parsedToken\(document\.getElementById\('bankLanguage'\)\.value\)/);
+  assert.match(constructor, /const entity=selectedVariantValue\('questionnaireSelect'\),variant=parsedToken\(document\.getElementById\('savedQuestionnaireLanguage'\)\.value\)/);
+  assert.match(constructor, /const LANGUAGE_ORDER=\['es-MX','en-US','ru-RU'\]/);
 });

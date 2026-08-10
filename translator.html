@@ -392,11 +392,23 @@ function renderDatabaseSourceLanguages() {
     const item = selectedDatabaseSource();
     const select = document.getElementById('sourceLanguage');
     select.innerHTML = '';
+    const languageOrder = ['es-MX', 'en-US', 'ru-RU'];
     const languages = (Array.isArray(item?.available_languages) ? item.available_languages : [])
-        .filter(row => row.is_source || (row.coverage_complete === true && row.verification_status === 'verified'));
+        .filter(row => row.is_source || (row.coverage_complete === true && row.verification_status === 'verified'))
+        .sort((left, right) => {
+            const leftIndex = languageOrder.indexOf(left.language);
+            const rightIndex = languageOrder.indexOf(right.language);
+            return (leftIndex < 0 ? languageOrder.length : leftIndex) -
+                (rightIndex < 0 ? languageOrder.length : rightIndex);
+        });
     languages.forEach(row => select.add(new Option(
-        `${row.language}${row.is_source ? ' · Source' : ' · Verified translation'}`,
-        row.language
+        `${row.language}${row.is_source ? ' · Source' : ` · Verified translation v${row.translation_version}`}`,
+        JSON.stringify({
+            language: row.language,
+            isSource: row.is_source === true,
+            translationPackageId: row.translation_package_id || null,
+            translationVersion: row.translation_version || null
+        })
     )));
 }
 
@@ -413,20 +425,37 @@ async function loadDatabaseCatalogs() {
 
 async function loadDatabaseSource() {
     const item = selectedDatabaseSource();
-    const language = document.getElementById('sourceLanguage').value;
-    if (!item || !language) {
+    let variant = null;
+    try {
+        variant = JSON.parse(document.getElementById('sourceLanguage').value || 'null');
+    } catch (_) {
+        variant = null;
+    }
+    if (!item || !variant?.language) {
         alert('Source and Source Language are required.');
         return;
     }
     const identity = sourceCatalogIdentity(item);
     const isQuestionnaire = document.getElementById('sourceType').value === 'questionnaire';
+    const params = new URLSearchParams({
+        version: String(identity.version),
+        lang: variant.language
+    });
+    if (!variant.isSource) {
+        if (!variant.translationPackageId || !Number.isInteger(Number(variant.translationVersion))) {
+            alert('Exact translation package and translation version are required.');
+            return;
+        }
+        params.set('translation_package_id', variant.translationPackageId);
+        params.set('translation_version', String(variant.translationVersion));
+    }
     const endpoint = isQuestionnaire
-        ? `/questionnaires/${encodeURIComponent(identity.id)}?version=${encodeURIComponent(identity.version)}&lang=${encodeURIComponent(language)}`
-        : `/question-banks/${encodeURIComponent(identity.id)}?version=${encodeURIComponent(identity.version)}&lang=${encodeURIComponent(language)}`;
+        ? `/questionnaires/${encodeURIComponent(identity.id)}?${params}`
+        : `/question-banks/${encodeURIComponent(identity.id)}?${params}`;
     try {
         const data = await window.ResearchContracts.requestJson(endpoint);
         const canonical = isQuestionnaire ? (data.questionnaire || data) : data;
-        setLoadedDocument(canonical, `${canonical.code || 'source'}_v${canonical.version}_${language}`);
+        setLoadedDocument(canonical, `${canonical.code || 'source'}_v${canonical.version}_${variant.language}`);
     } catch (error) {
         alert(error.message);
     }
@@ -496,6 +525,18 @@ function structuralProjection(documentValue, entries, sourceLanguage) {
     const projected = JSON.parse(JSON.stringify(documentValue));
     delete projected.translation_provenance;
     if (sourceLanguage !== undefined) projected.primary_language = sourceLanguage;
+    if (projected.schema === 'research_os.question_bank') {
+        Object.values(projected.questions || {}).forEach(question => {
+            delete question.definition_language;
+            delete question.translation_reference;
+        });
+    } else if (projected.schema === 'research_os.questionnaire') {
+        (projected.items || []).forEach(item => {
+            if (!item?.definition_snapshot) return;
+            delete item.definition_snapshot.definition_language;
+            delete item.definition_snapshot.translation_reference;
+        });
+    }
     entries.forEach(entry => setValueAt(projected, entry.path, '__TRANSLATABLE_TEXT__'));
     return projected;
 }
@@ -523,6 +564,18 @@ function applyTranslationResults(source, entries, results, targetLanguage) {
     const translated = JSON.parse(JSON.stringify(source));
     entries.forEach(entry => setValueAt(translated, entry.path, byId.get(entry.id).text));
     translated.primary_language = targetLanguage;
+    if (translated.schema === 'research_os.question_bank') {
+        Object.values(translated.questions || {}).forEach(question => {
+            question.definition_language = targetLanguage;
+            question.translation_reference = null;
+        });
+    } else if (translated.schema === 'research_os.questionnaire') {
+        (translated.items || []).forEach(item => {
+            if (!item?.definition_snapshot) return;
+            item.definition_snapshot.definition_language = targetLanguage;
+            item.definition_snapshot.translation_reference = null;
+        });
+    }
     return translated;
 }
 
@@ -857,7 +910,9 @@ async function loadTranslationRegistry() {
             const verificationStatus = item.verification_status || 'unverified';
             const parameter = item.source_schema === 'research_os.question_bank' ? 'bank' : 'questionnaire';
             const href = `constructor_survey.html?${parameter}=${encodeURIComponent(item.source_entity_id)}` +
-                `&version=${encodeURIComponent(item.source_version)}&lang=${encodeURIComponent(item.target_language)}`;
+                `&version=${encodeURIComponent(item.source_version)}&lang=${encodeURIComponent(item.target_language)}` +
+                `&translation_package_id=${encodeURIComponent(item.translation_package_id)}` +
+                `&translation_version=${encodeURIComponent(item.translation_version)}`;
             return `<article class="registry-entry">
                 <div class="registry-title">${escapeRegistryHtml(registrySourceLabel(item.source_schema))} · ${escapeRegistryHtml(item.translated_title || item.source_code || item.source_entity_id)}</div>
                 <div class="registry-meta">

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -44,7 +44,7 @@ const T={
  es:{cabinet:'← Al panel',loading:'Cargando cuestionario…',back:'Atrás',next:'Siguiente',finish:'Finalizar y enviar',progress:'Pregunta',of:'de',loadError:'No se pudo cargar el cuestionario.',sessionInactive:'Esta sesión ya no está activa.',submitError:'No se pudieron guardar las respuestas.',requiredAnswer:'Responda la pregunta obligatoria.',invalidValue:'La respuesta no respeta el rango o el paso permitido por la escala.',minimumAnswers:'No hay suficientes respuestas para completar.',invalidRoute:'La ruta del cuestionario no es válida.',submitting:'Guardando respuestas…'},
  en:{cabinet:'← Participant hub',loading:'Loading questionnaire…',back:'Back',next:'Next',finish:'Finish and submit',progress:'Question',of:'of',loadError:'The questionnaire could not be loaded.',sessionInactive:'This session is no longer active.',submitError:'The responses could not be saved.',requiredAnswer:'Answer the required question.',invalidValue:'The response is outside the scale range or does not follow its step.',minimumAnswers:'There are not enough answers to complete.',invalidRoute:'The questionnaire route is invalid.',submitting:'Saving responses…'}
 };
-let lang='ru',principal=null,sessionId=null,collectionSession=null,questionnaire=null,items=[],itemById=new Map(),history=[],currentItemId=null,answers=new Map(),presentedAt=new Map(),sessionFinalized=false,discardRequested=false;
+let lang='es',principal=null,sessionId=null,collectionSession=null,questionnaire=null,items=[],itemById=new Map(),history=[],currentItemId=null,answers=new Map(),presentedAt=new Map(),sessionFinalized=false,discardRequested=false;
 function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function applyLanguage(){document.documentElement.lang=lang;document.querySelectorAll('[data-i18n]').forEach(el=>{const v=T[lang][el.dataset.i18n];if(v)el.textContent=v;});}
@@ -127,7 +127,7 @@ async function submitAll(){
  try{await request(`/pilot/sessions/${encodeURIComponent(sessionId)}/answers`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({domain_data_identity:identity,response_records:records})});sessionFinalized=true;location.href=`cabinet.html?completed=${encodeURIComponent(sessionId)}`;}catch(error){button.disabled=false;document.getElementById('backButton').disabled=history.length===0;document.getElementById('status').textContent=`${T[lang].submitError} ${error.message}`;document.getElementById('status').className='error';}
 }
 window.addEventListener('pagehide',()=>{void discardIncompleteSession();});
-document.addEventListener('DOMContentLoaded',async()=>{principal=await ResearchAuth.requireRole('respondent','assessment.html');if(!principal)return;lang=localStorage.getItem('app_language')||'ru';if(!T[lang])lang='ru';applyLanguage();sessionId=new URLSearchParams(location.search).get('session_id');if(!sessionId){document.getElementById('title').textContent=T[lang].loadError;document.getElementById('description').textContent='session_id is required';return;}await loadSession();});
+document.addEventListener('DOMContentLoaded',async()=>{lang=localStorage.getItem('app_language')||'es';if(!T[lang])lang='es';applyLanguage();principal=await ResearchAuth.requireRole('respondent','assessment.html');if(!principal)return;sessionId=new URLSearchParams(location.search).get('session_id');if(!sessionId){document.getElementById('title').textContent=T[lang].loadError;document.getElementById('description').textContent='session_id is required';return;}await loadSession();});
 </script>
 </body>
 </html>
