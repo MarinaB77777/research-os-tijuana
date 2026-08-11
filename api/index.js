@@ -47,6 +47,86 @@ function validQuestionScaleContract(question) {
     return true;
 }
 
+const ISO_8601_DURATION = /^P(?=\d|T\d)(?:\d+Y)?(?:\d+M)?(?:\d+W)?(?:\d+D)?(?:T(?=\d)(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/;
+
+function studyProtocolErrors(study) {
+    const errors = [];
+    const groups = Array.isArray(study?.groups) ? study.groups : [];
+    const timepoints = Array.isArray(study?.timepoints) ? study.timepoints : [];
+    const assignments = Array.isArray(study?.questionnaire_assignments)
+        ? study.questionnaire_assignments
+        : [];
+    const design = study?.study_design;
+    const positiveInteger = value => Number.isInteger(value) && value > 0;
+    const unique = values => new Set(values).size === values.length;
+
+    if (design !== undefined && (!design || typeof design !== 'object' || Array.isArray(design))) {
+        errors.push('study_design must be an object');
+        return errors;
+    }
+    if (design) {
+        const allowedDesigns = new Set([
+            'cross_sectional', 'longitudinal', 'between_groups',
+            'mixed_longitudinal_groups', 'experimental', 'other'
+        ]);
+        if (!allowedDesigns.has(design.design_type)) errors.push('Study design type is invalid');
+        for (const field of ['target_sample_size', 'minimum_analyzable_sample']) {
+            if (design[field] !== null && design[field] !== undefined &&
+                !positiveInteger(design[field])) {
+                errors.push(`${field} must be a positive integer`);
+            }
+        }
+        for (const field of [
+            'research_questions', 'hypotheses', 'inclusion_criteria', 'exclusion_criteria'
+        ]) {
+            if (!Array.isArray(design[field]) || design[field].some(value =>
+                typeof value !== 'string' || !value.trim()
+            )) errors.push(`${field} must be an array of non-empty strings`);
+        }
+        if (design.target_sample_size && design.minimum_analyzable_sample &&
+            design.minimum_analyzable_sample > design.target_sample_size) {
+            errors.push('Minimum analyzable sample cannot exceed the target sample');
+        }
+        const longitudinal = ['longitudinal', 'mixed_longitudinal_groups']
+            .includes(design.design_type);
+        const betweenGroups = ['between_groups', 'mixed_longitudinal_groups', 'experimental']
+            .includes(design.design_type);
+        if (longitudinal && timepoints.length < 2) {
+            errors.push('A longitudinal design requires at least two timepoints');
+        }
+        if (longitudinal && study.longitudinal_linkage !== 'within_study_consent_bound') {
+            errors.push('A longitudinal design requires consent-bound participant linkage');
+        }
+        if (betweenGroups && groups.length < 2) {
+            errors.push('A between-groups design requires at least two groups');
+        }
+    }
+    if (study?.status === 'active' && !positiveInteger(design?.minimum_analyzable_sample)) {
+        errors.push('An active study requires a minimum analyzable sample');
+    }
+    if (!unique(groups.map(group => group.code)) || !unique(timepoints.map(point => point.code))) {
+        errors.push('Study group and timepoint codes must be unique');
+    }
+    if (groups.some(group => group.target_sample_size !== null &&
+        group.target_sample_size !== undefined && !positiveInteger(group.target_sample_size))) {
+        errors.push('Every group target sample must be a positive integer');
+    }
+    if (timepoints.some(point => point.planned_offset_iso8601 &&
+        !ISO_8601_DURATION.test(point.planned_offset_iso8601))) {
+        errors.push('Every planned timepoint offset must use ISO 8601 duration syntax');
+    }
+    const timepointIds = new Set(timepoints.map(point => point.timepoint_id));
+    if (assignments.some(assignment =>
+        !timepointIds.has(assignment.timepoint_id) ||
+        typeof assignment.required !== 'boolean' ||
+        (assignment.available_from && !Number.isFinite(Date.parse(assignment.available_from))) ||
+        (assignment.available_until && !Number.isFinite(Date.parse(assignment.available_until))) ||
+        (assignment.available_from && assignment.available_until &&
+            Date.parse(assignment.available_until) <= Date.parse(assignment.available_from))
+    )) errors.push('Study assignment references, requirement, or availability window are invalid');
+    return errors;
+}
+
 const TRANSLATION_LANGUAGES = new Set(['es-MX', 'en-US', 'ru-RU']);
 const RESEARCH_OS_TABLE_CONTRACT = Object.freeze([
     'app_users',
@@ -2221,6 +2301,14 @@ export default async function handler(req, res) {
             return res.status(400).json({
                 ok: false,
                 error: 'Study groups, timepoints or questionnaire assignments are invalid'
+            });
+        }
+        const protocolErrors = studyProtocolErrors(study);
+        if (protocolErrors.length) {
+            return res.status(400).json({
+                ok: false,
+                error: protocolErrors.join('\n'),
+                protocol_errors: protocolErrors
             });
         }
         try {

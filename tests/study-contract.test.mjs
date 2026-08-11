@@ -130,6 +130,51 @@ test('study save keeps study and questionnaire identities independent', async ()
   }
 });
 
+test('server rejects an active study without a scientific minimum analyzable sample', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = researcherAccessThen(async () => {
+    throw new Error('Invalid protocol must not reach the database RPC');
+  });
+  try {
+    const res = response();
+    await handler(researcherRequest('/studies/save', {
+      schema: 'research_os.study', schema_version: 1,
+      study_id: '9e37af31-acde-4ba9-83c3-f7fe77958322', version: 1,
+      code: 'ACTIVE_STUDY', title: 'Active study', status: 'active',
+      primary_language: 'es-MX', collection_mode: 'fixed_questionnaire_mode',
+      longitudinal_linkage: 'none', global_time_reference: '2026-08-11T18:00:00.000Z',
+      generated_at: '2026-08-11T18:00:00.000Z',
+      study_design: {
+        design_type: 'cross_sectional', objective: 'Measure the outcome',
+        research_questions: ['What is the outcome?'], hypotheses: [],
+        target_sample_size: 100, minimum_analyzable_sample: null,
+        inclusion_criteria: [], exclusion_criteria: []
+      },
+      groups: [{
+        group_id: 'a7d511ef-acde-4437-8b7d-7c84ebc019d8',
+        invitation_id: 'bd382521-acde-4755-8fa1-b0405b6bf628',
+        code: 'GROUP_1', title: 'Group 1', position: 1
+      }],
+      timepoints: [{
+        timepoint_id: '861c7785-acde-48b3-99c4-dd61b0ccadbd',
+        code: 'BASELINE', title: 'Baseline', ordinal: 1,
+        planned_offset_iso8601: 'P0D'
+      }],
+      questionnaire_assignments: [{
+        assignment_id: '16d04bf3-acde-4347-91ea-ecbbb8687191',
+        timepoint_id: '861c7785-acde-48b3-99c4-dd61b0ccadbd',
+        questionnaire_id: '24b68c24-acde-49d0-8a16-6cfd95d19328',
+        questionnaire_version: 1, position: 1, required: true,
+        available_from: null, available_until: null
+      }]
+    }), res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.payload.error, /minimum analyzable sample/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('study contract stores interval group history and session snapshots', async () => {
   const migration = await fs.readFile(
     new URL('../supabase/research_study_contract_v1.sql', import.meta.url),
@@ -220,4 +265,28 @@ test('manual researcher enrollment is retired', async () => {
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('study constructor exposes the complete versioned protocol without weakening collection contracts', async () => {
+  const page = await fs.readFile(
+    new URL('../constructor_study.html', import.meta.url),
+    'utf8'
+  );
+  assert.match(page, /function readIdentity\(\)/);
+  assert.match(page, /study_design/);
+  assert.match(page, /research_questions/);
+  assert.match(page, /hypotheses/);
+  assert.match(page, /minimum_analyzable_sample/);
+  assert.match(page, /inclusion_criteria/);
+  assert.match(page, /exclusion_criteria/);
+  assert.match(page, /available_from/);
+  assert.match(page, /available_until/);
+  assert.match(page, /required:a\.required!==false/);
+  assert.match(page, /function createNewVersion\(\)/);
+  assert.match(page, /next\.groups\.forEach\(g=>g\.invitation_id=RC\.createUuid\(\)\)/);
+  assert.match(page, /next\.questionnaire_assignments\.forEach\(a=>a\.assignment_id=RC\.createUuid\(\)\)/);
+  assert.match(page, /loaded&&state\?\.status==='active'/);
+  assert.match(page, /research_os\.study/);
+  assert.match(page, /CRM Sharks &amp; Ray/);
+  assert.doesNotMatch(page, /localStorage\.setItem\([^)]*study/i);
 });

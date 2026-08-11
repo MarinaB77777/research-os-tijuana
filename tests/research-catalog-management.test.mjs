@@ -157,3 +157,12 @@ test('management API failure does not break the existing bank, questionnaire, la
   assert.match(elements.get('status').textContent, /Catálogo completo cargado/);
   assert.match(elements.get('managementStatus').textContent, /management endpoint unavailable/);
 });
+
+test('management catalog keeps the scroll position visible and signals hidden records', () => {
+  assert.match(catalogPage, /overflow-y:scroll/);
+  assert.match(catalogPage, /scrollbar-color:var\(--cyan2\)/);
+  assert.match(catalogPage, /management-list::-webkit-scrollbar-thumb/);
+  assert.match(catalogPage, /id="managementScrollHint"/);
+  assert.match(catalogPage, /function updateManagementScrollHint\(\)/);
+  assert.match(catalogPage, /Ниже есть ещё записи/);
+});
