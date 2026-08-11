@@ -13,7 +13,8 @@ const [
   analyzer,
   validator,
   dataAnalysis,
-  questionConstructor
+  questionConstructor,
+  studyConstructor
 ] = await Promise.all([
   fs.readFile(new URL('../translator.html', import.meta.url), 'utf8'),
   fs.readFile(new URL('../question-bank-import.js', import.meta.url), 'utf8'),
@@ -23,7 +24,8 @@ const [
   fs.readFile(new URL('../analyzer.html', import.meta.url), 'utf8'),
   fs.readFile(new URL('../validator.html', import.meta.url), 'utf8'),
   fs.readFile(new URL('../data-analysis.html', import.meta.url), 'utf8'),
-  fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8')
+  fs.readFile(new URL('../constructor_quest.html', import.meta.url), 'utf8'),
+  fs.readFile(new URL('../constructor_study.html', import.meta.url), 'utf8')
 ]);
 
 test('uploaded questionnaire source is parsed as data and cannot execute code', () => {
@@ -77,6 +79,9 @@ test('uploaded, AI-generated, and dataset labels are escaped before HTML renderi
   assert.match(dataAnalysis, /esc\(JSON\.stringify\(snapshot,null,2\)\)/);
   assert.match(questionConstructor, /\$\{escapeHtml\(opt\.l\)\}/);
   assert.doesNotMatch(questionConstructor, /\$\{opt\.l\}/);
+  assert.match(studyConstructor, /pendingEligibilityAi\.criteria\.map/);
+  assert.match(studyConstructor, /esc\(item\.statement\)/);
+  assert.match(studyConstructor, /esc\(item\.rationale/);
 });
 
 function response() {

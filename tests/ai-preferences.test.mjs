@@ -59,6 +59,9 @@ test('AI preferences are account-scoped task/model choices with no credential fi
   assert.doesNotMatch(accessSql, /GROQ_API_KEY|GEMINI_API_KEY|provider_key|api_key/i);
   assert.match(routerSource, /fetch\('\/api\/ai\/preferences'/);
   assert.match(settingsSource, /AIRouter\.savePreferences/);
+  assert.match(settingsSource, /task_study_design/);
+  assert.match(routerSource, /study_design/);
+  assert.match(apiSource, /study_design: Object\.freeze/);
   assert.doesNotMatch(settingsSource, /localStorage\.setItem\(['"]ai_router_config/);
   assert.match(apiSource, /openai\/gpt-oss-20b/);
   assert.doesNotMatch(apiSource, /openai\/gpt-oss-120b/);
@@ -79,13 +82,15 @@ test('researcher can save only allow-listed per-account AI preferences', async (
   const calls = [];
   globalThis.fetch = authFetchSequence(calls, [{
     analyzer: { provider: 'gemini', model: 'gemini-3.6-flash' },
-    translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' }
+    translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+    study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
   }]);
 
   try {
     const preferences = {
       analyzer: { provider: 'gemini', model: 'gemini-3.6-flash' },
-      translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' }
+      translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
+      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
     };
     const res = response();
     await handler({
@@ -122,7 +127,8 @@ test('retired stored models fall back to the current free Groq model', async () 
   const calls = [];
   globalThis.fetch = authFetchSequence(calls, {
     analyzer: { provider: 'groq', model: 'openai/gpt-oss-120b' },
-    translator: { provider: 'groq', model: 'llama-3.3-70b-versatile' }
+    translator: { provider: 'groq', model: 'llama-3.3-70b-versatile' },
+    study_design: { provider: 'groq', model: 'retired-study-model' }
   });
 
   try {
@@ -138,7 +144,8 @@ test('retired stored models fall back to the current free Groq model', async () 
     assert.equal(res.statusCode, 200);
     assert.deepEqual(res.payload.preferences, {
       analyzer: { provider: 'groq', model: 'openai/gpt-oss-20b' },
-      translator: { provider: 'groq', model: 'openai/gpt-oss-20b' }
+      translator: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
     });
   } finally {
     globalThis.fetch = originalFetch;

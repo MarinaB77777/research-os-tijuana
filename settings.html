@@ -122,6 +122,14 @@
                 <option value='{"provider":"gemini","model":"gemini-3.6-flash"}'>Google / Gemini 3.6 Flash</option>
             </select>
         </div>
+        <div class="form-group">
+            <label data-i18n="label_study_design">🧭 Научный дизайн исследования (constructor_study.html):</label>
+            <select id="task_study_design">
+                <option value='{"provider":"groq","model":"openai/gpt-oss-20b"}'>Groq / OpenAI GPT-OSS 20B (Fast)</option>
+                <option value='{"provider":"gemini","model":"gemini-3.6-flash"}'>Google / Gemini 3.6 Flash</option>
+                <option value='{"provider":"gemini","model":"gemini-3.5-flash-lite"}'>Google / Gemini 3.5 Flash-Lite</option>
+            </select>
+        </div>
         <p class="hint" data-i18n="ai_free_tier_notice">Free-tier limits are shared by all researchers. Do not send personal, confidential, or participant data to Gemini free-tier models.</p>
     </div>
 
@@ -160,6 +168,7 @@ const i18n = {
         sec2_title: "4. Какой ИИ отвечает за задачи?",
         label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
         label_translator: "🌐 Перевод и адаптация (translator.html):",
+        label_study_design: "🧭 Научный дизайн исследования (constructor_study.html):",
         btn_save: "💾 Сохранить настройки",
         toast_saved: "✅ Настройки успешно сохранены!",
         delete_account_title: "Удаление аккаунта исследователя",
@@ -194,6 +203,7 @@ const i18n = {
         sec2_title: "4. ¿Qué IA se encarga de cada tarea?",
         label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
         label_translator: "🌐 Traducción y adaptación (translator.html):",
+        label_study_design: "🧭 Diseño científico del estudio (constructor_study.html):",
         btn_save: "💾 Guardar configuración",
         toast_saved: "✅ ¡Configuración guardada con éxito!",
         delete_account_title: "Eliminar cuenta de investigador",
@@ -228,6 +238,7 @@ const i18n = {
         sec2_title: "4. Assign AI models to tasks",
         label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
         label_translator: "🌐 Translation & adaptation (translator.html):",
+        label_study_design: "🧭 Scientific study design (constructor_study.html):",
         btn_save: "💾 Save Configuration",
         toast_saved: "✅ Configuration saved successfully!",
         delete_account_title: "Delete researcher account",
@@ -331,7 +342,8 @@ async function saveAllSettings() {
     try {
         await AIRouter.savePreferences({
             analyzer: JSON.parse(document.getElementById('task_analyzer').value),
-            translator: JSON.parse(document.getElementById('task_translator').value)
+            translator: JSON.parse(document.getElementById('task_translator').value),
+            study_design: JSON.parse(document.getElementById('task_study_design').value)
         });
         const toast = document.getElementById('toast');
         toast.style.display = 'block';
@@ -354,6 +366,7 @@ async function loadSettings() {
     };
     applyAvailable('task_analyzer', config.analyzer);
     applyAvailable('task_translator', config.translator);
+    applyAvailable('task_study_design', config.study_design);
 }
 
 async function deleteResearcherAccount() {

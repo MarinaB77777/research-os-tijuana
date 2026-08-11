@@ -83,6 +83,74 @@ function studyProtocolErrors(study) {
                 typeof value !== 'string' || !value.trim()
             )) errors.push(`${field} must be an array of non-empty strings`);
         }
+        if (design.eligibility_criteria !== undefined) {
+            if (!Array.isArray(design.eligibility_criteria) || design.eligibility_criteria.length > 100) {
+                errors.push('eligibility_criteria must be an array with at most 100 criteria');
+            } else {
+                const inclusion = [];
+                const exclusion = [];
+                const criterionIds = [];
+                for (const criterion of design.eligibility_criteria) {
+                    if (!criterion || typeof criterion !== 'object' || Array.isArray(criterion)) {
+                        errors.push('Each eligibility criterion must be an object');
+                        continue;
+                    }
+                    if (!UUID_V4.test(String(criterion.criterion_id || ''))) {
+                        errors.push('Every eligibility criterion requires an immutable UUID');
+                    } else {
+                        criterionIds.push(criterion.criterion_id);
+                    }
+                    if (!['inclusion', 'exclusion'].includes(criterion.type)) {
+                        errors.push('Eligibility criterion type must be inclusion or exclusion');
+                    }
+                    if (!['standard_template', 'researcher', 'ai_proposal'].includes(criterion.source)) {
+                        errors.push('Eligibility criterion source is invalid');
+                    }
+                    if (typeof criterion.statement !== 'string' || !criterion.statement.trim() ||
+                        criterion.statement.length > 4000) {
+                        errors.push('Eligibility criterion statement must be a non-empty string of at most 4000 characters');
+                    } else if (criterion.type === 'inclusion') {
+                        inclusion.push(criterion.statement);
+                    } else if (criterion.type === 'exclusion') {
+                        exclusion.push(criterion.statement);
+                    }
+                }
+                if (JSON.stringify(inclusion) !== JSON.stringify(design.inclusion_criteria) ||
+                    JSON.stringify(exclusion) !== JSON.stringify(design.exclusion_criteria)) {
+                    errors.push('Structured eligibility criteria must match the legacy criterion lists');
+                }
+                if (!unique(criterionIds)) errors.push('Eligibility criterion UUIDs must be unique');
+            }
+        }
+        if (design.eligibility_ai_reviews !== undefined) {
+            if (!Array.isArray(design.eligibility_ai_reviews) || design.eligibility_ai_reviews.length > 50) {
+                errors.push('eligibility_ai_reviews must be an array with at most 50 reviews');
+            } else {
+                for (const review of design.eligibility_ai_reviews) {
+                    const proposed = Array.isArray(review?.proposed_criteria) ? review.proposed_criteria : [];
+                    const proposedIds = new Set(proposed.map(item => item?.criterion_id));
+                    const acceptedIds = Array.isArray(review?.accepted_criterion_ids)
+                        ? review.accepted_criterion_ids : [];
+                    const historicalProvider = String(review?.provider || '');
+                    const historicalModel = String(review?.model || '');
+                    if (!review || typeof review !== 'object' ||
+                        !UUID_V4.test(String(review.review_id || '')) ||
+                        !Number.isFinite(Date.parse(review.requested_at)) ||
+                        !['groq', 'gemini'].includes(historicalProvider) ||
+                        !historicalModel.trim() || historicalModel.length > 200 ||
+                        !String(review.prompt_version || '').trim() ||
+                        !review.scoped_context || typeof review.scoped_context !== 'object' ||
+                        Array.isArray(review.scoped_context) || !proposed.length || proposed.length > 30 ||
+                        proposed.some(item => !UUID_V4.test(String(item?.criterion_id || '')) ||
+                            item?.source !== 'ai_proposal' || !String(item?.statement || '').trim()) ||
+                        proposedIds.size !== proposed.length || new Set(acceptedIds).size !== acceptedIds.length ||
+                        acceptedIds.some(id => !proposedIds.has(id)) ||
+                        !['accepted', 'partially_accepted', 'rejected'].includes(review.human_disposition)) {
+                        errors.push('eligibility_ai_reviews must contain complete AI provenance and human dispositions');
+                    }
+                }
+            }
+        }
         if (design.target_sample_size && design.minimum_analyzable_sample &&
             design.minimum_analyzable_sample > design.target_sample_size) {
             errors.push('Minimum analyzable sample cannot exceed the target sample');
@@ -103,6 +171,10 @@ function studyProtocolErrors(study) {
     }
     if (study?.status === 'active' && !positiveInteger(design?.minimum_analyzable_sample)) {
         errors.push('An active study requires a minimum analyzable sample');
+    }
+    if (study?.status === 'active' && (!Array.isArray(design?.inclusion_criteria) ||
+        design.inclusion_criteria.length === 0)) {
+        errors.push('An active study requires at least one explicit inclusion criterion');
     }
     if (!unique(groups.map(group => group.code)) || !unique(timepoints.map(point => point.code))) {
         errors.push('Study group and timepoint codes must be unique');
@@ -535,11 +607,16 @@ const AI_TASK_MODELS = Object.freeze({
     translator: Object.freeze({
         groq: new Set(['openai/gpt-oss-20b']),
         gemini: new Set(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])
+    }),
+    study_design: Object.freeze({
+        groq: new Set(['openai/gpt-oss-20b']),
+        gemini: new Set(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])
     })
 });
 const DEFAULT_AI_PREFERENCES = Object.freeze({
     analyzer: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
-    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
+    study_design: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
 });
 
 function sameQuestionnaireValue(left, right) {

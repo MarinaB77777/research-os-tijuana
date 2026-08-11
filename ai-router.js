@@ -9,7 +9,8 @@ localStorage.removeItem('ai_router_config');
 
 const AI_TASK_DEFAULTS = Object.freeze({
     analyzer: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
-    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+    translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
+    study_design: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
 });
 const AI_TASK_MODELS = Object.freeze({
     analyzer: new Set([
@@ -21,13 +22,19 @@ const AI_TASK_MODELS = Object.freeze({
         'groq:openai/gpt-oss-20b',
         'gemini:gemini-3.6-flash',
         'gemini:gemini-3.5-flash-lite'
+    ]),
+    study_design: new Set([
+        'groq:openai/gpt-oss-20b',
+        'gemini:gemini-3.6-flash',
+        'gemini:gemini-3.5-flash-lite'
     ])
 });
 
 const AIRouter = {
     preferences: {
         analyzer: AI_TASK_DEFAULTS.analyzer,
-        translator: AI_TASK_DEFAULTS.translator
+        translator: AI_TASK_DEFAULTS.translator,
+        study_design: AI_TASK_DEFAULTS.study_design
     },
 
     researcherSession() {
@@ -84,7 +91,7 @@ const AIRouter = {
         return this.preferences;
     },
 
-    async sendRequest(taskName, systemPrompt, payload) {
+    async sendRequestDetailed(taskName, systemPrompt, payload) {
         const config = this.getTaskConfig(taskName);
         const session = this.researcherSession();
         if (!session || session.role !== 'researcher' || !session.token) {
@@ -113,6 +120,16 @@ const AIRouter = {
         if (!response.ok) {
             throw new Error(data.error || `${response.status} ${response.statusText}`);
         }
-        return data.result;
+        return {
+            result: data.result,
+            task: data.task,
+            provider: data.provider,
+            model: data.model
+        };
+    },
+
+    async sendRequest(taskName, systemPrompt, payload) {
+        const response = await this.sendRequestDetailed(taskName, systemPrompt, payload);
+        return response.result;
     }
 };

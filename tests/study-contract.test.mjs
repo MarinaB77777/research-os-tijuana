@@ -170,6 +170,7 @@ test('server rejects an active study without a scientific minimum analyzable sam
     }), res);
     assert.equal(res.statusCode, 400);
     assert.match(res.payload.error, /minimum analyzable sample/i);
+    assert.match(res.payload.error, /inclusion criterion/i);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -279,6 +280,10 @@ test('study constructor exposes the complete versioned protocol without weakenin
   assert.match(page, /minimum_analyzable_sample/);
   assert.match(page, /inclusion_criteria/);
   assert.match(page, /exclusion_criteria/);
+  assert.match(page, /eligibility_criteria/);
+  assert.match(page, /eligibility_ai_reviews/);
+  assert.match(page, /EligibilityCriteria/);
+  assert.match(page, /sendRequestDetailed\('study_design'/);
   assert.match(page, /available_from/);
   assert.match(page, /available_until/);
   assert.match(page, /required:a\.required!==false/);
