@@ -241,7 +241,10 @@
       <div class="manager-section">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
           <div class="section-title" id="lbl-banks-header" style="margin:0;">📂 Bancos de preguntas registrados</div>
-          <a class="btn btn-secondary" href="importer.html?return=survey.html" id="lbl-upload-btn">📁 Importar archivo</a>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn btn-secondary" href="question_catalog.html" id="lbl-catalog-btn">☷ Catálogo</a>
+            <a class="btn btn-secondary" href="importer.html?return=survey.html" id="lbl-upload-btn">📁 Importar archivo</a>
+          </div>
         </div>
         <div class="banks-table-container">
           <table>
@@ -359,7 +362,7 @@
         tool6Title: "Colega de IA",
         tool6Desc: "Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.",
         tool6Btn: "Configurar IA",
-        questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Disponible con atribución",open:"Abrir",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
+        questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",catalogManage:"☷ Catálogo",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Disponible con atribución",open:"Abrir",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
       },
       en: {
         subtitle: "— Researcher Control Panel",
@@ -390,7 +393,7 @@
         tool6Title: "AI Colleague",
         tool6Desc: "Choose available models for translation and search. Provider keys remain exclusively on the server.",
         tool6Btn: "Configure AI",
-        questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Available with attribution",open:"Open",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
+        questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",catalogManage:"☷ Catalog",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Available with attribution",open:"Open",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
       },
       ru: {
         subtitle: "— Панель управления исследователя",
@@ -421,7 +424,7 @@
         tool6Title: "AI-коллега",
         tool6Desc: "Выберите доступные модели для перевода и поиска. Ключи провайдеров остаются исключительно на сервере.",
         tool6Btn: "Настроить AI",
-        questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Доступен с атрибуцией",open:"Открыть",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
+        questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",catalogManage:"☷ Каталог",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Доступен с атрибуцией",open:"Открыть",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
       }
     };
         
@@ -453,6 +456,7 @@
       document.getElementById('lbl-session-status').innerText = t.sessionStatus;
       document.getElementById('lbl-banks-header').innerText = t.banksHeader;
       document.getElementById('lbl-upload-btn').innerText = t.uploadBtn;
+      document.getElementById('lbl-catalog-btn').innerText = t.catalogManage;
       document.getElementById('th-name').innerText = t.thName;
       document.getElementById('th-author').innerText = t.thAuthor;
       document.getElementById('th-status').innerText = t.thStatus;

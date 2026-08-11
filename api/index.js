@@ -56,6 +56,7 @@ const RESEARCH_OS_TABLE_CONTRACT = Object.freeze([
     'questionnaire_routes',
     'question_translation_packages', 'question_translation_variants',
     'question_translation_drafts',
+    'research_catalog_archives', 'research_catalog_action_log',
     'research_os_accounts', 'research_os_auth_sessions',
     'research_os_entity_ownership', 'research_os_ai_preferences',
     'research_os_collection_sessions',
@@ -71,6 +72,7 @@ const RESEARCH_OS_CRITICAL_RPC_CONTRACT = Object.freeze([
     'list_questionnaires', 'load_questionnaire_package',
     'save_owned_questionnaire_with_consent',
     'list_question_translation_catalog', 'load_exact_question_translation_package',
+    'list_research_catalog', 'manage_research_catalog_item',
     'list_studies_for_account', 'load_study_package_for_account',
     'list_respondent_study_sessions', 'load_respondent_collection_session'
 ]);
@@ -2697,6 +2699,59 @@ export default async function handler(req, res) {
                     ? catalog.questionnaire_languages
                     : []
             });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/research-catalog' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const catalogResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_research_catalog',
+                { p_researcher_account_id: access.principal.account_id }
+            );
+            const catalog = Array.isArray(catalogResult) ? catalogResult[0] : catalogResult;
+            return res.status(200).json({
+                ok: true,
+                catalog: catalog && typeof catalog === 'object' ? catalog : {
+                    banks: [], questions: [], questionnaires: [],
+                    translation_packages: [], translation_drafts: []
+                }
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/research-catalog/action' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const item = req.body || {};
+        if (!['question_bank', 'question', 'questionnaire', 'translation_package', 'translation_draft'].includes(item.entity_type) ||
+            !UUID_V4.test(String(item.entity_id || '')) ||
+            !Number.isInteger(item.entity_version) || item.entity_version < 0 ||
+            !['archive', 'restore', 'delete', 'inspect'].includes(item.action)) {
+            return res.status(400).json({ ok: false, error: 'A valid catalog entity and action are required' });
+        }
+        try {
+            const actionResult = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'manage_research_catalog_item',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_entity_type: item.entity_type,
+                    p_entity_id: item.entity_id,
+                    p_entity_version: item.entity_version,
+                    p_action: item.action
+                }
+            );
+            const result = Array.isArray(actionResult) ? actionResult[0] : actionResult;
+            return res.status(200).json({ ok: true, result });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }

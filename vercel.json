@@ -10,6 +10,8 @@
     { "source": "/question-banks/(.*)", "destination": "/api/index.js" },
     { "source": "/question-translations", "destination": "/api/index.js" },
     { "source": "/question-translations/(.*)", "destination": "/api/index.js" },
+    { "source": "/research-catalog", "destination": "/api/index.js" },
+    { "source": "/research-catalog/(.*)", "destination": "/api/index.js" },
     { "source": "/parameters", "destination": "/api/index.js" },
     { "source": "/parameters/(.*)", "destination": "/api/index.js" },
     { "source": "/questionnaires", "destination": "/api/index.js" },
