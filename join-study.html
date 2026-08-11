@@ -50,7 +50,7 @@ async function loadInvitation(){
 function renderAuthLinks(){
  authActions.innerHTML='';
  const login=document.createElement('a');login.className='link';login.textContent=COPY[lang].login;login.href=ResearchAuth.loginUrl('respondent',returnTarget);
- const register=document.createElement('a');register.className='link secondary';register.textContent=COPY[lang].register;register.href=`register.html?return=${encodeURIComponent(returnTarget)}`;
+ const register=document.createElement('a');register.className='link secondary';register.textContent=COPY[lang].register;register.href=`register.html?role=respondent&return=${encodeURIComponent(returnTarget)}`;
  authActions.append(login,register);
 }
 async function joinStudy(){

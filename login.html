@@ -55,10 +55,10 @@
     const expectedRole=['researcher','respondent'].includes(params.get('role'))?params.get('role'):null;
     const fallback=expectedRole==='respondent'?'cabinet.html':'survey.html';
     const returnTarget=ResearchAuth.safeReturnTarget(params.get('return'),fallback);
-    if(expectedRole==='respondent')registerLink.href=`register.html?return=${encodeURIComponent(returnTarget)}`;
+    if(expectedRole)registerLink.href=`register.html?role=${encodeURIComponent(expectedRole)}&return=${encodeURIComponent(returnTarget)}`;
     let lang=localStorage.getItem('app_language')||'es';
     if(!copy[lang])lang='es';
-    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;submitButton.textContent=t.submit;registerLink.textContent=t.register;publicLink.textContent=t.public;if(params.get('reason')==='auth_unavailable')status.textContent=t.unavailable}
+    function setLang(value){lang=copy[value]?value:'es';localStorage.setItem('app_language',lang);document.documentElement.lang=lang;const t=copy[lang];title.textContent=t.title;description.textContent=t.description;usernameLabel.textContent=t.username;passwordLabel.textContent=t.password;submitButton.textContent=t.submit;registerLink.textContent=expectedRole==='researcher'?({es:'Crear una cuenta de investigador',en:'Create a researcher account',ru:'Зарегистрироваться как исследователь'}[lang]):t.register;publicLink.textContent=t.public;if(params.get('reason')==='auth_unavailable')status.textContent=t.unavailable}
     async function submitCredentials(){status.textContent=copy[lang].checking;submitButton.disabled=true;try{await ResearchAuth.login(usernameInput.value.trim(),passwordInput.value,expectedRole);history.replaceState({},document.title,'login.html');location.replace(returnTarget)}catch(error){status.textContent=error.code==='AUTH_REQUEST_TIMEOUT'?copy[lang].timeout:error.message}finally{submitButton.disabled=false}}
     loginForm.addEventListener('submit',event=>{event.preventDefault();submitCredentials()});
     document.addEventListener('DOMContentLoaded',async()=>{

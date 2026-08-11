@@ -1332,6 +1332,10 @@ export default async function handler(req, res) {
     if (path === '/auth/register' && method === 'POST') {
         const normalizedUsername = String(req.body?.username || '').trim();
         const password = String(req.body?.password || '');
+        const role = String(req.body?.role || 'respondent').trim().toLowerCase();
+        if (!['researcher', 'respondent'].includes(role)) {
+            return res.status(400).json({ ok: false, error: 'Registration role must be researcher or respondent' });
+        }
         if (!/^[A-Za-z0-9_.@+-]{3,128}$/.test(normalizedUsername)) {
             return res.status(400).json({
                 ok: false,
@@ -1350,10 +1354,11 @@ export default async function handler(req, res) {
             const result = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'register_research_os_respondent',
+                'register_research_os_account',
                 {
                     p_username: normalizedUsername,
                     p_password: password,
+                    p_role: role,
                     p_session_id: randomUUID(),
                     p_token_hash: sessionTokenHash(sessionToken),
                     p_expires_at: expiresAt
@@ -1368,7 +1373,7 @@ export default async function handler(req, res) {
                 ok: true,
                 session_token: sessionToken,
                 account_id: registered.account_id,
-                role: 'respondent',
+                role: registered.role,
                 user_identifier: registered.user_identifier,
                 expires_at: registered.expires_at || expiresAt
             });

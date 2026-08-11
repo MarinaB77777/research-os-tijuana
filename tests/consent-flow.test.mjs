@@ -338,7 +338,7 @@ test('public respondent registration creates its account and session atomically'
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = async (url, options) => {
-    assert.match(url, /rpc\/register_research_os_respondent$/);
+    assert.match(url, /rpc\/register_research_os_account$/);
     rpcBody = JSON.parse(options.body);
     return jsonFetch({
       account_id: '23572089-acde-4b51-8566-f770a0be2c3c',
@@ -353,13 +353,15 @@ test('public respondent registration creates its account and session atomically'
     await handler(
       request('POST', '/auth/register', {
         username: 'New.Respondent',
-        password: 'a-valid-password'
+        password: 'a-valid-password',
+        role: 'respondent'
       }),
       res
     );
     assert.equal(res.statusCode, 201);
     assert.equal(res.payload.role, 'respondent');
     assert.equal(res.payload.user_identifier, 'RSP-0ea04476fdac4b89a4c9df9451cb25d2');
+    assert.equal(rpcBody.p_role, 'respondent');
     assert.match(rpcBody.p_token_hash, /^[0-9a-f]{64}$/);
     assert.equal(Object.hasOwn(rpcBody, 'p_created_by_account_id'), false);
   } finally {
@@ -367,9 +369,65 @@ test('public respondent registration creates its account and session atomically'
   }
 });
 
-test('self-registered respondents join by invitation and consent remains per survey', async () => {
+test('public researcher registration creates an independent researcher session', async () => {
+  const originalFetch = globalThis.fetch;
+  let rpcBody;
+  globalThis.fetch = async (url, options) => {
+    assert.match(url, /rpc\/register_research_os_account$/);
+    rpcBody = JSON.parse(options.body);
+    return jsonFetch({
+      account_id: 'a22cb0be-acde-42c4-86aa-a1c023b0c329',
+      username: 'new.researcher',
+      role: 'researcher',
+      user_identifier: 'RSR-1ea04476fdac4b89a4c9df9451cb25d2',
+      expires_at: '2099-01-01T00:00:00.000Z'
+    });
+  };
+  try {
+    const res = response();
+    await handler(
+      request('POST', '/auth/register', {
+        username: 'New.Researcher',
+        password: 'a-valid-password',
+        role: 'researcher'
+      }),
+      res
+    );
+    assert.equal(res.statusCode, 201);
+    assert.equal(res.payload.role, 'researcher');
+    assert.match(res.payload.user_identifier, /^RSR-/);
+    assert.equal(rpcBody.p_role, 'researcher');
+    assert.equal(Object.hasOwn(rpcBody, 'p_created_by_account_id'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('public registration rejects every role outside researcher and respondent', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error('An invalid public role must not reach storage');
+  };
+  try {
+    const res = response();
+    await handler(
+      request('POST', '/auth/register', {
+        username: 'attempted.admin',
+        password: 'a-valid-password',
+        role: 'admin'
+      }),
+      res
+    );
+    assert.equal(res.statusCode, 400);
+    assert.match(res.payload.error, /researcher or respondent/i);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('self-registered accounts preserve role isolation and respondents join by invitation', async () => {
   const [registrationMigration, studyMigration, registerPage, studyPage, joinPage, loginSource, authSource] = await Promise.all([
-    fs.readFile(new URL('../supabase/public_respondent_registration_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../supabase/public_account_registration_v2.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../supabase/research_study_contract_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../register.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../constructor_study.html', import.meta.url), 'utf8'),
@@ -377,18 +435,24 @@ test('self-registered respondents join by invitation and consent remains per sur
     fs.readFile(new URL('../login.html', import.meta.url), 'utf8'),
     fs.readFile(new URL('../auth.js', import.meta.url), 'utf8')
   ]);
-  assert.match(registrationMigration, /register_research_os_respondent/);
+  assert.match(registrationMigration, /register_research_os_account/);
+  assert.match(registrationMigration, /p_role not in \('researcher', 'respondent'\)/);
   assert.match(registrationMigration, /created_by_account_id\s*\)\s*values\s*\([\s\S]*null/i);
+  assert.match(registrationMigration, /to service_role/);
+  assert.match(registrationMigration, /from public, anon, authenticated/);
   assert.match(studyMigration, /research_study_invitations/);
   assert.match(studyMigration, /join_study_by_invitation/);
   assert.match(studyMigration, /accept_consent_and_start_measurement/);
   assert.match(studyMigration, /p_explicit_acceptance is distinct from true/);
-  assert.match(registerPage, /registerRespondent/);
+  assert.match(registerPage, /registerAccount/);
+  assert.match(registerPage, /value="researcher"/);
+  assert.match(loginSource, /role=\$\{encodeURIComponent\(expectedRole\)\}/);
   assert.match(loginSource, /href="register\.html"/);
   assert.match(authSource, /\/api\/auth\/register/);
   assert.match(studyPage, /join-study\.html\?invite=/);
   assert.match(studyPage, /\/qr\.svg/);
   assert.doesNotMatch(studyPage, /id="respondentId"/);
   assert.doesNotMatch(joinPage, /explicit_acceptance/);
+  assert.match(joinPage, /role=respondent/);
   assert.match(joinPage, /location\.replace\('cabinet\.html'\)/);
 });

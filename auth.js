@@ -100,17 +100,23 @@
     return session;
   }
 
-  async function registerRespondent(username, password) {
+  async function registerAccount(username, password, role) {
     if (!username || !password) throw new Error('Username and password are required');
+    const requestedRole = role || 'respondent';
+    if (!ALLOWED_ROLES.has(requestedRole)) throw new Error('Invalid registration role');
     const response = await fetchWithTimeout('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, role: requestedRole })
     });
     const payload = await parseResponse(response);
     const session = sessionFromPayload(payload);
     storeSession(session);
     return session;
+  }
+
+  function registerRespondent(username, password) {
+    return registerAccount(username, password, 'respondent');
   }
 
   async function verify(requiredRole) {
@@ -212,6 +218,7 @@
     clearSession,
     safeReturnTarget,
     login,
+    registerAccount,
     registerRespondent,
     verify,
     requireRole,
