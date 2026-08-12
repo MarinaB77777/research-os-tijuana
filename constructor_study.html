@@ -9,7 +9,7 @@
 </style>
 </head>
 <body>
-<header><div class="head"><div><div class="brand">🔬 Research OS · <span data-t="title">Estudios</span></div><div id="dirtyState" class="dirty"></div></div><div class="toolbar"><button class="secondary" data-lang="es" onclick="setLang('es')">ES</button><button class="secondary" data-lang="en" onclick="setLang('en')">EN</button><button class="secondary" data-lang="ru" onclick="setLang('ru')">RU</button><a class="button secondary" href="survey.html" data-t="cabinet">Panel</a><a class="button secondary" href="index.html">⌂ Research OS</a></div></div></header>
+<header><div class="head"><div><div class="brand">🔬 Research OS · <span data-t="title">Estudios</span></div><div id="dirtyState" class="dirty"></div></div><div class="toolbar"><button class="secondary" data-lang="es" onclick="setLang('es')"> 🇲🇽 ES</button><button class="secondary" data-lang="en" onclick="setLang('en')"> 🇺🇸  EN</button><button class="secondary" data-lang="ru" onclick="setLang('ru')">RU</button><a class="button secondary" href="survey.html" data-t="cabinet">Panel</a><a class="button secondary" href="index.html">⌂ Research OS</a></div></div></header>
 <main><div class="grid">
 <aside>
   <section class="card"><div class="toolbar"><button onclick="newStudy()" data-t="newStudy">Nuevo estudio</button><button class="secondary" onclick="document.getElementById('importFile').click()" data-t="importJson">Importar JSON</button><input id="importFile" type="file" accept="application/json,.json" hidden onchange="importStudy(this.files[0])"></div><label data-t="catalogFilter">Filtrar estudios</label><input id="catalogFilter" oninput="renderCatalog()"><div id="catalog" class="catalog meta"></div><div id="catalogCount" class="counter"></div></section>
