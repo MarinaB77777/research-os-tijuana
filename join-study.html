@@ -6,12 +6,12 @@
 <title>Research OS | Join study</title>
 <style>
 :root{--bg:#0b0f19;--panel:#162032;--line:#334155;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--bad:#fca5a5}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}h1{color:var(--accent);font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:20px 0 8px}.muted{color:var(--muted);line-height:1.55}.meta{color:var(--muted);font-size:12px;line-height:1.5}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.lang{justify-content:flex-end;margin-bottom:18px}button,.link{border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#082f49;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}.error{color:var(--bad);white-space:pre-wrap;margin-top:16px}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}h1{color:var(--accent);font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:20px 0 8px}.muted{color:var(--muted);line-height:1.55}.meta{color:var(--muted);font-size:12px;line-height:1.5}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.lang{justify-content:space-between;margin-bottom:18px}button,.link{border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#082f49;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}.error{color:var(--bad);white-space:pre-wrap;margin-top:16px}footer{width:100%;text-align:center;color:var(--muted);font-size:12px;padding:22px 0 0}
 </style>
 </head>
 <body>
 <main class="card">
-<div class="row lang"><button class="secondary" onclick="setLang('es')">ES</button><button class="secondary" onclick="setLang('en')">EN</button><button class="secondary" onclick="setLang('ru')">RU</button></div>
+<div class="row lang"><a class="link secondary" href="index.html">⌂ Research OS</a><div class="row"><button class="secondary" onclick="setLang('es')">ES</button><button class="secondary" onclick="setLang('en')">EN</button><button class="secondary" onclick="setLang('ru')">RU</button></div></div>
 <h1 id="pageTitle"></h1>
 <div id="status" class="muted"></div>
 <section id="studyInfo" hidden>
@@ -21,6 +21,7 @@
 <div id="authActions" class="row" style="margin-top:20px"></div>
 </section>
 </main>
+<footer>✨ CRM Sharks &amp; Ray AI | Research OS Pilot</footer>
 <script src="auth.js"></script>
 <script>
 'use strict';

@@ -69,7 +69,7 @@
 
     .header-left { display: flex; align-items: center; gap: 16px; }
 
-    .lang-selector { display: flex; gap: 6px; }
+    .lang-selector { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
     .lang-selector button {
       background: transparent;
       border: 1px solid var(--border-color);
@@ -122,7 +122,7 @@
 
     .tools-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
       gap: 16px;
     }
 
@@ -221,6 +221,7 @@
           <span style="color: var(--text-muted);" id="lbl-subtitle">— Panel de Control del Investigador</span>
         </div>
         <div class="lang-selector">
+          <a class="btn btn-secondary" href="index.html" id="home-btn">⌂ Research OS</a>
           <button onclick="setLanguage('es')" id="lang-es" class="active">🇲🇽 ES</button>
           <button onclick="setLanguage('en')" id="lang-en">🇺🇸 EN</button>
           <button onclick="setLanguage('ru')" id="lang-ru">RU</button>
@@ -321,6 +322,42 @@
             <div class="tool-desc" id="tool6-desc">Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.</div>
             <a href="settings.html" class="btn" id="tool6-btn">Configurar IA</a>
           </div>
+
+          <div class="tool-card">
+            <div class="tool-title">🔀 <span id="tool7-title">Constructor de Cuestionarios</span></div>
+            <div class="tool-desc" id="tool7-desc">Composición, orden y transiciones con preguntas de cualquier banco registrado.</div>
+            <a href="constructor_survey.html" class="btn" id="tool7-btn">Crear Cuestionario</a>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">🧪 <span id="tool8-title">Constructor de Estudios</span></div>
+            <div class="tool-desc" id="tool8-desc">Diseño de grupos, momentos, asignaciones y cuestionarios de una investigación.</div>
+            <a href="constructor_study.html" class="btn" id="tool8-btn">Abrir Estudios</a>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">🧩 <span id="tool9-title">Constructor de Parámetros</span></div>
+            <div class="tool-desc" id="tool9-desc">Definiciones, marcadores, dependencias, tiempo, medición y cálculo explícito.</div>
+            <a href="constructor_parameter.html" class="btn" id="tool9-btn">Crear Parámetro</a>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">🗂️ <span id="tool10-title">Catálogos y Registros</span></div>
+            <div class="tool-desc" id="tool10-desc">Preguntas, cuestionarios y parámetros registrados con versiones y procedencia.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap"><a href="question_catalog.html" class="btn" id="tool10-btn">Catálogo</a><a href="parameter_registry.html" class="btn btn-secondary" id="tool10-alt">Parámetros</a></div>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">📜 <span id="tool11-title">Registro de Consentimientos</span></div>
+            <div class="tool-desc" id="tool11-desc">Documentos de consentimiento estándar y especiales, versionados por idioma.</div>
+            <a href="consent_registry.html" class="btn" id="tool11-btn">Abrir Registro</a>
+          </div>
+
+          <div class="tool-card">
+            <div class="tool-title">📈 <span id="tool12-title">Análisis Científico</span></div>
+            <div class="tool-desc" id="tool12-desc">Formación reproducible de muestras, variables, métodos y resultados estadísticos.</div>
+            <a href="data-analysis.html" class="btn" id="tool12-btn">Abrir Análisis</a>
+          </div>
             
         </div>
       </div>
@@ -362,6 +399,12 @@
         tool6Title: "Colega de IA",
         tool6Desc: "Elija modelos disponibles para traducción y búsqueda. Las claves permanecen exclusivamente en el servidor.",
         tool6Btn: "Configurar IA",
+        tool7Title:"Constructor de Cuestionarios",tool7Desc:"Composición, orden y transiciones con preguntas de cualquier banco registrado.",tool7Btn:"Crear Cuestionario",
+        tool8Title:"Constructor de Estudios",tool8Desc:"Diseño de grupos, momentos, asignaciones y cuestionarios de una investigación.",tool8Btn:"Abrir Estudios",
+        tool9Title:"Constructor de Parámetros",tool9Desc:"Definiciones, marcadores, dependencias, tiempo, medición y cálculo explícito.",tool9Btn:"Crear Parámetro",
+        tool10Title:"Catálogos y Registros",tool10Desc:"Preguntas, cuestionarios y parámetros registrados con versiones y procedencia.",tool10Btn:"Catálogo",tool10Alt:"Parámetros",
+        tool11Title:"Registro de Consentimientos",tool11Desc:"Documentos de consentimiento estándar y especiales, versionados por idioma.",tool11Btn:"Abrir Registro",
+        tool12Title:"Análisis Científico",tool12Desc:"Formación reproducible de muestras, variables, métodos y resultados estadísticos.",tool12Btn:"Abrir Análisis",
         questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",catalogManage:"☷ Catálogo",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Disponible con atribución",open:"Abrir",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
       },
       en: {
@@ -393,6 +436,12 @@
         tool6Title: "AI Colleague",
         tool6Desc: "Choose available models for translation and search. Provider keys remain exclusively on the server.",
         tool6Btn: "Configure AI",
+        tool7Title:"Questionnaire Builder",tool7Desc:"Compose, order, and route questions from any registered bank.",tool7Btn:"Create Questionnaire",
+        tool8Title:"Study Builder",tool8Desc:"Design study groups, timepoints, assignments, and questionnaires.",tool8Btn:"Open Studies",
+        tool9Title:"Parameter Builder",tool9Desc:"Define markers, dependencies, time, measurement, and explicit computation.",tool9Btn:"Create Parameter",
+        tool10Title:"Catalogs and Registries",tool10Desc:"Registered questions, questionnaires, and parameters with versions and provenance.",tool10Btn:"Catalog",tool10Alt:"Parameters",
+        tool11Title:"Consent Registry",tool11Desc:"Versioned standard and special consent documents in each language.",tool11Btn:"Open Registry",
+        tool12Title:"Scientific Analysis",tool12Desc:"Reproducible sample formation, variables, methods, and statistical results.",tool12Btn:"Open Analysis",
         questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",catalogManage:"☷ Catalog",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Available with attribution",open:"Open",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
       },
       ru: {
@@ -424,6 +473,12 @@
         tool6Title: "AI-коллега",
         tool6Desc: "Выберите доступные модели для перевода и поиска. Ключи провайдеров остаются исключительно на сервере.",
         tool6Btn: "Настроить AI",
+        tool7Title:"Конструктор анкет",tool7Desc:"Состав, порядок и переходы с вопросами из любого зарегистрированного банка.",tool7Btn:"Создать анкету",
+        tool8Title:"Конструктор исследований",tool8Desc:"Проектирование групп, временных точек, назначений и анкет исследования.",tool8Btn:"Открыть исследования",
+        tool9Title:"Конструктор параметров",tool9Desc:"Определения, маркеры, зависимости, время, измерение и явный расчёт.",tool9Btn:"Создать параметр",
+        tool10Title:"Каталоги и реестры",tool10Desc:"Зарегистрированные вопросы, анкеты и параметры с версиями и происхождением.",tool10Btn:"Каталог",tool10Alt:"Параметры",
+        tool11Title:"Реестр согласий",tool11Desc:"Версионируемые стандартные и особые документы согласия на каждом языке.",tool11Btn:"Открыть реестр",
+        tool12Title:"Научный анализ",tool12Desc:"Воспроизводимое формирование выборок, переменных, методов и статистических результатов.",tool12Btn:"Открыть анализ",
         questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",catalogManage:"☷ Каталог",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Доступен с атрибуцией",open:"Открыть",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
       }
     };
@@ -486,6 +541,12 @@
       document.getElementById('tool6-title').innerText = t.tool6Title;
       document.getElementById('tool6-desc').innerText = t.tool6Desc;
       document.getElementById('tool6-btn').innerText = t.tool6Btn;
+      for (let index=7;index<=12;index++) {
+        document.getElementById(`tool${index}-title`).innerText=t[`tool${index}Title`];
+        document.getElementById(`tool${index}-desc`).innerText=t[`tool${index}Desc`];
+        document.getElementById(`tool${index}-btn`).innerText=t[`tool${index}Btn`];
+      }
+      document.getElementById('tool10-alt').innerText=t.tool10Alt;
       document.getElementById('lbl-questionnaires-header').innerText=t.questionnairesHeader;
       document.getElementById('lbl-questionnaire-create').innerText=t.questionnaireCreate;
       document.getElementById('qth-name').innerText=t.qName;document.getElementById('qth-version').innerText=t.qVersion;document.getElementById('qth-status').innerText=t.qStatus;document.getElementById('qth-action').innerText=t.qAction;
@@ -531,7 +592,7 @@
     window.addEventListener('DOMContentLoaded', initSession);
   </script>
   <div style="text-align:center;padding:24px;color:#6e8790;font-size:12px;border-top:1px solid #1e293b;">
-    ✨ CRM Sharks · Ray AI | Research OS Pilot
+    ✨ CRM Sharks &amp; Ray AI | Research OS Pilot
   </div>
 </body>
 </html>

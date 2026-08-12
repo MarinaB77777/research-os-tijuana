@@ -9,7 +9,7 @@
 </style>
 </head>
 <body>
-<header><div class="head"><div><div class="brand">🔬 Research OS · <span data-t="title">Estudios</span></div><div id="dirtyState" class="dirty"></div></div><div class="toolbar"><button class="secondary" data-lang="es" onclick="setLang('es')">ES</button><button class="secondary" data-lang="en" onclick="setLang('en')">EN</button><button class="secondary" data-lang="ru" onclick="setLang('ru')">RU</button><a class="button secondary" href="survey.html" data-t="cabinet">Panel</a><a class="button secondary" href="index.html">←</a></div></div></header>
+<header><div class="head"><div><div class="brand">🔬 Research OS · <span data-t="title">Estudios</span></div><div id="dirtyState" class="dirty"></div></div><div class="toolbar"><button class="secondary" data-lang="es" onclick="setLang('es')">ES</button><button class="secondary" data-lang="en" onclick="setLang('en')">EN</button><button class="secondary" data-lang="ru" onclick="setLang('ru')">RU</button><a class="button secondary" href="survey.html" data-t="cabinet">Panel</a><a class="button secondary" href="index.html">⌂ Research OS</a></div></div></header>
 <main><div class="grid">
 <aside>
   <section class="card"><div class="toolbar"><button onclick="newStudy()" data-t="newStudy">Nuevo estudio</button><button class="secondary" onclick="document.getElementById('importFile').click()" data-t="importJson">Importar JSON</button><input id="importFile" type="file" accept="application/json,.json" hidden onchange="importStudy(this.files[0])"></div><label data-t="catalogFilter">Filtrar estudios</label><input id="catalogFilter" oninput="renderCatalog()"><div id="catalog" class="catalog meta"></div><div id="catalogCount" class="counter"></div></section>
@@ -39,7 +39,7 @@
 <section class="card"><div class="toolbar"><button id="saveButton" onclick="saveStudy()" data-t="save">Guardar en la base</button><button class="secondary" onclick="downloadStudy()" data-t="download">Guardar JSON</button><button id="newVersionButton" class="secondary" onclick="createNewVersion()" data-t="newVersion">Crear nueva versión</button></div><div id="saveStatus" class="status"></div></section>
 <section class="card"><h2 data-t="joinLinks">Enlaces y códigos QR de participación</h2><div class="meta" data-t="joinHint">Cada participante se registra mediante el enlace de su grupo. El consentimiento versionado aparece antes de cada sesión.</div><div id="joinLinks"></div></section>
 </div></div></main>
-<footer>✨ CRM Sharks &amp; Ray | Research OS Pilot</footer>
+<footer>✨ CRM Sharks &amp; Ray AI | Research OS Pilot</footer>
 <script src="auth.js"></script><script src="research-contracts.js"></script><script src="eligibility-criteria.js"></script><script src="ai-router.js"></script>
 <script>
 'use strict';

@@ -64,7 +64,7 @@ test('statistical page has no fabricated startup result and exposes the complete
   assert.match(page, /changeSpearman/);
   assert.doesNotMatch(page, /"participant_id": "P_01"/);
   assert.doesNotMatch(page, /Условия применимости статистического метода соблюдены/);
-  assert.match(page, /CRM Sharks · Ray AI/);
+  assert.match(page, /CRM Sharks &amp; Ray AI/);
 });
 
 test('statistical planning blocks methods that conflict with psychometric level', async () => {

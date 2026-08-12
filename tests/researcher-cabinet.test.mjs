@@ -12,7 +12,13 @@ test('researcher cabinet renders registered catalogs and contains no simulated b
   assert.match(cabinet, /requestJson\('\/questionnaires\?status=all'\)/);
   assert.match(cabinet, /importer\.html\?return=survey\.html/);
   assert.match(cabinet, /owned_by_current_account/);
-  assert.match(cabinet, /CRM Sharks · Ray AI/);
+  assert.match(cabinet, /CRM Sharks &amp; Ray AI/);
+  for (const route of [
+    'constructor_quest.html', 'constructor_survey.html', 'constructor_study.html',
+    'constructor_parameter.html', 'parameter_registry.html', 'question_catalog.html',
+    'consent_registry.html', 'importer.html', 'translator.html', 'validator.html',
+    'analyzer.html', 'data-analysis.html', 'settings.html'
+  ]) assert.match(cabinet, new RegExp(`href=["']${route.replace('.', '\\.')}`), `researcher cabinet must expose ${route}`);
   assert.doesNotMatch(cabinet, /Estrés y carga laboral \(Wave 1\)/);
   assert.doesNotMatch(cabinet, /uploadedBanks/);
   assert.doesNotMatch(cabinet, /toggleBank/);

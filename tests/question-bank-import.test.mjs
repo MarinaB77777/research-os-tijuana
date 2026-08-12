@@ -649,7 +649,7 @@ test('constructor routes all file imports through preview and consumes only vali
   assert.doesNotMatch(page, /options\.push\(\[currentId,/);
   assert.match(page, /ResearchContracts\.requestJson\('\/question-banks\/save'/);
   assert.match(page, /research_os\.imported_question_bank\.v1/);
-  assert.match(page, /CRM Sharks · Ray \| Research OS Pilot/);
+  assert.match(page, /CRM Sharks &amp; Ray AI \| Research OS Pilot/);
   assert.doesNotMatch(page, /Gemini AI/);
 });
 
