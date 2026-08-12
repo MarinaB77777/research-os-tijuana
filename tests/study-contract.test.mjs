@@ -69,7 +69,7 @@ test('study save keeps study and questionnaire identities independent', async ()
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = researcherAccessThen(async (url, options) => {
-    assert.match(url, /rpc\/save_owned_study_package_with_visibility$/);
+    assert.match(url, /rpc\/save_owned_advanced_study_package$/);
     rpcBody = JSON.parse(options.body);
     return jsonFetch({
       study_id: '9e37af31-acde-4ba9-83c3-f7fe77958322',

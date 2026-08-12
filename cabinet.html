@@ -96,7 +96,7 @@ const T={
  es:{logo:'🔬 Research OS — Panel del participante',logout:'Salir',deleteAccount:'Eliminar cuenta',deleteTitle:'Eliminar cuenta',deleteExplanation:'Después de eliminarla, no será posible iniciar sesión. Los datos de acceso se anonimizarán; los registros de investigación y consentimientos ya recopilados conservarán su integridad.',currentPassword:'Contraseña actual',confirmDelete:'Eliminar definitivamente',welcome:'Panel personal',description:'Aquí se encuentran los cuestionarios disponibles, los consentimientos firmados y el historial.',available:'📋 Cuestionarios disponibles',history:'📊 Historial de participaciones',loading:'Cargando…',emptyAvailable:'No hay cuestionarios activos disponibles.',emptyHistory:'Aún no tiene sesiones iniciadas o completadas.',readStart:'Leer el consentimiento y comenzar',version:'Versión',ready:'Listo para completar',acceptText:'He leído el documento y acepto participar voluntariamente.',signStart:'Firmar y comenzar',cancel:'Cancelar',close:'Cerrar',accepted:'Consentimiento aceptado',started:'Iniciado',completed:'Completado',active:'Sesión iniciada',discarded:'Interrumpido',revoked:'Revocado',signedCopy:'Abrir consentimiento firmado',loadError:'No se pudo cargar el panel.',startError:'No se pudo iniciar el cuestionario.'},
  en:{logo:'🔬 Research OS — Participant Hub',logout:'Log out',deleteAccount:'Delete account',deleteTitle:'Delete account',deleteExplanation:'After deletion, sign-in will no longer be possible. Login data will be anonymized while existing research records and consents retain their integrity.',currentPassword:'Current password',confirmDelete:'Delete permanently',welcome:'Personal hub',description:'Available questionnaires, signed consents, and completion history are kept here.',available:'📋 Available questionnaires',history:'📊 Completion history',loading:'Loading…',emptyAvailable:'No active questionnaires are currently available.',emptyHistory:'You have no started or completed sessions yet.',readStart:'Read consent and start',version:'Version',ready:'Ready to complete',acceptText:'I have read the document and voluntarily agree to participate.',signStart:'Sign and start',cancel:'Cancel',close:'Close',accepted:'Consent accepted',started:'Started',completed:'Completed',active:'Session started',discarded:'Interrupted',revoked:'Revoked',signedCopy:'Open signed consent',loadError:'The participant hub could not be loaded.',startError:'The questionnaire could not be started.'}
 };
-let lang='es',principal=null,questionnaires=[],sessions=[],selectedQuestionnaire=null,selectedConsent=null;
+let lang='es',principal=null,questionnaires=[],dialogues=[],sessions=[],selectedQuestionnaire=null,selectedDialogue=null,selectedConsent=null;
 function headers(extra){return ResearchAuth.authHeaders('respondent',extra||{});}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function formatDate(value){if(!value)return '—';try{return new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeStyle:'short'}).format(new Date(value));}catch(_){return value;}}
@@ -113,17 +113,18 @@ async function request(url,options){
 async function loadCabinet(){
  document.getElementById('pageStatus').textContent='';
  try{
-  const [qData,sData]=await Promise.all([
+  const [qData,dData,sData]=await Promise.all([
    request('/respondent/measurements',{headers:headers()}),
+   request('/respondent/dialogue-measurements',{headers:headers()}),
    request('/respondent/sessions',{headers:headers()})
   ]);
-  questionnaires=qData.measurements||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
+  questionnaires=qData.measurements||[];dialogues=dData.measurements||[];sessions=sData.sessions||[];renderQuestionnaires();renderSessions();
  }catch(error){document.getElementById('pageStatus').textContent=`${T[lang].loadError} ${error.message}`;document.getElementById('pageStatus').className='error';document.getElementById('questionnaireList').textContent=T[lang].loadError;document.getElementById('sessionList').textContent=T[lang].loadError;}
 }
 function renderQuestionnaires(){
  const box=document.getElementById('questionnaireList');if(!box)return;
- if(!questionnaires.length){box.className='empty';box.textContent=T[lang].emptyAvailable;return;}
- box.className='';box.innerHTML=questionnaires.map((q,index)=>`<article class="item"><h3>${escapeHtml(q.questionnaire_title)}</h3><div class="meta">${escapeHtml(q.study_title)} · ${escapeHtml(q.timepoint_title)} (${escapeHtml(q.timepoint_code)}) · ${escapeHtml(q.group_title)}<br>${escapeHtml(q.questionnaire_description||'')}<br>${T[lang].version}: ${q.questionnaire_version} · ${T[lang].ready}</div><button onclick="openConsent(${index})">${T[lang].readStart}</button></article>`).join('');
+ if(!questionnaires.length&&!dialogues.length){box.className='empty';box.textContent=T[lang].emptyAvailable;return;}
+ box.className='';box.innerHTML=questionnaires.map((q,index)=>`<article class="item"><h3>${escapeHtml(q.questionnaire_title)}</h3><div class="meta">${escapeHtml(q.study_title)} · ${escapeHtml(q.timepoint_title)} (${escapeHtml(q.timepoint_code)}) · ${escapeHtml(q.group_title)}<br>${escapeHtml(q.questionnaire_description||'')}<br>${T[lang].version}: ${q.questionnaire_version} · ${T[lang].ready}</div><button onclick="openConsent(${index})">${T[lang].readStart}</button></article>`).join('')+dialogues.map((d,index)=>`<article class="item"><h3>💬 ${escapeHtml(d.dialogue_title)}</h3><div class="meta">${escapeHtml(d.study_title)} · ${escapeHtml(d.timepoint_title)} (${escapeHtml(d.timepoint_code)})${d.group_title?` · ${escapeHtml(d.group_title)}`:''}<br>${escapeHtml(d.dialogue_type)} · ${T[lang].version}: ${d.protocol_version} · ${T[lang].ready}</div><button onclick="openDialogueConsent(${index})">${T[lang].readStart}</button></article>`).join('');
 }
 function renderSessions(){
  const box=document.getElementById('sessionList');if(!box)return;
@@ -134,20 +135,20 @@ function renderSessions(){
  }).join('');
 }
 async function openConsent(index){
- selectedQuestionnaire=questionnaires[index];selectedConsent=null;document.getElementById('acceptCheckbox').checked=false;updateStartButton();
+ selectedQuestionnaire=questionnaires[index];selectedDialogue=null;selectedConsent=null;document.getElementById('acceptCheckbox').checked=false;updateStartButton();
  try{
   const data=await request(`/respondent/measurements/${encodeURIComponent(selectedQuestionnaire.participant_measurement_id)}/consent?lang=${encodeURIComponent(lang)}`,{headers:headers()});
   selectedConsent=data.consent;document.getElementById('consentTitle').textContent=selectedConsent.consent_title;document.getElementById('consentMeta').textContent=`${selectedConsent.questionnaire_title} · v${selectedConsent.questionnaire_version} · ${selectedConsent.language} · SHA-256 ${selectedConsent.text_sha256}`;document.getElementById('consentText').textContent=selectedConsent.text;document.getElementById('consentDialog').showModal();
  }catch(error){document.getElementById('pageStatus').textContent=error.message;document.getElementById('pageStatus').className='error';}
 }
-function closeConsent(){document.getElementById('consentDialog').close();selectedQuestionnaire=null;selectedConsent=null;}
+async function openDialogueConsent(index){selectedDialogue=dialogues[index];selectedQuestionnaire=null;selectedConsent=null;document.getElementById('acceptCheckbox').checked=false;updateStartButton();try{const data=await request(`/respondent/dialogue-measurements/${encodeURIComponent(selectedDialogue.dialogue_measurement_id)}/consent?lang=${encodeURIComponent(lang)}`,{headers:headers()});selectedConsent=data.consent;document.getElementById('consentTitle').textContent=selectedConsent.consent_title;document.getElementById('consentMeta').textContent=`${selectedConsent.dialogue_title} · v${selectedConsent.protocol_version} · ${selectedConsent.language} · SHA-256 ${selectedConsent.text_sha256}`;document.getElementById('consentText').textContent=selectedConsent.text;document.getElementById('consentDialog').showModal()}catch(error){document.getElementById('pageStatus').textContent=error.message;document.getElementById('pageStatus').className='error'}}
+function closeConsent(){document.getElementById('consentDialog').close();selectedQuestionnaire=null;selectedDialogue=null;selectedConsent=null;}
 function updateStartButton(){document.getElementById('signStartButton').disabled=!selectedConsent||!document.getElementById('acceptCheckbox').checked;}
 async function acceptAndStart(){
- if(!selectedQuestionnaire||!selectedConsent||!document.getElementById('acceptCheckbox').checked)return;
+ if((!selectedQuestionnaire&&!selectedDialogue)||!selectedConsent||!document.getElementById('acceptCheckbox').checked)return;
  const button=document.getElementById('signStartButton');button.disabled=true;
  try{
-  const data=await request(`/respondent/measurements/${encodeURIComponent(selectedQuestionnaire.participant_measurement_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({language:lang,explicit_acceptance:true})});
-  location.href=`assessment.html?session_id=${encodeURIComponent(data.session_id)}`;
+  if(selectedDialogue){const data=await request(`/respondent/dialogue-measurements/${encodeURIComponent(selectedDialogue.dialogue_measurement_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({language:lang,explicit_acceptance:true})});location.href=`dialogue.html?dialogue_session_id=${encodeURIComponent(data.dialogue_session_id)}`}else{const data=await request(`/respondent/measurements/${encodeURIComponent(selectedQuestionnaire.participant_measurement_id)}/start`,{method:'POST',headers:headers({'Content-Type':'application/json'}),body:JSON.stringify({language:lang,explicit_acceptance:true})});location.href=`assessment.html?session_id=${encodeURIComponent(data.session_id)}`}
  }catch(error){button.disabled=false;document.getElementById('pageStatus').textContent=`${T[lang].startError} ${error.message}`;document.getElementById('pageStatus').className='error';closeConsent();}
 }
 function openSignedConsent(index){

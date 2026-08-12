@@ -317,7 +317,7 @@ test('authenticated account closure revokes access without deleting research rec
   }
 });
 
-test('account closure contract anonymizes login and preserves referenced records', async () => {
+test('account closure contract freezes researcher records without blocking or transferring them', async () => {
   const [migration, authSource, cabinet, settings] = await Promise.all([
     fs.readFile(new URL('../supabase/account_closure_v1.sql', import.meta.url), 'utf8'),
     fs.readFile(new URL('../auth.js', import.meta.url), 'utf8'),
@@ -327,11 +327,28 @@ test('account closure contract anonymizes login and preserves referenced records
   assert.match(migration, /status in \('active', 'suspended', 'revoked', 'deleted'\)/);
   assert.match(migration, /username = 'deleted_'/);
   assert.match(migration, /update public\.research_os_auth_sessions/);
-  assert.match(migration, /Active research must be closed or transferred/);
+  assert.doesNotMatch(migration, /Active research must be closed or transferred/);
+  assert.match(migration, /never cascades, transfers, archives or changes catalog permissions/);
   assert.doesNotMatch(migration, /delete\s+from\s+public\.research_os_accounts/i);
   assert.match(authSource, /DELETE/);
   assert.match(cabinet, /deleteAccount\(\)/);
   assert.match(settings, /deleteResearcherAccount\(\)/);
+});
+
+test('standard consent is editable through immutable versioning, not a read-only placeholder', async () => {
+  const [migration, api, registry] = await Promise.all([
+    fs.readFile(new URL('../supabase/consent_questionnaire_flow_v1.sql', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../api/index.js', import.meta.url), 'utf8'),
+    fs.readFile(new URL('../consent_registry.html', import.meta.url), 'utf8')
+  ]);
+  assert.match(migration, /consent_kind' not in \('standard', 'special'\)/);
+  assert.match(migration, /standard consent has one permanent identity and code/);
+  assert.match(migration, /Active consent version is immutable; create a new version/);
+  assert.match(migration, /new standard consent must use the next consecutive version/);
+  assert.match(api, /\['standard', 'special'\]\.includes\(consentData\?\.consent_kind\)/);
+  assert.doesNotMatch(registry, /System standard document \(read only\)|Системный стандартный документ \(только чтение\)/);
+  assert.match(registry, /function createNextVersion\(\)\{readForm\(\);const latest=catalog/);
+  assert.match(registry, /const immutable=state\.status==='active'/);
 });
 
 test('public respondent registration creates its account and session atomically', async () => {

@@ -23,8 +23,11 @@ test('researcher cabinet renders registered catalogs and contains no simulated b
   assert.doesNotMatch(cabinet, /uploadedBanks/);
   assert.doesNotMatch(cabinet, /toggleBank/);
   assert.doesNotMatch(cabinet, /JSON\.parse\(text\)/);
-  assert.match(api, /owned_by_current_account: owned\.has\(bank\.bank_id\)/);
-  assert.match(api, /owned_by_current_account: owned\.has\(questionnaire\.questionnaire_id\)/);
+  assert.match(api, /list_question_banks_for_account/);
+  assert.match(api, /list_questionnaires_for_account/);
+  assert.match(api, /set_owned_entity_content_visibility/);
+  assert.match(cabinet, /content_visible/);
+  assert.match(cabinet, /metadataOnly/);
   assert.match(questionnaireConstructor, /params\.get\('bank'\)/);
   assert.match(questionnaireConstructor, /params\.get\('questionnaire'\)/);
 });

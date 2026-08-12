@@ -912,10 +912,12 @@ function renderDatabaseSources() {
     select.innerHTML = '';
     catalogForSourceType().forEach(item => {
         const identity = sourceCatalogIdentity(item);
-        select.add(new Option(
-            `${item.title} · ${item.code} v${item.version}`,
+        const option = new Option(
+            `${item.content_visible ? '' : '🔒 '}${item.title} · ${item.code} v${item.version}`,
             `${identity.id}:${identity.version}`
-        ));
+        );
+        option.disabled = !item.content_visible;
+        select.add(option);
     });
     renderDatabaseSourceLanguages();
 }

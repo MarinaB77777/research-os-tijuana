@@ -408,26 +408,23 @@ test('saved translation catalog is discoverable and enriches the bank language s
   let call = 0;
   globalThis.fetch = async (url) => {
     call += 1;
-    if (call === 1) {
-      assert.match(url, /rpc\/list_question_banks$/);
-      return jsonFetch([{
-        bank_id: bankId, version: 1, code: 'SUPPORT', title: 'Support',
-        status: 'active', primary_language: 'en-US', reuse_permission: 'attribution_permitted'
-      }]);
-    }
-    if (call === 2) return jsonFetch([{
+    if (call === 1) return jsonFetch([{
       session_id: 'e3ce976f-acde-47a7-8247-ef92986ca3da', account_id: researcherId,
       expires_at: '2099-01-01T00:00:00.000Z', revoked_at: null
     }]);
-    if (call === 3) return jsonFetch([{
+    if (call === 2) return jsonFetch([{
       account_id: researcherId, username: 'researcher', user_identifier: 'RESEARCHER-001',
       role: 'researcher', status: 'active', created_by_account_id: null
     }]);
-    if (call === 4) {
-      assert.match(url, /research_os_entity_ownership/);
-      return jsonFetch([{ entity_id: bankId }]);
+    if (call === 3) {
+      assert.match(url, /rpc\/list_question_banks_for_account$/);
+      return jsonFetch([{
+        bank_id: bankId, version: 1, code: 'SUPPORT', title: 'Support',
+        status: 'active', primary_language: 'en-US', reuse_permission: 'attribution_permitted',
+        owned_by_current_account: true, content_visible: true, content_visibility: 'metadata_only'
+      }]);
     }
-    assert.equal(call, 5);
+    assert.equal(call, 4);
     assert.match(url, /rpc\/list_question_translation_catalog$/);
     return jsonFetch({
       packages: [{
@@ -461,23 +458,23 @@ test('catalog recovers the exact source language when an older list RPC omits it
   let call = 0;
   globalThis.fetch = async (url) => {
     call += 1;
-    if (call === 1) {
-      assert.match(url, /rpc\/list_question_banks$/);
-      return jsonFetch([{
-        bank_id: bankId, version: 1, code: 'SUPPORT', title: 'Support',
-        status: 'draft', reuse_permission: 'attribution_permitted'
-      }]);
-    }
-    if (call === 2) return jsonFetch([{
+    if (call === 1) return jsonFetch([{
       session_id: 'e3ce976f-acde-47a7-8247-ef92986ca3da', account_id: researcherId,
       expires_at: '2099-01-01T00:00:00.000Z', revoked_at: null
     }]);
-    if (call === 3) return jsonFetch([{
+    if (call === 2) return jsonFetch([{
       account_id: researcherId, username: 'researcher', user_identifier: 'RESEARCHER-001',
       role: 'researcher', status: 'active', created_by_account_id: null
     }]);
-    if (call === 4) return jsonFetch([{ entity_id: bankId }]);
-    assert.equal(call, 5);
+    if (call === 3) {
+      assert.match(url, /rpc\/list_question_banks_for_account$/);
+      return jsonFetch([{
+        bank_id: bankId, version: 1, code: 'SUPPORT', title: 'Support',
+        status: 'draft', reuse_permission: 'attribution_permitted',
+        owned_by_current_account: true, content_visible: true, content_visibility: 'metadata_only'
+      }]);
+    }
+    assert.equal(call, 4);
     assert.match(url, /rpc\/list_question_translation_catalog$/);
     return jsonFetch({
       packages: [],
@@ -580,18 +577,18 @@ test('an exact accepted questionnaire package loads translated snapshots without
   };
   globalThis.fetch = async (url) => {
     call += 1;
-    if (call === 1) {
-      assert.match(url, /rpc\/load_questionnaire_package$/);
-      return jsonFetch(sourceQuestionnaire);
-    }
-    if (call === 2) return jsonFetch([{
+    if (call === 1) return jsonFetch([{
       session_id: 'e3ce976f-acde-47a7-8247-ef92986ca3da', account_id: researcherId,
       expires_at: '2099-01-01T00:00:00.000Z', revoked_at: null
     }]);
-    if (call === 3) return jsonFetch([{
+    if (call === 2) return jsonFetch([{
       account_id: researcherId, username: 'researcher', user_identifier: 'RESEARCHER-001',
       role: 'researcher', status: 'active', created_by_account_id: null
     }]);
+    if (call === 3) {
+      assert.match(url, /rpc\/load_questionnaire_package_for_account$/);
+      return jsonFetch(sourceQuestionnaire);
+    }
     if (call === 4) {
       assert.match(url, /rpc\/load_exact_question_translation_package$/);
       return jsonFetch({

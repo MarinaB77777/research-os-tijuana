@@ -96,6 +96,8 @@ test('mapping prompt prohibits item matching, invention, and protected-item repr
   assert.match(promptSource, /Never reproduce protected instrument items/i);
   assert.match(promptSource, /candidate identifier until independent metadata lookup succeeds/i);
   assert.match(promptSource, /researcher decision/i);
+  assert.match(promptSource, /question_match/);
+  assert.match(promptSource, /Question match and depth match are separate assessments/i);
 });
 
 test('navigation names the mapping, converter, and structure validator honestly in every language', () => {
@@ -120,6 +122,7 @@ test('AI candidates can cover only exact researcher-defined subconstructs', () =
   const raw = {
     method_name: 'Candidate Method',
     covered_subconstructs: ['Support', 'Invented construct', 'Trust', 'Support'],
+    question_match: 'same_outcome_question',
     depth_match: 'comparable',
     primary_source: { doi: 'https://doi.org/10.1000/TEST.Scale' }
   };
@@ -128,6 +131,7 @@ test('AI candidates can cover only exact researcher-defined subconstructs', () =
     { raw }
   ));
   assert.deepEqual(normalized.covered_subconstructs, ['Support', 'Trust']);
+  assert.equal(normalized.question_match, 'same_outcome_question');
   assert.equal(normalized.primary_source.doi, '10.1000/test.scale');
   assert.equal(normalized.human_disposition.status, 'pending');
   assert.equal(normalized.source_verification.status, 'pending');
@@ -506,6 +510,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
         evidence_type: 'questionnaire',
         target_node_ids: coveredIds,
         covered_subconstructs: ['What does the selected group show about available social support?'],
+        question_match: 'partial_outcome_question',
         depth_match: 'partial',
         population_fit: { status: 'partial', explanation: 'Population review needed.' },
         language_cultural_fit: { status: 'unknown', explanation: 'No adaptation established.' },
@@ -595,6 +600,7 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
     'union_of_researcher_approved_deep_research_questions'
   );
   assert.equal(result.comparison_strategy.question_level_mapping, false);
+  assert.equal(result.comparison_strategy.question_match_assessed_separately, true);
   assert.equal(result.author_instrument.code, 'SOCIAL_RESOURCES');
   assert.equal(result.candidate_registry[0].source_verification.status, 'bibliographic_metadata_verified');
   assert.equal(result.candidate_registry[0].human_disposition.status, 'pending');
@@ -604,7 +610,8 @@ test('generated mapping is owner-bound and preserves complete AI and evidence pr
   );
   assert.equal(result.ai_provenance.provider, 'groq');
   assert.equal(result.ai_provenance.model, 'openai/gpt-oss-20b');
-  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_standard_methods_v5');
+  assert.equal(result.ai_provenance.prompt_version, 'deep_research_question_standard_methods_v6');
+  assert.equal(result.candidate_registry[0].question_match, 'partial_outcome_question');
   assert.equal(result.context.standard_method_access_scope, 'include_all_recognized');
   assert.equal(result.ai_provenance.human_authority, false);
   assert.equal(result.potentially_unique_constructs[0].separate_validation_required, true);

@@ -168,6 +168,37 @@ function studyProtocolErrors(study) {
         if (betweenGroups && groups.length < 2) {
             errors.push('A between-groups design requires at least two groups');
         }
+        const allocation = design.allocation_protocol;
+        if (design.design_type === 'experimental') {
+            const groupIds = new Set(groups.map(group => group.group_id));
+            const ratios = Array.isArray(allocation?.group_ratios) ? allocation.group_ratios : [];
+            const ratioIds = ratios.map(ratio => ratio?.group_id);
+            const ratioSum = ratios.reduce((sum, ratio) => sum + Number(ratio?.weight || 0), 0);
+            if (!allocation || !UUID_V4.test(String(allocation.protocol_id || '')) ||
+                !['simple_random', 'block_random', 'stratified_block_random'].includes(allocation.method) ||
+                !String(allocation.allocation_seed || '').trim() ||
+                !['concealed_until_assignment', 'concealed_from_respondent'].includes(allocation.concealment) ||
+                ratios.length !== groups.length || new Set(ratioIds).size !== groupIds.size ||
+                ratioIds.some(id => !groupIds.has(id)) ||
+                ratios.some(ratio => !positiveInteger(ratio?.weight))) {
+                errors.push('Experimental design requires a complete concealed allocation protocol');
+            } else if (['block_random', 'stratified_block_random'].includes(allocation.method) &&
+                allocation.block_size !== ratioSum) {
+                errors.push('Block size must equal the complete allocation-ratio cycle');
+            }
+            if (allocation?.method === 'stratified_block_random') {
+                const strata = Array.isArray(allocation.strata) ? allocation.strata : [];
+                if (!strata.length || strata.some(stratum =>
+                    !UUID_V4.test(String(stratum?.stratum_id || '')) ||
+                    !SYSTEM_CODE.test(String(stratum?.code || '')) ||
+                    !String(stratum?.label || '').trim() ||
+                    !Array.isArray(stratum?.allowed_values) || stratum.allowed_values.length < 2 ||
+                    new Set(stratum.allowed_values.map(String)).size !== stratum.allowed_values.length
+                )) errors.push('Stratified allocation requires explicit strata with allowed values');
+            }
+        } else if (allocation !== undefined && allocation !== null) {
+            errors.push('Allocation protocol is allowed only for an experimental design');
+        }
     }
     if (study?.status === 'active' && !positiveInteger(design?.minimum_analyzable_sample)) {
         errors.push('An active study requires a minimum analyzable sample');
@@ -196,6 +227,145 @@ function studyProtocolErrors(study) {
         (assignment.available_from && assignment.available_until &&
             Date.parse(assignment.available_until) <= Date.parse(assignment.available_from))
     )) errors.push('Study assignment references, requirement, or availability window are invalid');
+    const dialogueAssignments = Array.isArray(study?.dialogue_assignments)
+        ? study.dialogue_assignments : [];
+    if (study?.collection_mode === 'adaptive_dialogue_mode' && !dialogueAssignments.length) {
+        errors.push('Adaptive dialogue mode requires at least one dialogue assignment');
+    }
+    if (study?.collection_mode === 'fixed_questionnaire_mode' && dialogueAssignments.length) {
+        errors.push('Dialogue assignments require adaptive dialogue mode');
+    }
+    for (const assignment of dialogueAssignments) {
+        if (!UUID_V4.test(String(assignment?.dialogue_assignment_id || '')) ||
+            !timepointIds.has(assignment?.timepoint_id) ||
+            !positiveInteger(assignment?.position) || typeof assignment?.required !== 'boolean' ||
+            (assignment?.available_from && !Number.isFinite(Date.parse(assignment.available_from))) ||
+            (assignment?.available_until && !Number.isFinite(Date.parse(assignment.available_until))) ||
+            (assignment?.available_from && assignment?.available_until &&
+                Date.parse(assignment.available_until) <= Date.parse(assignment.available_from))) {
+            errors.push('Dialogue assignment identity, timepoint, position, requirement, or window is invalid');
+            continue;
+        }
+        errors.push(...dialogueProtocolErrors(assignment.protocol));
+    }
+    return errors;
+}
+
+function dialogueProtocolErrors(protocol) {
+    const errors = [];
+    const type = protocol?.dialogue_type;
+    if (!protocol || typeof protocol !== 'object' || Array.isArray(protocol) ||
+        !UUID_V4.test(String(protocol.protocol_id || '')) ||
+        !Number.isInteger(protocol.version) || protocol.version < 1 ||
+        !['researcher_scripted', 'ai_assisted'].includes(type) ||
+        !String(protocol.title || '').trim() || !String(protocol.primary_language || '').trim() ||
+        !Number.isInteger(protocol.max_turns) || protocol.max_turns < 1 || protocol.max_turns > 100 ||
+        !UUID_V4.test(String(protocol?.consent?.consent_id || '')) ||
+        !Number.isInteger(protocol?.consent?.consent_version) || protocol.consent.consent_version < 1) {
+        return ['Complete adaptive dialogue protocol is required'];
+    }
+    if (type === 'researcher_scripted') {
+        const scripted = protocol.researcher_scripted;
+        const nodes = Array.isArray(scripted?.nodes) ? scripted.nodes : [];
+        const ids = nodes.map(node => node?.node_id);
+        const allowedTargets = new Set([...ids, 'end']);
+        if (!UUID_V4.test(String(scripted?.opening_node_id || '')) || !nodes.length ||
+            new Set(ids).size !== ids.length || !ids.includes(scripted?.opening_node_id) ||
+            nodes.some(node =>
+                !UUID_V4.test(String(node?.node_id || '')) || !String(node?.prompt || '').trim() ||
+                !['text', 'single_select', 'multiple_select', 'numeric'].includes(node?.response_type) ||
+                !allowedTargets.has(node?.default_target) || !Array.isArray(node?.rules) ||
+                (['single_select', 'multiple_select'].includes(node?.response_type) &&
+                    (!Array.isArray(node?.options) || node.options.length < 2)) ||
+                node.rules.some(rule =>
+                    !['equals', 'contains', 'greater_than', 'less_than', 'includes'].includes(rule?.operator) ||
+                    rule?.value === undefined || !allowedTargets.has(rule?.target)
+                )
+            )) errors.push('Scripted dialogue nodes and routing must form a complete valid graph');
+    } else {
+        const ai = protocol.ai_assisted;
+        if (!String(ai?.opening_prompt || '').trim() ||
+            !Array.isArray(ai?.research_objectives) || !ai.research_objectives.length ||
+            ai.research_objectives.some(value => !String(value || '').trim()) ||
+            !Array.isArray(ai?.probe_boundaries) || !ai.probe_boundaries.length ||
+            ai.probe_boundaries.some(value => !String(value || '').trim()) ||
+            !Array.isArray(ai?.stopping_criteria) || !ai.stopping_criteria.length ||
+            ai.stopping_criteria.some(value => !String(value || '').trim()) ||
+            ai?.provider !== 'groq' || ai?.model !== 'openai/gpt-oss-20b' ||
+            !String(ai?.prompt_version || '').trim() || ai?.external_processing_disclosure !== true ||
+            protocol?.consent?.mode !== 'special') {
+            errors.push('AI-assisted dialogue requires objectives, boundaries, stopping criteria, pinned model and processing disclosure');
+        }
+    }
+    return errors;
+}
+
+function qualitativeProjectErrors(project) {
+    const errors = [];
+    const arrays = ['sources', 'segments', 'codes', 'codings', 'memos', 'triangulation_links'];
+    if (project?.schema !== 'research_os.qualitative_project' || project?.schema_version !== 1 ||
+        !UUID_V4.test(String(project?.qualitative_project_id || '')) ||
+        !Number.isInteger(project?.version) || project.version < 1 ||
+        !['draft', 'trial', 'active'].includes(project?.status) ||
+        !SYSTEM_CODE.test(String(project?.code || '')) || !String(project?.title || '').trim() ||
+        !String(project?.primary_language || '').trim() ||
+        !['thematic_analysis', 'content_analysis', 'grounded_theory', 'discourse_analysis',
+            'narrative_analysis', 'mixed_qualitative'].includes(project?.methodology) ||
+        !Number.isFinite(Date.parse(project?.generated_at)) || arrays.some(key => !Array.isArray(project?.[key]))) {
+        return ['Complete research_os.qualitative_project v1 package is required'];
+    }
+    if ((project.study_id || project.study_version) &&
+        (!UUID_V4.test(String(project.study_id || '')) ||
+            !Number.isInteger(project.study_version) || project.study_version < 1)) {
+        errors.push('Study linkage requires an exact study UUID and version');
+    }
+    const sources = new Map(project.sources.map(source => [source?.source_id, source]));
+    const segments = new Map(project.segments.map(segment => [segment?.segment_id, segment]));
+    const codes = new Map(project.codes.map(code => [code?.code_id, code]));
+    if (sources.size !== project.sources.length || project.sources.some((source, index) =>
+        !UUID_V4.test(String(source?.source_id || '')) ||
+        !['interview_transcript', 'dialogue_transcript', 'field_note', 'document',
+            'observation', 'open_response_corpus'].includes(source?.source_type) ||
+        !String(source?.title || '').trim() || !String(source?.language || '').trim() ||
+        typeof source?.content !== 'string' || source.position !== index + 1
+    )) errors.push('Every qualitative source requires unique identity, type, language, content, and position');
+    if (segments.size !== project.segments.length || project.segments.some(segment => {
+        const source = sources.get(segment?.source_id);
+        return !UUID_V4.test(String(segment?.segment_id || '')) || !source ||
+            !Number.isInteger(segment?.start_offset) || segment.start_offset < 0 ||
+            !Number.isInteger(segment?.end_offset) || segment.end_offset <= segment.start_offset ||
+            segment.end_offset > source.content.length ||
+            source.content.slice(segment.start_offset, segment.end_offset) !== segment.exact_text_snapshot;
+    })) errors.push('Every segment must preserve exact source offsets and text snapshot');
+    if (codes.size !== project.codes.length || project.codes.some((code, index) =>
+        !UUID_V4.test(String(code?.code_id || '')) ||
+        (code?.parent_code_id && (!UUID_V4.test(String(code.parent_code_id)) || !codes.has(code.parent_code_id))) ||
+        !SYSTEM_CODE.test(String(code?.code || '')) || !String(code?.label || '').trim() ||
+        !String(code?.definition || '').trim() || typeof code?.inclusion_rules !== 'string' ||
+        typeof code?.exclusion_rules !== 'string' || !Array.isArray(code?.examples) ||
+        code.position !== index + 1 || (code.parent_code_id &&
+            codes.get(code.parent_code_id)?.position >= code.position)
+    )) errors.push('Codebook entries require identity, hierarchy, definition, rules, examples, and position');
+    if (project.codings.some(coding =>
+        !UUID_V4.test(String(coding?.coding_id || '')) || !segments.has(coding?.segment_id) ||
+        !codes.has(coding?.code_id) ||
+        !['high', 'medium', 'low', 'not_stated'].includes(coding?.confidence) ||
+        (coding?.interpretation !== null && coding?.interpretation !== undefined &&
+            typeof coding.interpretation !== 'string')
+    )) errors.push('Coding records must reference an exact segment and code');
+    if (project.memos.some(memo =>
+        !UUID_V4.test(String(memo?.memo_id || '')) ||
+        !['reflexive', 'methodological', 'analytic', 'case', 'code', 'triangulation'].includes(memo?.memo_type) ||
+        !String(memo?.title || '').trim() || !String(memo?.body || '').trim() ||
+        !Number.isFinite(Date.parse(memo?.created_at)) || !Number.isFinite(Date.parse(memo?.updated_at))
+    )) errors.push('Memos require identity, type, title, body, and timestamps');
+    if (project.triangulation_links.some(link =>
+        !UUID_V4.test(String(link?.link_id || '')) ||
+        !link?.qualitative_evidence || typeof link.qualitative_evidence !== 'object' ||
+        !link?.quantitative_evidence || typeof link.quantitative_evidence !== 'object' ||
+        !['converges', 'complements', 'diverges', 'explains', 'not_established'].includes(link?.relationship) ||
+        !String(link?.rationale || '').trim() || !Number.isFinite(Date.parse(link?.created_at))
+    )) errors.push('Triangulation links require qualitative and quantitative evidence plus a human rationale');
     return errors;
 }
 
@@ -216,19 +386,34 @@ const RESEARCH_OS_TABLE_CONTRACT = Object.freeze([
     'research_studies', 'research_study_groups', 'research_study_timepoints',
     'research_study_invitations', 'research_study_questionnaire_assignments',
     'research_study_enrollments', 'research_study_group_memberships',
-    'research_participant_measurements'
+    'research_participant_measurements', 'research_experimental_allocations',
+    'research_dialogue_protocols', 'research_study_dialogue_assignments',
+    'research_dialogue_sessions', 'research_dialogue_consent_acceptances',
+    'research_dialogue_turns', 'qualitative_projects', 'qualitative_sources',
+    'qualitative_segments', 'qualitative_codes', 'qualitative_codings',
+    'qualitative_memos', 'qualitative_triangulation_links',
+    'qualitative_project_collaborators'
 ]);
 const RESEARCH_OS_CRITICAL_RPC_CONTRACT = Object.freeze([
     'list_question_banks', 'load_question_bank_package',
     'load_question_bank_package_for_account', 'save_owned_question_bank_package',
     'list_questionnaires', 'load_questionnaire_package',
+    'list_question_banks_for_account', 'list_questionnaires_for_account',
+    'load_shared_question_bank_package', 'load_shared_questionnaire_package',
+    'set_owned_entity_content_visibility',
     'save_owned_questionnaire_with_consent',
     'list_question_translation_catalog', 'load_exact_question_translation_package',
     'list_research_catalog', 'manage_research_catalog_item',
     'list_studies_for_account', 'load_study_package_for_account',
     'save_owned_study_package_with_visibility',
     'set_owned_study_catalog_visibility',
-    'list_respondent_study_sessions', 'load_respondent_collection_session'
+    'list_respondent_study_sessions', 'load_respondent_collection_session',
+    'allocate_experimental_group', 'join_study_by_invitation',
+    'list_respondent_dialogue_measurements', 'start_respondent_dialogue_session',
+    'append_scripted_dialogue_response', 'prepare_ai_dialogue_turn',
+    'finish_ai_dialogue_turn', 'save_owned_qualitative_project',
+    'list_owned_qualitative_projects', 'load_owned_qualitative_project',
+    'set_qualitative_project_collaborator', 'add_qualitative_coding_record'
 ]);
 const TRANSLATABLE_QUESTION_FIELDS = Object.freeze([
     'prompt', 'instruction', 'instructions', 'help_text', 'description'
@@ -613,12 +798,16 @@ const AI_TASK_MODELS = Object.freeze({
     study_design: Object.freeze({
         groq: new Set(['openai/gpt-oss-20b']),
         gemini: new Set(['gemini-3.6-flash', 'gemini-3.5-flash-lite'])
+    }),
+    adaptive_dialogue: Object.freeze({
+        groq: new Set(['openai/gpt-oss-20b'])
     })
 });
 const DEFAULT_AI_PREFERENCES = Object.freeze({
     analyzer: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
     translator: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
-    study_design: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
+    study_design: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' }),
+    adaptive_dialogue: Object.freeze({ provider: 'groq', model: 'openai/gpt-oss-20b' })
 });
 
 function sameQuestionnaireValue(left, right) {
@@ -1698,8 +1887,11 @@ export default async function handler(req, res) {
             !UUID_V4.test(consentData?.consent_id || '') ||
             !Number.isInteger(consentData?.version) ||
             consentData.version < 1 ||
-            consentData?.consent_kind !== 'special' ||
-            consentData?.is_system !== false ||
+            !['standard', 'special'].includes(consentData?.consent_kind) ||
+            ((consentData?.consent_kind === 'standard') !== (consentData?.is_system === true)) ||
+            (consentData?.consent_kind === 'standard' &&
+                (consentData?.consent_id !== '00000000-0000-4000-8000-000000000001' ||
+                 consentData?.code !== 'STANDARD_CONSENT')) ||
             !['draft', 'trial', 'active'].includes(consentData?.status) ||
             !consentData?.title ||
             !consentData?.code ||
@@ -1709,7 +1901,7 @@ export default async function handler(req, res) {
             typeof consentData.texts !== 'object') {
             return res.status(400).json({
                 ok: false,
-                error: 'Valid research_os.consent_document v1 special-consent package is required'
+                error: 'Valid research_os.consent_document v1 package is required'
             });
         }
         try {
@@ -1824,7 +2016,8 @@ export default async function handler(req, res) {
                 supabaseUrl, supabaseAdminKey, 'join_study_by_invitation',
                 {
                     p_respondent_account_id: access.principal.account_id,
-                    p_invitation_id: respondentStudyJoinMatch[1]
+                    p_invitation_id: respondentStudyJoinMatch[1],
+                    p_strata: req.body?.strata || {}
                 }
             );
             const result = Array.isArray(joined) ? joined[0] : joined;
@@ -1845,6 +2038,205 @@ export default async function handler(req, res) {
             return res.status(200).json({
                 ok: true, measurements: Array.isArray(measurements) ? measurements : []
             });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/respondent/dialogue-measurements' && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const measurements = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'list_respondent_dialogue_measurements',
+                { p_respondent_account_id: access.principal.account_id }
+            );
+            return res.status(200).json({
+                ok: true, measurements: Array.isArray(measurements) ? measurements : []
+            });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const dialogueMeasurementConsentMatch = path.match(
+        /^\/respondent\/dialogue-measurements\/([0-9a-f-]+)\/consent$/i
+    );
+    if (dialogueMeasurementConsentMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const language = String(requestUrl.searchParams.get('lang') || 'es');
+        if (!UUID_V4.test(dialogueMeasurementConsentMatch[1]) ||
+            !['es', 'en', 'ru'].includes(language)) {
+            return res.status(400).json({ ok: false, error: 'Valid dialogue measurement and language are required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'get_respondent_dialogue_consent',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_measurement_id: dialogueMeasurementConsentMatch[1],
+                    p_language: language
+                }
+            );
+            const consent = Array.isArray(loaded) ? loaded[0] : loaded;
+            return res.status(200).json({ ok: true, consent });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const dialogueMeasurementStartMatch = path.match(
+        /^\/respondent\/dialogue-measurements\/([0-9a-f-]+)\/start$/i
+    );
+    if (dialogueMeasurementStartMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const language = String(req.body?.language || 'es');
+        if (!UUID_V4.test(dialogueMeasurementStartMatch[1]) ||
+            !['es', 'en', 'ru'].includes(language) || req.body?.explicit_acceptance !== true) {
+            return res.status(400).json({ ok: false, error: 'Explicit dialogue consent acceptance is required' });
+        }
+        try {
+            const started = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'start_respondent_dialogue_session',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_measurement_id: dialogueMeasurementStartMatch[1],
+                    p_language: language,
+                    p_explicit_acceptance: true
+                }
+            );
+            const result = Array.isArray(started) ? started[0] : started;
+            return res.status(result?.idempotent ? 200 : 201).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const scriptedDialogueResponseMatch = path.match(
+        /^\/respondent\/dialogue-sessions\/([0-9a-f-]+)\/scripted-response$/i
+    );
+    if (scriptedDialogueResponseMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        if (!UUID_V4.test(scriptedDialogueResponseMatch[1]) || req.body?.response === undefined) {
+            return res.status(400).json({ ok: false, error: 'Dialogue session and response are required' });
+        }
+        try {
+            const advanced = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'append_scripted_dialogue_response',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_session_id: scriptedDialogueResponseMatch[1],
+                    p_response: req.body.response
+                }
+            );
+            const result = Array.isArray(advanced) ? advanced[0] : advanced;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const dialogueSessionMatch = path.match(
+        /^\/respondent\/dialogue-sessions\/([0-9a-f-]+)$/i
+    );
+    if (dialogueSessionMatch && method === 'GET') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        if (!UUID_V4.test(dialogueSessionMatch[1])) {
+            return res.status(400).json({ ok: false, error: 'Valid dialogue session UUID is required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'get_respondent_dialogue_session',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_session_id: dialogueSessionMatch[1]
+                }
+            );
+            const session = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!session) return res.status(404).json({ ok: false, error: 'Dialogue session not found' });
+            return res.status(200).json({ ok: true, session });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const aiDialogueResponseMatch = path.match(
+        /^\/respondent\/dialogue-sessions\/([0-9a-f-]+)\/ai-response$/i
+    );
+    if (aiDialogueResponseMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const responseText = String(req.body?.response || '').trim();
+        if (!UUID_V4.test(aiDialogueResponseMatch[1]) || !responseText || responseText.length > 20000) {
+            return res.status(400).json({ ok: false, error: 'A valid dialogue session and response are required' });
+        }
+        try {
+            const preparedValue = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'prepare_ai_dialogue_turn',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_session_id: aiDialogueResponseMatch[1],
+                    p_response: responseText
+                }
+            );
+            const prepared = Array.isArray(preparedValue) ? preparedValue[0] : preparedValue;
+            if (prepared?.provider !== 'groq' || prepared?.model !== 'openai/gpt-oss-20b' ||
+                !UUID_V4.test(String(prepared?.processing_token || ''))) {
+                return res.status(409).json({ ok: false, error: 'Pinned AI dialogue configuration is invalid' });
+            }
+            const systemPrompt = `You facilitate a consented research interview. The researcher-authored protocol in the payload is authoritative. Ask exactly one neutral, non-leading probe at a time. Never diagnose, advise, persuade, infer hidden traits, introduce a topic outside the objectives, or cross a probe boundary. Decide complete when a stopping criterion is met or further probing would violate a boundary. Return only JSON: {"decision":"continue|complete","next_probe":"string or null","rationale":"brief protocol-grounded rationale","addressed_objectives":["exact objective strings"]}.`;
+            const payload = {
+                protocol: prepared.protocol,
+                transcript: prepared.transcript
+            };
+            const serializedPayload = JSON.stringify(payload);
+            const promptSha256 = createHash('sha256')
+                .update(`${systemPrompt}\n${serializedPayload}`, 'utf8').digest('hex');
+            const aiResult = await callAiProvider({
+                task: 'adaptive_dialogue', provider: prepared.provider,
+                model: prepared.model, systemPrompt, serializedPayload
+            });
+            const finishedValue = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'finish_ai_dialogue_turn',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_session_id: aiDialogueResponseMatch[1],
+                    p_processing_token: prepared.processing_token,
+                    p_result: aiResult,
+                    p_prompt_sha256: promptSha256
+                }
+            );
+            const result = Array.isArray(finishedValue) ? finishedValue[0] : finishedValue;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const discardDialogueMatch = path.match(
+        /^\/respondent\/dialogue-sessions\/([0-9a-f-]+)\/discard$/i
+    );
+    if (discardDialogueMatch && method === 'POST') {
+        const access = await verifyAccess(req, 'respondent', supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        if (!UUID_V4.test(discardDialogueMatch[1])) {
+            return res.status(400).json({ ok: false, error: 'Valid dialogue session UUID is required' });
+        }
+        try {
+            const discarded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'discard_respondent_dialogue_session',
+                {
+                    p_respondent_account_id: access.principal.account_id,
+                    p_dialogue_session_id: discardDialogueMatch[1],
+                    p_reason: String(req.body?.reason || 'respondent_exit')
+                }
+            );
+            const result = Array.isArray(discarded) ? discarded[0] : discarded;
+            return res.status(200).json({ ok: true, ...result });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
@@ -2172,26 +2564,18 @@ export default async function handler(req, res) {
             return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
         }
         try {
-            const rows = await callSupabaseRpc(supabaseUrl, supabaseAdminKey, 'list_question_banks', {});
-            let banks = Array.isArray(rows) ? rows : [];
             let access = null;
             if (bearerToken(req)) {
                 access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
-                const owned = await ownedEntityIds('question_bank', access.principal.account_id, supabaseUrl, supabaseAdminKey);
-                banks = banks.filter(bank =>
-                    owned.has(bank.bank_id) ||
-                    (
-                        bank.status === 'active' &&
-                        (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
-                    )
-                ).map(bank => ({ ...bank, owned_by_current_account: owned.has(bank.bank_id) }));
-            } else {
-                banks = banks.filter(bank =>
-                    bank.status === 'active' &&
-                    (!bank.reuse_permission || bank.reuse_permission === 'attribution_permitted')
-                );
             }
+            const rows = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'list_question_banks_for_account',
+                { p_researcher_account_id: access?.principal.account_id || null }
+            );
+            let banks = Array.isArray(rows) ? rows : [];
             let translationCatalog = null;
             if (access) {
                 const catalogResult = await callSupabaseRpc(
@@ -2226,6 +2610,36 @@ export default async function handler(req, res) {
                 };
             }));
             return res.status(200).json({ ok: true, banks });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const bankVisibilityMatch = url.split('?')[0].match(
+        /^\/question-banks\/([0-9a-f-]+)\/content-visibility$/i
+    );
+    if (bankVisibilityMatch && method === 'PATCH') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const contentVisibility = req.body?.content_visibility;
+        if (!UUID_V4.test(bankVisibilityMatch[1]) ||
+            !['metadata_only', 'content_visible'].includes(contentVisibility)) {
+            return res.status(400).json({ ok: false, error: 'Valid bank UUID and content visibility are required' });
+        }
+        try {
+            const changed = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'set_owned_entity_content_visibility',
+                {
+                    p_entity_type: 'question_bank',
+                    p_entity_id: bankVisibilityMatch[1],
+                    p_researcher_account_id: access.principal.account_id,
+                    p_content_visibility: contentVisibility
+                }
+            );
+            const result = Array.isArray(changed) ? changed[0] : changed;
+            return res.status(200).json({ ok: true, ...result });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
@@ -2351,9 +2765,13 @@ export default async function handler(req, res) {
             ? { ...requestedStudy }
             : requestedStudy;
         if (study && typeof study === 'object') delete study.catalog_visibility;
+        if (study && typeof study === 'object' && study.dialogue_assignments === undefined) {
+            study.dialogue_assignments = [];
+        }
         const groups = study?.groups;
         const timepoints = study?.timepoints;
         const assignments = study?.questionnaire_assignments;
+        const dialogueAssignments = study?.dialogue_assignments;
         if (study?.schema !== 'research_os.study' ||
             study?.schema_version !== 1 ||
             !UUID_V4.test(study?.study_id || '') ||
@@ -2366,6 +2784,7 @@ export default async function handler(req, res) {
             !Array.isArray(groups) || groups.length === 0 ||
             !Array.isArray(timepoints) || timepoints.length === 0 ||
             !Array.isArray(assignments) ||
+            !Array.isArray(dialogueAssignments) ||
             !['listed', 'existence_only'].includes(catalogVisibility)) {
             return res.status(400).json({
                 ok: false,
@@ -2390,7 +2809,7 @@ export default async function handler(req, res) {
         )) {
             return res.status(400).json({
                 ok: false,
-                error: 'Study groups, timepoints or questionnaire assignments are invalid'
+                error: 'Study groups, timepoints or measurement assignments are invalid'
             });
         }
         const protocolErrors = studyProtocolErrors(study);
@@ -2405,7 +2824,7 @@ export default async function handler(req, res) {
             const saved = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'save_owned_study_package_with_visibility',
+                'save_owned_advanced_study_package',
                 {
                     study_data: study,
                     p_researcher_account_id: access.principal.account_id,
@@ -2414,6 +2833,168 @@ export default async function handler(req, res) {
             );
             const result = Array.isArray(saved) ? saved[0] : saved;
             return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/qualitative-projects' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        try {
+            const projects = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'list_owned_qualitative_projects',
+                { p_researcher_account_id: access.principal.account_id }
+            );
+            return res.status(200).json({ ok: true, projects: Array.isArray(projects) ? projects : [] });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/dialogue-transcripts' && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const studyId = String(requestUrl.searchParams.get('study_id') || '');
+        const version = Number(requestUrl.searchParams.get('version'));
+        if (!UUID_V4.test(studyId) || !Number.isInteger(version) || version < 1) {
+            return res.status(400).json({ ok: false, error: 'Exact study UUID and version are required' });
+        }
+        try {
+            const transcripts = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'list_owned_dialogue_transcripts',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_study_id: studyId, p_study_version: version
+                }
+            );
+            return res.status(200).json({ ok: true, transcripts: Array.isArray(transcripts) ? transcripts : [] });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    if (path === '/qualitative-projects/save' && method === 'POST') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const errors = qualitativeProjectErrors(req.body);
+        if (errors.length) return res.status(400).json({ ok: false, error: errors.join('\n'), project_errors: errors });
+        try {
+            const saved = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'save_owned_qualitative_project',
+                { p_project: req.body, p_researcher_account_id: access.principal.account_id }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const qualitativeLoadMatch = path.match(/^\/qualitative-projects\/([0-9a-f-]+)$/i);
+    if (qualitativeLoadMatch && method === 'GET') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const version = Number(requestUrl.searchParams.get('version'));
+        if (!UUID_V4.test(qualitativeLoadMatch[1]) || !Number.isInteger(version) || version < 1) {
+            return res.status(400).json({ ok: false, error: 'Valid qualitative project UUID and version are required' });
+        }
+        try {
+            const loaded = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'load_owned_qualitative_project',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_qualitative_project_id: qualitativeLoadMatch[1], p_version: version
+                }
+            );
+            const project = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!project) return res.status(404).json({ ok: false, error: 'Qualitative project not found' });
+            return res.status(200).json({ ok: true, project });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const qualitativeCollaboratorMatch = path.match(
+        /^\/qualitative-projects\/([0-9a-f-]+)\/collaborators$/i
+    );
+    if (qualitativeCollaboratorMatch && ['GET', 'PUT'].includes(method)) {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        if (!UUID_V4.test(qualitativeCollaboratorMatch[1])) {
+            return res.status(400).json({ ok: false, error: 'Valid qualitative project UUID is required' });
+        }
+        try {
+            if (method === 'GET') {
+                const rows = await callSupabaseRpc(
+                    supabaseUrl, supabaseAdminKey, 'list_qualitative_project_collaborators',
+                    {
+                        p_requester_account_id: access.principal.account_id,
+                        p_qualitative_project_id: qualitativeCollaboratorMatch[1]
+                    }
+                );
+                return res.status(200).json({ ok: true, collaborators: Array.isArray(rows) ? rows : [] });
+            }
+            const username = String(req.body?.username || '').trim();
+            const role = String(req.body?.role || '');
+            const status = String(req.body?.status || 'active');
+            if (!username || !['coder', 'reviewer'].includes(role) || !['active', 'revoked'].includes(status)) {
+                return res.status(400).json({ ok: false, error: 'Collaborator username, role, and status are required' });
+            }
+            const saved = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'set_qualitative_project_collaborator',
+                {
+                    p_owner_account_id: access.principal.account_id,
+                    p_qualitative_project_id: qualitativeCollaboratorMatch[1],
+                    p_collaborator_username: username, p_role: role, p_status: status
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
+    const qualitativeCodingsMatch = path.match(
+        /^\/qualitative-projects\/([0-9a-f-]+)\/versions\/(\d+)\/codings$/i
+    );
+    if (qualitativeCodingsMatch && ['GET', 'POST'].includes(method)) {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const projectId = qualitativeCodingsMatch[1], version = Number(qualitativeCodingsMatch[2]);
+        if (!UUID_V4.test(projectId) || !Number.isInteger(version) || version < 1) {
+            return res.status(400).json({ ok: false, error: 'Valid qualitative project UUID and version are required' });
+        }
+        try {
+            if (method === 'GET') {
+                const rows = await callSupabaseRpc(
+                    supabaseUrl, supabaseAdminKey, 'list_qualitative_coding_records',
+                    {
+                        p_researcher_account_id: access.principal.account_id,
+                        p_qualitative_project_id: projectId, p_version: version
+                    }
+                );
+                return res.status(200).json({ ok: true, codings: Array.isArray(rows) ? rows : [] });
+            }
+            const coding = req.body?.coding;
+            if (!UUID_V4.test(String(coding?.coding_id || '')) ||
+                !UUID_V4.test(String(coding?.segment_id || '')) ||
+                !UUID_V4.test(String(coding?.code_id || '')) ||
+                !['high', 'medium', 'low', 'not_stated'].includes(coding?.confidence) ||
+                (coding?.interpretation !== null && coding?.interpretation !== undefined &&
+                    typeof coding.interpretation !== 'string')) {
+                return res.status(400).json({ ok: false, error: 'Valid qualitative coding record is required' });
+            }
+            const saved = await callSupabaseRpc(
+                supabaseUrl, supabaseAdminKey, 'add_qualitative_coding_record',
+                {
+                    p_researcher_account_id: access.principal.account_id,
+                    p_qualitative_project_id: projectId, p_version: version, p_coding: coding
+                }
+            );
+            const result = Array.isArray(saved) ? saved[0] : saved;
+            return res.status(201).json({ ok: true, ...result });
         } catch (error) {
             return res.status(error.status || 500).json({ ok: false, error: error.message });
         }
@@ -2581,21 +3162,13 @@ export default async function handler(req, res) {
             const rows = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'list_questionnaires',
-                { requested_status: requestedStatus }
+                'list_questionnaires_for_account',
+                {
+                    p_researcher_account_id: access?.principal.account_id || null,
+                    requested_status: requestedStatus
+                }
             );
             let questionnaires = Array.isArray(rows) ? rows : [];
-            if (access) {
-                const owned = await ownedEntityIds('questionnaire', access.principal.account_id, supabaseUrl, supabaseAdminKey);
-                questionnaires = questionnaires.filter(questionnaire =>
-                    questionnaire.status === 'active' || owned.has(questionnaire.questionnaire_id)
-                ).map(questionnaire => ({
-                    ...questionnaire,
-                    owned_by_current_account: owned.has(questionnaire.questionnaire_id)
-                }));
-            } else {
-                questionnaires = questionnaires.filter(questionnaire => questionnaire.status === 'active');
-            }
             let translationCatalog = null;
             if (access) {
                 const catalogResult = await callSupabaseRpc(
@@ -2635,6 +3208,36 @@ export default async function handler(req, res) {
         }
     }
 
+    const questionnaireVisibilityMatch = url.split('?')[0].match(
+        /^\/questionnaires\/([0-9a-f-]+)\/content-visibility$/i
+    );
+    if (questionnaireVisibilityMatch && method === 'PATCH') {
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const contentVisibility = req.body?.content_visibility;
+        if (!UUID_V4.test(questionnaireVisibilityMatch[1]) ||
+            !['metadata_only', 'content_visible'].includes(contentVisibility)) {
+            return res.status(400).json({ ok: false, error: 'Valid questionnaire UUID and content visibility are required' });
+        }
+        try {
+            const changed = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'set_owned_entity_content_visibility',
+                {
+                    p_entity_type: 'questionnaire',
+                    p_entity_id: questionnaireVisibilityMatch[1],
+                    p_researcher_account_id: access.principal.account_id,
+                    p_content_visibility: contentVisibility
+                }
+            );
+            const result = Array.isArray(changed) ? changed[0] : changed;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
+    }
+
     if (url.startsWith('/questionnaires/') && method === 'GET') {
         if (!supabaseUrl || !supabaseAdminKey) {
             return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
@@ -2656,22 +3259,23 @@ export default async function handler(req, res) {
             return res.status(400).json({ ok: false, error: 'Questionnaire UUID or code is required' });
         }
         try {
-            const loaded = await callSupabaseRpc(
-                supabaseUrl,
-                supabaseAdminKey,
-                'load_questionnaire_package',
-                {
-                    questionnaire_reference: questionnaireReference,
-                    requested_version: Number(requestedVersion)
-                }
-            );
-            let questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
-            if (!questionnaire) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
             let access = null;
             if (bearerToken(req)) {
                 access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
             }
+            const loaded = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                access ? 'load_questionnaire_package_for_account' : 'load_shared_questionnaire_package',
+                {
+                    questionnaire_reference: questionnaireReference,
+                    requested_version: Number(requestedVersion),
+                    ...(access ? { p_researcher_account_id: access.principal.account_id } : {})
+                }
+            );
+            let questionnaire = Array.isArray(loaded) ? loaded[0] : loaded;
+            if (!questionnaire) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
             if (questionnaire.status !== 'active') {
                 if (!access) access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
                 if (!access.ok) return res.status(404).json({ ok: false, error: 'Questionnaire not found' });
@@ -3298,7 +3902,7 @@ export default async function handler(req, res) {
             }
             const loadFunction = access
                 ? 'load_question_bank_package_for_account'
-                : 'load_question_bank_package';
+                : 'load_shared_question_bank_package';
             const requestBody = {
                 bank_reference: bankReference,
                 requested_version: Number(requestedVersion)

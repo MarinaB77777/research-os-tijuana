@@ -149,8 +149,8 @@ async function loadCompleteCatalog(){
   ]);
   renderDatabaseAudit(audit);banks=bankData.banks||[];questionnaires=questionnaireData.questionnaires||[];
   const tasks=[];
-  banks.forEach(entity=>entityVariants(entity).forEach(variant=>tasks.push({kind:'question_bank',entity,variant})));
-  questionnaires.forEach(entity=>entityVariants(entity).forEach(variant=>tasks.push({kind:'questionnaire',entity,variant})));
+  banks.filter(entity=>entity.content_visible).forEach(entity=>entityVariants(entity).forEach(variant=>tasks.push({kind:'question_bank',entity,variant})));
+  questionnaires.filter(entity=>entity.content_visible).forEach(entity=>entityVariants(entity).forEach(variant=>tasks.push({kind:'questionnaire',entity,variant})));
   const loaded=await mapLimit(tasks,4,loadVariant);records=loaded.flatMap(occurrenceRecords);
   await classify();updateSummary(tasks.length);renderGroups();renderRecords();
   status.className=audit.all_available?'status ok':'status error';

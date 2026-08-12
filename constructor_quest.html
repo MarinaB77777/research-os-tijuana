@@ -319,6 +319,17 @@
               </select>
             </div>
           </div>
+          <div class="field">
+            <label data-i18n="contentLanguageLabel">Язык исходного содержания</label>
+            <select id="contentLanguageSelect" onchange="onContentLanguageChange(this.value)">
+              <option value="es-MX">Español (México)</option>
+              <option value="en-US">English (United States)</option>
+              <option value="ru-RU">Русский</option>
+            </select>
+            <div data-i18n="contentLanguageNotice" style="font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:6px;">
+              Язык интерфейса не меняет язык вопросов. Переводы остаются вариантами этой же сущности банка.
+            </div>
+          </div>
           <div class="grid-2" style="margin-top: 12px;">
             <div class="field">
               <label data-i18n="scaleLabel">Escala</label>
@@ -458,6 +469,16 @@
             </div>
           </div>
           <div class="field">
+            <label data-i18n="contentVisibilityLabel">Просмотр содержания другими исследователями</label>
+            <select id="contentVisibilitySelect" onchange="onContentVisibilityChange(this.value)">
+              <option value="metadata_only" data-i18n="contentMetadataOnly">Показывать карточку, скрывать вопросы</option>
+              <option value="content_visible" data-i18n="contentVisible">Разрешить просмотр вопросов</option>
+            </select>
+            <div data-i18n="contentVisibilityNotice" style="font-size:10px;color:var(--text-muted);line-height:1.4;margin-top:6px;">
+              Карточка банка видна в общем каталоге всегда. Эта настройка управляет только чтением содержания и не заменяет разрешение на использование.
+            </div>
+          </div>
+          <div class="field">
             <label data-i18n="reusePolicyLabel">Uso por otros investigadores</label>
             <select id="reusePolicySelect" onchange="onReusePolicyChange(this.value)">
               <option value="attribution_permitted" data-i18n="reuseAttributionPermitted">Uso libre con atribución obligatoria</option>
@@ -555,6 +576,12 @@
           reuseAttributionPermitted: "Uso libre con atribución obligatoria",
           reusePermissionRequired: "Solo con permiso del autor",
           reusePolicyNotice: "La autoría y la propiedad permanecen siempre con el titular de la cuenta. El modo predeterminado evita solicitar permiso para cada pregunta, pero exige atribución.",
+          contentVisibilityLabel: "Visualización del contenido por otros investigadores",
+          contentMetadataOnly: "Mostrar la ficha y ocultar las preguntas",
+          contentVisible: "Permitir ver las preguntas",
+          contentVisibilityNotice: "La ficha del banco siempre aparece en el catálogo general. Esta opción controla solo la lectura del contenido y no sustituye el permiso de uso.",
+          contentLanguageLabel: "Idioma del contenido fuente",
+          contentLanguageNotice: "El idioma de la interfaz no cambia el idioma de las preguntas. Las traducciones permanecen como variantes de la misma entidad de banco.",
           exportFormatLabel: "Formato del archivo",
           exportMultiBtn: "💾 Elegir ubicación y guardar",
           syncDbBtn: "☁️ Guardar en la base de datos",
@@ -639,6 +666,12 @@
           reuseAttributionPermitted: "Free use with required attribution",
           reusePermissionRequired: "Author permission required",
           reusePolicyNotice: "Authorship and ownership always remain with the account owner. The default avoids per-question permission requests while requiring attribution.",
+          contentVisibilityLabel: "Content viewing by other researchers",
+          contentMetadataOnly: "Show metadata and hide questions",
+          contentVisible: "Allow question viewing",
+          contentVisibilityNotice: "The bank metadata card always appears in the general catalog. This setting controls content reading only and does not replace reuse permission.",
+          contentLanguageLabel: "Source content language",
+          contentLanguageNotice: "The interface language does not change the question language. Translations remain variants of the same bank entity.",
           exportFormatLabel: "File format",
           exportMultiBtn: "💾 Choose location and save",
           syncDbBtn: "☁️ Save to database",
@@ -723,6 +756,12 @@
           reuseAttributionPermitted: "Свободное использование с обязательной атрибуцией",
           reusePermissionRequired: "Только с разрешения автора",
           reusePolicyNotice: "Авторство и владение всегда остаются у владельца кабинета. Режим по умолчанию не требует разрешения на каждый вопрос, но требует указания автора.",
+          contentVisibilityLabel: "Просмотр содержания другими исследователями",
+          contentMetadataOnly: "Показывать карточку, скрывать вопросы",
+          contentVisible: "Разрешить просмотр вопросов",
+          contentVisibilityNotice: "Карточка банка всегда видна в общем каталоге. Эта настройка управляет только чтением содержания и не заменяет разрешение на использование.",
+          contentLanguageLabel: "Язык исходного содержания",
+          contentLanguageNotice: "Язык интерфейса не меняет язык вопросов. Переводы остаются вариантами одной и той же сущности банка.",
           exportFormatLabel: "Формат файла",
           exportMultiBtn: "💾 Выбрать место и сохранить",
           syncDbBtn: "☁️ Сохранить в базе данных",
@@ -1060,6 +1099,10 @@
       let bank = loadBank(currentLang);
       let bankMetadata = loadBankMetadata();
 
+      function editorLocale(language = bankMetadata?.primary_language) {
+        return language === 'ru-RU' ? 'ru' : (language === 'en-US' ? 'en-US' : 'es-MX');
+      }
+
       function isUuid(value) {
         return typeof value === 'string' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -1110,7 +1153,10 @@
             generated_at: typeof parsed.generated_at === 'string' && parsed.generated_at ? parsed.generated_at : createdAt,
             reuse_permission: ['attribution_permitted', 'permission_required'].includes(parsed.reuse_permission)
               ? parsed.reuse_permission
-              : 'attribution_permitted'
+              : 'attribution_permitted',
+            content_visibility: ['metadata_only', 'content_visible'].includes(parsed.content_visibility)
+              ? parsed.content_visibility
+              : 'metadata_only'
           };
         } catch (error) {
           console.error('Question-bank identity read error:', error);
@@ -1124,7 +1170,8 @@
             primary_language: 'es-MX',
             global_time_reference: createdAt,
             generated_at: createdAt,
-            reuse_permission: 'attribution_permitted'
+            reuse_permission: 'attribution_permitted',
+            content_visibility: 'metadata_only'
           };
         }
       }
@@ -1141,8 +1188,11 @@
         document.getElementById('bankTitleInput').value = bankMetadata.title;
         document.getElementById('bankCodeInput').value = bankMetadata.code;
         document.getElementById('bankStatusSelect').value = bankMetadata.status;
+        document.getElementById('contentLanguageSelect').value = bankMetadata.primary_language || 'es-MX';
         document.getElementById('reusePolicySelect').value =
           bankMetadata.reuse_permission || 'attribution_permitted';
+        document.getElementById('contentVisibilitySelect').value =
+          bankMetadata.content_visibility || 'metadata_only';
         document.getElementById('bankIdentity').textContent =
           `UUID: ${bankMetadata.bank_id} · v${bankMetadata.version}`;
       }
@@ -1169,9 +1219,27 @@
         saveBankMetadata();
       }
 
+      function onContentLanguageChange(value) {
+        if (!['es-MX', 'en-US', 'ru-RU'].includes(value)) return;
+        if (bankMetadata.status === 'active') {
+          document.getElementById('contentLanguageSelect').value = bankMetadata.primary_language;
+          setDatabaseStatus('An Active bank version is immutable. Create a new version to change its source language.', false);
+          return;
+        }
+        bankMetadata.primary_language = value;
+        saveBankMetadata();
+        setDatabaseStatus((i18n[currentLang] || i18n['es-MX']).contentLanguageNotice, true);
+      }
+
       function onReusePolicyChange(value) {
         if (!['attribution_permitted', 'permission_required'].includes(value)) return;
         bankMetadata.reuse_permission = value;
+        saveBankMetadata();
+      }
+
+      function onContentVisibilityChange(value) {
+        if (!['metadata_only', 'content_visible'].includes(value)) return;
+        bankMetadata.content_visibility = value;
         saveBankMetadata();
       }
 
@@ -1229,7 +1297,7 @@
           };
         });
         return {
-          questions: sanitizeBankData(questions, currentLang),
+          questions: sanitizeBankData(questions, editorLocale(packageData.primary_language)),
           metadata: {
             bank_id: packageData.bank_id,
             title: packageData.title,
@@ -1239,7 +1307,12 @@
             primary_language: packageData.primary_language || 'es-MX',
             global_time_reference: packageData.global_time_reference,
             generated_at: packageData.generated_at || packageData.global_time_reference,
-            reuse_permission: packageData.reuse_policy?.permission || 'attribution_permitted'
+            reuse_permission: packageData.reuse_policy?.permission || 'attribution_permitted',
+            content_visibility: (() => {
+              if (typeof URLSearchParams !== 'function' || typeof window === 'undefined') return 'metadata_only';
+              const requested = new URLSearchParams(window.location.search).get('content_visibility');
+              return ['metadata_only', 'content_visible'].includes(requested) ? requested : 'metadata_only';
+            })()
           },
           mode: packageData.global_mode === 'dynamic' ? 'dynamic' : 'static'
         };
@@ -1356,7 +1429,8 @@
       }
 
       function addVariable() {
-        const dict = i18n[currentLang] || i18n['es-MX'];
+        const contentLocale = editorLocale();
+        const dict = i18n[contentLocale] || i18n['es-MX'];
         const newVar = {
           question_id: createUuid(),
           version: 1,
@@ -1365,15 +1439,15 @@
           type: "ordinal",
           scale: "likert_5",
           tracking_mode: (currentMode === 'dynamic') ? 'time_variant' : 'time_invariant',
-          prompt: currentLang === 'es-MX' ? "¿Nueva pregunta de investigación?" : (currentLang === 'ru' ? "Новый вопрос исследования?" : "New research question?"),
+          prompt: contentLocale === 'es-MX' ? "¿Nueva pregunta de investigación?" : (contentLocale === 'ru' ? "Новый вопрос исследования?" : "New research question?"),
           wave: "wave_1",
           lag: "immediate",
           options: [
-            {l: currentLang === 'es-MX' ? "Totalmente en desacuerdo" : (currentLang === 'ru' ? "Совсем не согласен" : "Strongly Disagree"), s: 1},
-            {l: currentLang === 'es-MX' ? "En desacuerdo" : (currentLang === 'ru' ? "Скорее не согласен" : "Disagree"), s: 2},
+            {l: contentLocale === 'es-MX' ? "Totalmente en desacuerdo" : (contentLocale === 'ru' ? "Совсем не согласен" : "Strongly Disagree"), s: 1},
+            {l: contentLocale === 'es-MX' ? "En desacuerdo" : (contentLocale === 'ru' ? "Скорее не согласен" : "Disagree"), s: 2},
             {l: "Neutral", s: 3},
-            {l: currentLang === 'es-MX' ? "De acuerdo" : (currentLang === 'ru' ? "Скорее согласен" : "Agree"), s: 4},
-            {l: currentLang === 'es-MX' ? "Totalmente de acuerdo" : (currentLang === 'ru' ? "Полностью согласен" : "Strongly Agree"), s: 5}
+            {l: contentLocale === 'es-MX' ? "De acuerdo" : (contentLocale === 'ru' ? "Скорее согласен" : "Agree"), s: 4},
+            {l: contentLocale === 'es-MX' ? "Totalmente de acuerdo" : (contentLocale === 'ru' ? "Полностью согласен" : "Strongly Agree"), s: 5}
           ],
           config: { min: 1, max: 5, step: 1, direction: "direct", unit: "", maxLength: 500, placeholder: dict.placeholderText }
         };
@@ -1627,7 +1701,8 @@
         if (!v.options) v.options = [];
         const lastOpt = v.options[v.options.length - 1];
         const nextVal = lastOpt && !isNaN(Number(lastOpt.s)) ? Number(lastOpt.s) + 1 : 1;
-        const defaultLabel = currentLang === 'es-MX' ? `Opción ${v.options.length + 1}` : (currentLang === 'ru' ? `Вариант ${v.options.length + 1}` : `Option ${v.options.length + 1}`);
+        const contentLocale = editorLocale();
+        const defaultLabel = contentLocale === 'es-MX' ? `Opción ${v.options.length + 1}` : (contentLocale === 'ru' ? `Вариант ${v.options.length + 1}` : `Option ${v.options.length + 1}`);
         v.options.push({ l: defaultLabel, s: nextVal });
         synchronizeVariableScaleContract(v);
         saveBank();
@@ -2218,6 +2293,26 @@
               sessionStorage.removeItem('research_os.auth.v1');
             }
             throw new Error(result?.error || `HTTP ${response.status}`);
+          }
+          const visibilityResponse = await fetch(
+            `/question-banks/${encodeURIComponent(bankMetadata.bank_id)}/content-visibility`,
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${researcherToken}`
+              },
+              body: JSON.stringify({
+                content_visibility: bankMetadata.content_visibility || 'metadata_only'
+              })
+            }
+          );
+          const visibilityType = visibilityResponse.headers.get('content-type') || '';
+          const visibilityResult = visibilityType.includes('application/json')
+            ? await visibilityResponse.json()
+            : null;
+          if (!visibilityResponse.ok) {
+            throw new Error(visibilityResult?.error || `HTTP ${visibilityResponse.status}`);
           }
           setDatabaseStatus(dict.syncSuccess, true);
         } catch (error) {

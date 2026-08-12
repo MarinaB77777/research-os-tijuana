@@ -83,14 +83,16 @@ test('researcher can save only allow-listed per-account AI preferences', async (
   globalThis.fetch = authFetchSequence(calls, [{
     analyzer: { provider: 'gemini', model: 'gemini-3.6-flash' },
     translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
-    study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
+    study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+    adaptive_dialogue: { provider: 'groq', model: 'openai/gpt-oss-20b' }
   }]);
 
   try {
     const preferences = {
       analyzer: { provider: 'gemini', model: 'gemini-3.6-flash' },
       translator: { provider: 'gemini', model: 'gemini-3.5-flash-lite' },
-      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
+      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      adaptive_dialogue: { provider: 'groq', model: 'openai/gpt-oss-20b' }
     };
     const res = response();
     await handler({
@@ -128,7 +130,8 @@ test('retired stored models fall back to the current free Groq model', async () 
   globalThis.fetch = authFetchSequence(calls, {
     analyzer: { provider: 'groq', model: 'openai/gpt-oss-120b' },
     translator: { provider: 'groq', model: 'llama-3.3-70b-versatile' },
-    study_design: { provider: 'groq', model: 'retired-study-model' }
+    study_design: { provider: 'groq', model: 'retired-study-model' },
+    adaptive_dialogue: { provider: 'groq', model: 'retired-dialogue-model' }
   });
 
   try {
@@ -145,7 +148,8 @@ test('retired stored models fall back to the current free Groq model', async () 
     assert.deepEqual(res.payload.preferences, {
       analyzer: { provider: 'groq', model: 'openai/gpt-oss-20b' },
       translator: { provider: 'groq', model: 'openai/gpt-oss-20b' },
-      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' }
+      study_design: { provider: 'groq', model: 'openai/gpt-oss-20b' },
+      adaptive_dialogue: { provider: 'groq', model: 'openai/gpt-oss-20b' }
     });
   } finally {
     globalThis.fetch = originalFetch;

@@ -91,7 +91,7 @@
 
     <div id="deleteAccountSection" class="section" style="display:none;border-color:#991b1b;">
         <h2 data-i18n="delete_account_title">Удаление аккаунта исследователя</h2>
-        <p data-i18n="delete_account_explanation">Аккаунт можно удалить только после закрытия или передачи активных исследований. Исторические исследовательские записи сохраняются.</p>
+        <p data-i18n="delete_account_explanation">После удаления вход станет невозможен. Все исследования, анкеты, банки, сессии и авторство останутся замороженными с последними настройками доступа. Заранее удалите только то, что не должно сохраниться.</p>
         <input id="deleteAccountPassword" type="password" autocomplete="current-password" data-i18n-placeholder="current_password" placeholder="Текущий пароль">
         <button id="deleteAccountButton" class="btn" style="background:#991b1b;margin-top:12px" onclick="deleteResearcherAccount()" data-i18n="delete_account_button">Удалить мой аккаунт</button>
         <p id="deleteAccountStatus" style="color:#fca5a5;font-size:12px"></p>
@@ -128,6 +128,12 @@
                 <option value='{"provider":"groq","model":"openai/gpt-oss-20b"}'>Groq / OpenAI GPT-OSS 20B (Fast)</option>
                 <option value='{"provider":"gemini","model":"gemini-3.6-flash"}'>Google / Gemini 3.6 Flash</option>
                 <option value='{"provider":"gemini","model":"gemini-3.5-flash-lite"}'>Google / Gemini 3.5 Flash-Lite</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label data-i18n="label_adaptive_dialogue">💬 Адаптивный исследовательский диалог:</label>
+            <select id="task_adaptive_dialogue">
+                <option value='{"provider":"groq","model":"openai/gpt-oss-20b"}'>Groq / OpenAI GPT-OSS 20B (Fast)</option>
             </select>
         </div>
         <p class="hint" data-i18n="ai_free_tier_notice">Free-tier limits are shared by all researchers. Do not send personal, confidential, or participant data to Gemini free-tier models.</p>
@@ -169,10 +175,11 @@ const i18n = {
         label_analyzer: "🔍 Анализ и поиск шкал (analyzer.html):",
         label_translator: "🌐 Перевод и адаптация (translator.html):",
         label_study_design: "🧭 Научный дизайн исследования (constructor_study.html):",
+        label_adaptive_dialogue: "💬 Адаптивный исследовательский диалог:",
         btn_save: "💾 Сохранить настройки",
         toast_saved: "✅ Настройки успешно сохранены!",
         delete_account_title: "Удаление аккаунта исследователя",
-        delete_account_explanation: "Аккаунт можно удалить только после закрытия или передачи активных исследований. Исторические исследовательские записи сохраняются.",
+        delete_account_explanation: "После удаления вход станет невозможен. Все исследования, анкеты, банки, сессии и авторство останутся замороженными с последними настройками доступа. Заранее удалите только то, что не должно сохраниться.",
         current_password: "Текущий пароль",
         delete_account_button: "Удалить мой аккаунт"
     },
@@ -204,10 +211,11 @@ const i18n = {
         label_analyzer: "🔍 Análisis y búsqueda de escalas (analyzer.html):",
         label_translator: "🌐 Traducción y adaptación (translator.html):",
         label_study_design: "🧭 Diseño científico del estudio (constructor_study.html):",
+        label_adaptive_dialogue: "💬 Diálogo de investigación adaptativo:",
         btn_save: "💾 Guardar configuración",
         toast_saved: "✅ ¡Configuración guardada con éxito!",
         delete_account_title: "Eliminar cuenta de investigador",
-        delete_account_explanation: "La cuenta solo puede eliminarse después de cerrar o transferir los estudios activos. Los registros históricos se conservan.",
+        delete_account_explanation: "Después de eliminar la cuenta, ya no será posible iniciar sesión. Los estudios, cuestionarios, bancos, sesiones y la autoría quedarán congelados con sus últimas reglas de acceso. Elimine antes únicamente lo que no deba conservarse.",
         current_password: "Contraseña actual",
         delete_account_button: "Eliminar mi cuenta"
     },
@@ -239,10 +247,11 @@ const i18n = {
         label_analyzer: "🔍 Scale analysis & search (analyzer.html):",
         label_translator: "🌐 Translation & adaptation (translator.html):",
         label_study_design: "🧭 Scientific study design (constructor_study.html):",
+        label_adaptive_dialogue: "💬 Adaptive research dialogue:",
         btn_save: "💾 Save Configuration",
         toast_saved: "✅ Configuration saved successfully!",
         delete_account_title: "Delete researcher account",
-        delete_account_explanation: "The account can be deleted only after active studies are closed or transferred. Historical research records are retained.",
+        delete_account_explanation: "After account deletion, sign-in is no longer possible. Studies, questionnaires, banks, sessions, and authorship remain frozen with their last access settings. Delete beforehand only what should not be retained.",
         current_password: "Current password",
         delete_account_button: "Delete my account"
     }
@@ -343,7 +352,8 @@ async function saveAllSettings() {
         await AIRouter.savePreferences({
             analyzer: JSON.parse(document.getElementById('task_analyzer').value),
             translator: JSON.parse(document.getElementById('task_translator').value),
-            study_design: JSON.parse(document.getElementById('task_study_design').value)
+            study_design: JSON.parse(document.getElementById('task_study_design').value),
+            adaptive_dialogue: JSON.parse(document.getElementById('task_adaptive_dialogue').value)
         });
         const toast = document.getElementById('toast');
         toast.style.display = 'block';
@@ -367,6 +377,7 @@ async function loadSettings() {
     applyAvailable('task_analyzer', config.analyzer);
     applyAvailable('task_translator', config.translator);
     applyAvailable('task_study_design', config.study_design);
+    applyAvailable('task_adaptive_dialogue', config.adaptive_dialogue);
 }
 
 async function deleteResearcherAccount() {

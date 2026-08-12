@@ -6,7 +6,7 @@
 <title>Research OS | Join study</title>
 <style>
 :root{--bg:#0b0f19;--panel:#162032;--line:#334155;--text:#f8fafc;--muted:#94a3b8;--accent:#38bdf8;--bad:#fca5a5}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}h1{color:var(--accent);font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:20px 0 8px}.muted{color:var(--muted);line-height:1.55}.meta{color:var(--muted);font-size:12px;line-height:1.5}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.lang{justify-content:space-between;margin-bottom:18px}button,.link{border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#082f49;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}.error{color:var(--bad);white-space:pre-wrap;margin-top:16px}footer{width:100%;text-align:center;color:var(--muted);font-size:12px;padding:22px 0 0}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:14px system-ui,-apple-system,"Segoe UI",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}.card{width:min(620px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px}h1{color:var(--accent);font-size:24px;margin:0 0 8px}h2{font-size:18px;margin:20px 0 8px}.muted{color:var(--muted);line-height:1.55}.meta{color:var(--muted);font-size:12px;line-height:1.5}.row{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.lang{justify-content:space-between;margin-bottom:18px}button,.link{border:0;border-radius:8px;padding:10px 14px;background:var(--accent);color:#082f49;font-weight:800;text-decoration:none;cursor:pointer}.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}label{display:block;color:var(--muted);font-size:12px;margin:12px 0 5px}select{width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px}.error{color:var(--bad);white-space:pre-wrap;margin-top:16px}footer{width:100%;text-align:center;color:var(--muted);font-size:12px;padding:22px 0 0}
 </style>
 </head>
 <body>
@@ -18,6 +18,7 @@
 <h2 id="studyTitle"></h2>
 <div id="studyDescription" class="muted"></div>
 <div id="studyMeta" class="meta"></div>
+<div id="strataForm"></div>
 <div id="authActions" class="row" style="margin-top:20px"></div>
 </section>
 </main>
@@ -26,9 +27,9 @@
 <script>
 'use strict';
 const COPY={
-es:{title:'Participar en el estudio',loading:'Comprobando el enlace…',group:'Grupo',login:'Iniciar sesión',register:'Crear cuenta de participante',joining:'Añadiendo los cuestionarios disponibles a su panel…',unavailable:'El enlace del estudio está cerrado o no está disponible.',error:'No se pudo acceder al estudio.'},
-en:{title:'Join the study',loading:'Checking the invitation…',group:'Group',login:'Sign in',register:'Create participant account',joining:'Adding the available questionnaires to your hub…',unavailable:'The study invitation is closed or unavailable.',error:'The study could not be joined.'},
-ru:{title:'Присоединиться к исследованию',loading:'Проверяем ссылку…',group:'Группа',login:'Войти',register:'Зарегистрироваться как респондент',joining:'Добавляем доступные анкеты в ваш кабинет…',unavailable:'Ссылка исследования закрыта или недоступна.',error:'Не удалось присоединиться к исследованию.'}
+es:{title:'Participar en el estudio',loading:'Comprobando el enlace…',group:'Grupo',randomized:'La asignación al grupo se realizará en el servidor después de responder los campos de estratificación definidos por el protocolo.',continue:'Continuar y asignar',login:'Iniciar sesión',register:'Crear cuenta de participante',joining:'Añadiendo las mediciones disponibles a su panel…',unavailable:'El enlace del estudio está cerrado o no está disponible.',error:'No se pudo acceder al estudio.'},
+en:{title:'Join the study',loading:'Checking the invitation…',group:'Group',randomized:'Group allocation will be performed by the server after the protocol-defined stratification fields are answered.',continue:'Continue and allocate',login:'Sign in',register:'Create participant account',joining:'Adding available measurements to your hub…',unavailable:'The study invitation is closed or unavailable.',error:'The study could not be joined.'},
+ru:{title:'Присоединиться к исследованию',loading:'Проверяем ссылку…',group:'Группа',randomized:'Группа будет назначена сервером после заполнения заданных протоколом полей стратификации.',continue:'Продолжить и распределить',login:'Войти',register:'Зарегистрироваться как респондент',joining:'Добавляем доступные измерения в ваш кабинет…',unavailable:'Ссылка исследования закрыта или недоступна.',error:'Не удалось присоединиться к исследованию.'}
 };
 const invitationId=new URLSearchParams(location.search).get('invite')||'';
 const returnTarget=`join-study.html?invite=${encodeURIComponent(invitationId)}`;
@@ -42,12 +43,15 @@ async function loadInvitation(){
  try{
   const response=await fetch(`/api/public/studies/join/${encodeURIComponent(invitationId)}`,{cache:'no-store'});
   const data=await response.json();if(!response.ok)throw new Error(data.error||t.unavailable);
-  invitation=data.invitation;studyTitle.textContent=invitation.study_title;studyDescription.textContent=invitation.study_description||'';studyMeta.textContent=`${t.group}: ${invitation.group_title}`;studyInfo.hidden=false;
+  invitation=data.invitation;studyTitle.textContent=invitation.study_title;studyDescription.textContent=invitation.study_description||'';studyMeta.textContent=invitation.randomized?t.randomized:`${t.group}: ${invitation.group_title}`;studyInfo.hidden=false;
   const principal=await ResearchAuth.verify('respondent');
   if(!principal){status.textContent='';renderAuthLinks();return}
+  if(invitation.randomized&&Array.isArray(invitation.strata)&&invitation.strata.length){renderStrata();status.textContent='';return}
   await joinStudy();
  }catch(error){status.className='error';status.textContent=`${t.error} ${error.message||t.unavailable}`}
 }
+function renderStrata(){strataForm.innerHTML=invitation.strata.map(s=>`<label for="stratum-${escapeHtml(s.code)}">${escapeHtml(s.label)}</label><select id="stratum-${escapeHtml(s.code)}" data-stratum="${escapeHtml(s.code)}"><option value=""></option>${(s.allowed_values||[]).map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join('')}</select>`).join('')+`<button style="margin-top:16px" onclick="joinStudy()">${COPY[lang].continue}</button>`}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function renderAuthLinks(){
  authActions.innerHTML='';
  const login=document.createElement('a');login.className='link';login.textContent=COPY[lang].login;login.href=ResearchAuth.loginUrl('respondent',returnTarget);
@@ -56,7 +60,8 @@ function renderAuthLinks(){
 }
 async function joinStudy(){
  status.className='muted';status.textContent=COPY[lang].joining;authActions.innerHTML='';
- const response=await fetch(`/api/respondent/studies/join/${encodeURIComponent(invitationId)}`,{method:'POST',headers:ResearchAuth.authHeaders('respondent')});
+ const strata={};document.querySelectorAll('[data-stratum]').forEach(select=>{if(select.value)strata[select.dataset.stratum]=select.value});if(invitation.randomized&&Array.isArray(invitation.strata)&&Object.keys(strata).length!==invitation.strata.length){status.className='error';status.textContent=COPY[lang].error;return}
+ const response=await fetch(`/api/respondent/studies/join/${encodeURIComponent(invitationId)}`,{method:'POST',headers:ResearchAuth.authHeaders('respondent',{'Content-Type':'application/json'}),body:JSON.stringify({strata})});
  const data=await response.json();if(!response.ok)throw new Error(data.error||COPY[lang].error);
  location.replace('cabinet.html');
 }

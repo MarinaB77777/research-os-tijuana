@@ -73,9 +73,9 @@
 'use strict';
 const RC=window.ResearchContracts;
 const I18N={
- es:{title:'Research OS · Registro de consentimientos',back:'← Cuestionario',registry:'Base común',new:'＋ Especial',editor:'Documento versionado',name:'Nombre',code:'Código automático',version:'Versión',statusLabel:'Estado',documentLanguage:'Idioma del texto mostrado',text:'Texto exacto del consentimiento',nextVersion:'Nueva versión',save:'Guardar en BD',saved:'Documento guardado.',standard:'Documento estándar del sistema (solo lectura)',emptyActive:'Un documento Active requiere texto en su idioma principal.'},
- en:{title:'Research OS · Consent Registry',back:'← Questionnaire',registry:'Shared registry',new:'＋ Special',editor:'Versioned document',name:'Name',code:'Automatic code',version:'Version',statusLabel:'Status',documentLanguage:'Displayed text language',text:'Exact consent text',nextVersion:'New version',save:'Save to DB',saved:'Document saved.',standard:'System standard document (read only)',emptyActive:'An Active document requires text in its primary language.'},
- ru:{title:'Research OS · Реестр согласий',back:'← К анкете',registry:'Общая база',new:'＋ Особое',editor:'Версионируемый документ',name:'Название',code:'Автоматический код',version:'Версия',statusLabel:'Статус',documentLanguage:'Язык отображаемого текста',text:'Точный текст согласия',nextVersion:'Новая версия',save:'Сохранить в БД',saved:'Документ сохранён.',standard:'Системный стандартный документ (только чтение)',emptyActive:'Для статуса Active нужен текст на основном языке.'}
+ es:{title:'Research OS · Registro de consentimientos',back:'← Cuestionario',registry:'Base común',new:'＋ Especial',editor:'Documento versionado',name:'Nombre',code:'Código automático',version:'Versión',statusLabel:'Estado',documentLanguage:'Idioma del texto mostrado',text:'Texto exacto del consentimiento',nextVersion:'Nueva versión',save:'Guardar en BD',saved:'Documento guardado.',standard:'Consentimiento estándar común. Una versión Active permanece inmutable; cree una nueva versión para cambiarla.',emptyActive:'Un documento Active requiere texto en su idioma principal.'},
+ en:{title:'Research OS · Consent Registry',back:'← Questionnaire',registry:'Shared registry',new:'＋ Special',editor:'Versioned document',name:'Name',code:'Automatic code',version:'Version',statusLabel:'Status',documentLanguage:'Displayed text language',text:'Exact consent text',nextVersion:'New version',save:'Save to DB',saved:'Document saved.',standard:'Shared standard consent. An Active version remains immutable; create a new version to change it.',emptyActive:'An Active document requires text in its primary language.'},
+ ru:{title:'Research OS · Реестр согласий',back:'← К анкете',registry:'Общая база',new:'＋ Особое',editor:'Версионируемый документ',name:'Название',code:'Автоматический код',version:'Версия',statusLabel:'Статус',documentLanguage:'Язык отображаемого текста',text:'Точный текст согласия',nextVersion:'Новая версия',save:'Сохранить в БД',saved:'Документ сохранён.',standard:'Общее стандартное согласие. Версия Active неизменяема; для правки создайте новую версию.',emptyActive:'Для статуса Active нужен текст на основном языке.'}
 };
 let lang='es',catalog=[],textLanguage='es',state;
 function blankState(){return {schema:'research_os.consent_document',schema_version:1,consent_id:RC.createUuid(),version:1,code:'SPECIAL_CONSENT',title:'',consent_kind:'special',status:'draft',primary_language:lang,texts:{es:'',en:'',ru:''},is_system:false,generated_at:RC.nowIso()};}
@@ -85,22 +85,22 @@ function setLanguage(value){
  renderCatalog();
 }
 function setStatus(message,type){const box=document.getElementById('statusBox');box.textContent=message||'';box.className=`status ${type||''}`;}
-function onName(){state.title=document.getElementById('name').value;state.code=RC.normalizeCode(state.title,'SPECIAL_CONSENT');document.getElementById('code').value=state.code;}
-function saveCurrentText(){if(state&&!state.is_system)state.texts[textLanguage]=document.getElementById('documentText').value;}
+function onName(){state.title=document.getElementById('name').value;state.code=state.is_system?'STANDARD_CONSENT':RC.normalizeCode(state.title,'SPECIAL_CONSENT');document.getElementById('code').value=state.code;}
+function saveCurrentText(){if(state)state.texts[textLanguage]=document.getElementById('documentText').value;}
 function readForm(){
- if(!state||state.is_system)return state;
- saveCurrentText();state.title=document.getElementById('name').value.trim();state.code=RC.normalizeCode(state.title,'SPECIAL_CONSENT');state.version=Number(document.getElementById('version').value);state.status=document.getElementById('status').value;state.primary_language=state.primary_language||textLanguage;state.generated_at=RC.nowIso();return state;
+ if(!state)return state;
+ saveCurrentText();state.title=document.getElementById('name').value.trim();state.code=state.is_system?'STANDARD_CONSENT':RC.normalizeCode(state.title,'SPECIAL_CONSENT');state.version=Number(document.getElementById('version').value);state.status=document.getElementById('status').value;state.primary_language=state.primary_language||textLanguage;state.generated_at=RC.nowIso();return state;
 }
 function renderForm(){
- const readonly=Boolean(state.is_system);document.getElementById('name').value=state.title||'';document.getElementById('code').value=state.code||'';document.getElementById('uuid').value=state.consent_id;document.getElementById('version').value=state.version;document.getElementById('status').value=state.status;document.getElementById('textLanguage').value=textLanguage;document.getElementById('documentText').value=state.texts?.[textLanguage]||'';
- ['name','version','status','documentText'].forEach(id=>document.getElementById(id).disabled=readonly);
- document.querySelector('button[onclick="saveConsent()"]').disabled=readonly;
- document.querySelector('button[onclick="createNextVersion()"]').disabled=readonly;
- if(readonly)setStatus(I18N[lang].standard,'');
+ const immutable=state.status==='active';document.getElementById('name').value=state.title||'';document.getElementById('code').value=state.code||'';document.getElementById('uuid').value=state.consent_id;document.getElementById('version').value=state.version;document.getElementById('status').value=state.status;document.getElementById('textLanguage').value=textLanguage;document.getElementById('documentText').value=state.texts?.[textLanguage]||'';
+ ['name','version','status','documentText'].forEach(id=>document.getElementById(id).disabled=immutable);
+ document.querySelector('button[onclick="saveConsent()"]').disabled=immutable;
+ document.querySelector('button[onclick="createNextVersion()"]').disabled=false;
+ if(state.is_system)setStatus(I18N[lang].standard,'');
 }
 function switchTextLanguage(value){saveCurrentText();textLanguage=value;document.getElementById('documentText').value=state.texts?.[textLanguage]||'';}
 function newSpecialConsent(){state=blankState();textLanguage=lang;renderForm();renderCatalog();setStatus('','');}
-function createNextVersion(){if(state.is_system)return;readForm();state={...state,version:Number(state.version)+1,status:'draft',generated_at:RC.nowIso()};renderForm();}
+function createNextVersion(){readForm();const latest=catalog.filter(item=>item.consent_id===state.consent_id).reduce((max,item)=>Math.max(max,Number(item.version)||0),Number(state.version)||0);state={...state,version:latest+1,status:'draft',generated_at:RC.nowIso()};renderForm();}
 function renderCatalog(){
  const list=document.getElementById('consentList');list.innerHTML='';
  catalog.forEach(c=>{const el=document.createElement('div');el.className=`entry${state&&state.consent_id===c.consent_id&&Number(state.version)===Number(c.version)?' active':''}`;el.innerHTML=`<div class="title">${escapeHtml(c.title)}</div><div class="meta">${escapeHtml(c.code)} · v${c.version} · ${escapeHtml(c.status)} · ${escapeHtml(c.consent_kind)}</div>`;el.onclick=()=>openConsent(c);list.appendChild(el);});

@@ -38,18 +38,11 @@ begin
         raise exception 'Current password is incorrect';
     end if;
 
-    if v_account.role = 'researcher' and exists (
-        select 1
-          from public.research_os_entity_ownership owner
-          join public.research_studies study
-            on study.study_id = owner.entity_id
-         where owner.entity_type = 'study'
-           and owner.researcher_account_id = p_account_id
-           and study.status in ('trial', 'active')
-    ) then
-        raise exception 'Active research must be closed or transferred before deleting the researcher account';
-    end if;
-
+    -- Closing a researcher account revokes access only. Scientific entities,
+    -- immutable authorship snapshots, ownership links, studies, sessions,
+    -- consent acceptances and responses remain in place. The owner must remove
+    -- any still-deletable material before closing the account; closure itself
+    -- never cascades, transfers, archives or changes catalog permissions.
     update public.research_os_accounts
        set username = 'deleted_' || replace(account_id::text, '-', ''),
            user_identifier = 'DEL-' || replace(account_id::text, '-', ''),

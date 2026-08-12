@@ -405,7 +405,7 @@
         tool10Title:"Catálogos y Registros",tool10Desc:"Preguntas, cuestionarios y parámetros registrados con versiones y procedencia.",tool10Btn:"Catálogo",tool10Alt:"Parámetros",
         tool11Title:"Registro de Consentimientos",tool11Desc:"Documentos de consentimiento estándar y especiales, versionados por idioma.",tool11Btn:"Abrir Registro",
         tool12Title:"Análisis Científico",tool12Desc:"Formación reproducible de muestras, variables, métodos y resultados estadísticos.",tool12Btn:"Abrir Análisis",
-        questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",catalogManage:"☷ Catálogo",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Disponible con atribución",open:"Abrir",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
+        questionnairesHeader:"📋 Cuestionarios registrados",questionnaireCreate:"＋ Crear cuestionario",catalogManage:"☷ Catálogo",qName:"Cuestionario",qVersion:"Versión",qStatus:"Estado",qAction:"Acción",mine:"Mío",available:"Otro autor",open:"Abrir",metadataOnly:"Contenido cerrado",contentViewable:"Contenido visible",permissionRequired:"Permiso del autor requerido",useInStudy:"Asignar en estudio",emptyBanks:"No hay bancos disponibles.",emptyQuestionnaires:"No hay cuestionarios registrados."
       },
       en: {
         subtitle: "— Researcher Control Panel",
@@ -442,7 +442,7 @@
         tool10Title:"Catalogs and Registries",tool10Desc:"Registered questions, questionnaires, and parameters with versions and provenance.",tool10Btn:"Catalog",tool10Alt:"Parameters",
         tool11Title:"Consent Registry",tool11Desc:"Versioned standard and special consent documents in each language.",tool11Btn:"Open Registry",
         tool12Title:"Scientific Analysis",tool12Desc:"Reproducible sample formation, variables, methods, and statistical results.",tool12Btn:"Open Analysis",
-        questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",catalogManage:"☷ Catalog",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Available with attribution",open:"Open",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
+        questionnairesHeader:"📋 Registered questionnaires",questionnaireCreate:"＋ Create questionnaire",catalogManage:"☷ Catalog",qName:"Questionnaire",qVersion:"Version",qStatus:"Status",qAction:"Action",mine:"Mine",available:"Another author",open:"Open",metadataOnly:"Content closed",contentViewable:"Content visible",permissionRequired:"Author permission required",useInStudy:"Assign in study",emptyBanks:"No question banks are available.",emptyQuestionnaires:"No questionnaires are registered."
       },
       ru: {
         subtitle: "— Панель управления исследователя",
@@ -479,7 +479,7 @@
         tool10Title:"Каталоги и реестры",tool10Desc:"Зарегистрированные вопросы, анкеты и параметры с версиями и происхождением.",tool10Btn:"Каталог",tool10Alt:"Параметры",
         tool11Title:"Реестр согласий",tool11Desc:"Версионируемые стандартные и особые документы согласия на каждом языке.",tool11Btn:"Открыть реестр",
         tool12Title:"Научный анализ",tool12Desc:"Воспроизводимое формирование выборок, переменных, методов и статистических результатов.",tool12Btn:"Открыть анализ",
-        questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",catalogManage:"☷ Каталог",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Доступен с атрибуцией",open:"Открыть",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
+        questionnairesHeader:"📋 Зарегистрированные анкеты",questionnaireCreate:"＋ Создать анкету",catalogManage:"☷ Каталог",qName:"Анкета",qVersion:"Версия",qStatus:"Статус",qAction:"Действие",mine:"Мой",available:"Другой автор",open:"Открыть",metadataOnly:"Содержание закрыто",contentViewable:"Содержание открыто",permissionRequired:"Требуется разрешение автора",useInStudy:"Назначить в исследование",emptyBanks:"Доступных банков нет.",emptyQuestionnaires:"Зарегистрированных анкет нет."
       }
     };
         
@@ -564,9 +564,10 @@
     function openBank(bank){
       const target=bank.owned_by_current_account?'constructor_quest.html':'constructor_survey.html';
       const returnTarget=bank.owned_by_current_account?'&return=survey.html':'';
-      location.href=`${target}?bank=${encodeURIComponent(bank.bank_id)}&version=${encodeURIComponent(bank.version)}${returnTarget}`;
+      const language=bank.source_language||bank.primary_language;
+      location.href=`${target}?bank=${encodeURIComponent(bank.bank_id)}&version=${encodeURIComponent(bank.version)}&lang=${encodeURIComponent(language)}&content_visibility=${encodeURIComponent(bank.content_visibility||'metadata_only')}${returnTarget}`;
     }
-    function openQuestionnaire(questionnaire){location.href=`constructor_survey.html?questionnaire=${encodeURIComponent(questionnaire.questionnaire_id)}&version=${encodeURIComponent(questionnaire.version)}`;}
+    function openQuestionnaire(questionnaire){const language=questionnaire.source_language||questionnaire.primary_language;location.href=`constructor_survey.html?questionnaire=${encodeURIComponent(questionnaire.questionnaire_id)}&version=${encodeURIComponent(questionnaire.version)}&lang=${encodeURIComponent(language)}&content_visibility=${encodeURIComponent(questionnaire.content_visibility||'metadata_only')}`;}
         
     function renderBanksTable() {
       const tbody = document.getElementById('banks-table-body');
@@ -578,15 +579,15 @@
         tbody.innerHTML += `
           <tr>
             <td>📚 ${escapeHtml(bank.title)}<div style="color:var(--text-muted)">${escapeHtml(bank.code)} · v${Number(bank.version)}</div></td>
-            <td>${bank.owned_by_current_account?t.mine:t.available}</td>
-            <td>${escapeHtml(bank.status)}</td>
-            <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" onclick="openBank(registeredBanks[${idx}])">${t.open}</button></td>
+            <td>${bank.owned_by_current_account?t.mine:`${t.available} · ${escapeHtml(bank.owner_identifier||'—')}`}</td>
+            <td>${escapeHtml(bank.status)} · ${bank.content_visible?t.contentViewable:t.metadataOnly}${bank.reuse_permission==='permission_required'?` · ${t.permissionRequired}`:''}</td>
+            <td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" ${bank.content_visible?'': 'disabled'} onclick="openBank(registeredBanks[${idx}])">${bank.content_visible?t.open:t.metadataOnly}</button></td>
           </tr>
         `;
       });
     }
 
-    function renderQuestionnairesTable(){const tbody=document.getElementById('questionnaires-table-body'),t=i18n[currentLang]||i18n.es;tbody.innerHTML='';if(!registeredQuestionnaires.length){tbody.innerHTML=`<tr><td colspan="4" style="color:var(--text-muted)">${t.emptyQuestionnaires}</td></tr>`;return;}registeredQuestionnaires.forEach((q,idx)=>{tbody.innerHTML+=`<tr><td>📋 ${escapeHtml(q.title)}<div style="color:var(--text-muted)">${escapeHtml(q.code)}</div></td><td>v${Number(q.version)}</td><td>${escapeHtml(q.status)}${q.owned_by_current_account?` · ${t.mine}`:''}</td><td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" onclick="openQuestionnaire(registeredQuestionnaires[${idx}])">${t.open}</button> <a class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" href="constructor_study.html">${t.useInStudy}</a></td></tr>`;});}
+    function renderQuestionnairesTable(){const tbody=document.getElementById('questionnaires-table-body'),t=i18n[currentLang]||i18n.es;tbody.innerHTML='';if(!registeredQuestionnaires.length){tbody.innerHTML=`<tr><td colspan="4" style="color:var(--text-muted)">${t.emptyQuestionnaires}</td></tr>`;return;}registeredQuestionnaires.forEach((q,idx)=>{tbody.innerHTML+=`<tr><td>📋 ${escapeHtml(q.title)}<div style="color:var(--text-muted)">${escapeHtml(q.code)} · ${q.owned_by_current_account?t.mine:`${t.available} · ${escapeHtml(q.owner_identifier||'—')}`}</div></td><td>v${Number(q.version)}</td><td>${escapeHtml(q.status)} · ${q.content_visible?t.contentViewable:t.metadataOnly}</td><td><button class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" ${q.content_visible?'':'disabled'} onclick="openQuestionnaire(registeredQuestionnaires[${idx}])">${q.content_visible?t.open:t.metadataOnly}</button>${q.owned_by_current_account?` <a class="btn btn-secondary" style="padding:4px 10px;font-size:.75rem" href="constructor_study.html">${t.useInStudy}</a>`:''}</td></tr>`;});}
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
         
     window.addEventListener('DOMContentLoaded', initSession);

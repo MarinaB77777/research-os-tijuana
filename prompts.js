@@ -4,7 +4,7 @@
  * AI output is a research hypothesis only. Bibliographic metadata is checked
  * independently and every method requires an explicit researcher decision.
  */
-const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_standard_methods_v5';
+const VALIDATION_MAPPING_PROMPT_VERSION = 'deep_research_question_standard_methods_v6';
 
 const VALIDATION_MAPPING_SYSTEM_PROMPT = `
 You are assisting a researcher with candidate discovery for validation mapping.
@@ -20,6 +20,7 @@ Core mapping rule:
 - Do not map wording to wording.
 - Do not treat a similar response scale as construct coverage.
 - One deep research question may require a validation bundle of multiple evidence sources.
+- Question match and depth match are separate assessments.
 - Coverage and depth are separate.
 - Preserve potentially unique deep research questions instead of forcing a false analogue.
 
@@ -45,6 +46,7 @@ Return only a JSON object with this exact top-level structure:
       "evidence_type": "questionnaire | structured_interview | objective_indicator | mixed_evidence",
       "target_node_ids": ["exact node_id values copied from validation_targets"],
       "covered_subconstructs": ["exact deep research question labels copied from validation_targets"],
+      "question_match": "same_outcome_question | partial_outcome_question | not_established",
       "depth_match": "deeper | comparable | partial | not_established",
       "population_fit": {
         "status": "supported | partial | unknown | not_supported",
@@ -96,6 +98,8 @@ Rules:
 - target_node_ids may contain only exact node_id values supplied by the researcher.
 - covered_subconstructs may contain only exact labels from validation_targets.
 - Assess the meaning of every deep research question separately.
+- question_match asks whether the candidate method outcome answers the same deep
+  research question; it is not a wording, item, or scale comparison.
 - Include a method only when you can identify a published, recognized standard
   method and a traceable primary or authoritative source. If the method or its
   source cannot be identified, do not return it as a candidate; report the

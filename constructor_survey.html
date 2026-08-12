@@ -99,6 +99,14 @@
     </div>
     <div class="field"><label data-i18n="description">Propósito / descripción</label><textarea id="description" oninput="saveDraft()"></textarea></div>
     <div class="field">
+      <label data-i18n="contentVisibilityLabel">Просмотр содержания другими исследователями</label>
+      <select id="contentVisibility" onchange="onQuestionnaireContentVisibility(this.value)">
+        <option value="metadata_only" data-i18n="contentMetadataOnly">Показывать карточку, скрывать содержание</option>
+        <option value="content_visible" data-i18n="contentVisible">Разрешить просмотр содержания</option>
+      </select>
+      <div class="meta" data-i18n="contentVisibilityNotice">Карточка анкеты остаётся видимой в каталоге. Настройка открывает только вопросы и маршруты просмотра.</div>
+    </div>
+    <div class="field">
       <label data-i18n="consentMode">Consentimiento informado</label>
       <select id="consentMode" onchange="onConsentMode()">
         <option value="standard"></option>
@@ -161,8 +169,14 @@ const languageTexts={
  ru:{questionnaireLanguage:'Язык анкеты',selectLanguageBank:'Язык изменён. Заново откройте каждый банк, чтобы загрузить принятые вопросы на этом языке.',languageMismatch:'Язык импортированного банка не совпадает с языком анкеты.'}
 };
 Object.keys(languageTexts).forEach(key=>Object.assign(texts[key],languageTexts[key]));
+const accessTexts={
+ es:{contentVisibilityLabel:'Visualización del contenido por otros investigadores',contentMetadataOnly:'Mostrar la ficha y ocultar el contenido',contentVisible:'Permitir ver el contenido',contentVisibilityNotice:'La ficha del cuestionario permanece visible en el catálogo. Esta opción abre solo las preguntas y rutas para su visualización.'},
+ en:{contentVisibilityLabel:'Content viewing by other researchers',contentMetadataOnly:'Show metadata and hide content',contentVisible:'Allow content viewing',contentVisibilityNotice:'The questionnaire metadata card remains visible in the catalog. This setting opens only questions and routes for viewing.'},
+ ru:{contentVisibilityLabel:'Просмотр содержания другими исследователями',contentMetadataOnly:'Показывать карточку, скрывать содержание',contentVisible:'Разрешить просмотр содержания',contentVisibilityNotice:'Карточка анкеты остаётся видимой в каталоге. Настройка открывает только вопросы и маршруты для просмотра.'}
+};
+Object.keys(accessTexts).forEach(key=>Object.assign(texts[key],accessTexts[key]));
 const STANDARD_CONSENT_ID='00000000-0000-4000-8000-000000000001';
-let lang='es', bankCatalog=[], questionnaireCatalog=[], consentCatalog=[], sourceQuestions=[], state,initialBankOpened=false,initialQuestionnaireOpened=false;
+let lang='es', bankCatalog=[], questionnaireCatalog=[], consentCatalog=[], sourceQuestions=[], state,questionnaireContentVisibility='metadata_only',initialBankOpened=false,initialQuestionnaireOpened=false;
 const LANGUAGE_NAMES={'es-MX':'Spanish (Mexico)','en-US':'English (United States)','ru-RU':'Russian'};
 const LANGUAGE_ORDER=['es-MX','en-US','ru-RU'];
 
@@ -223,7 +237,10 @@ function readIdentity(){
  state.completion_policy={minimum_answered_items:Number(document.getElementById('minimumAnswers').value),require_terminal_route:true};
  const mode=document.getElementById('consentMode').value;
  if(mode==='standard'){
-  state.consent={mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};
+  const currentVersion=state.consent?.mode==='standard'?Number(state.consent.consent_version):0;
+  const currentExists=consentCatalog.some(c=>c.is_system&&Number(c.version)===currentVersion);
+  const latestActive=consentCatalog.filter(c=>c.is_system&&c.status==='active').sort((a,b)=>Number(b.version)-Number(a.version))[0];
+  state.consent={mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:currentExists?currentVersion:Number(latestActive?.version||1)};
  }else{
   const value=document.getElementById('specialConsent').value;
   const [consentId,consentVersion]=value.split(':');
@@ -233,6 +250,7 @@ function readIdentity(){
 function renderIdentity(writeValues=true){
  if(writeValues){document.getElementById('name').value=state.name;document.getElementById('version').value=state.version;document.getElementById('status').value=state.status;document.getElementById('description').value=state.description;}
  document.getElementById('questionnaireLanguage').value=state.primary_language||'es-MX';
+ document.getElementById('contentVisibility').value=questionnaireContentVisibility;
  document.getElementById('code').value=state.code;document.getElementById('uuid').value=state.questionnaire_id;document.getElementById('gtr').value=state.global_time_reference;
  state.completion_policy=state.completion_policy||{minimum_answered_items:1,require_terminal_route:true};document.getElementById('minimumAnswers').value=state.completion_policy.minimum_answered_items||1;
  state.consent=state.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};
@@ -242,6 +260,7 @@ function renderIdentity(writeValues=true){
  state.items.forEach((item,i)=>start.add(new Option(`${i+1}. ${item.code}`,item.item_id)));
  state.start_item_id=state.items.some(x=>x.item_id===old)?old:(state.items[0]?.item_id||null);start.value=state.start_item_id||'';
 }
+function onQuestionnaireContentVisibility(value){if(!['metadata_only','content_visible'].includes(value))return;questionnaireContentVisibility=value;saveDraft();}
 function renderConsentSelection(){
  const special=state.consent?.mode==='special',field=document.getElementById('specialConsentField'),select=document.getElementById('specialConsent'),summary=document.getElementById('consentSummary');
  field.classList.toggle('hidden',!special);select.innerHTML='';
@@ -252,7 +271,7 @@ function renderConsentSelection(){
   summary.textContent=selected?`${selected.title} · ${selected.code} v${selected.version} · ${selected.status}`:texts[lang].specialMissing;
   summary.className=`status ${selected?'ok':'error'}`;
  }else{
-  const standard=consentCatalog.find(c=>c.consent_id===STANDARD_CONSENT_ID&&Number(c.version)===1);
+  const standard=consentCatalog.find(c=>c.consent_id===STANDARD_CONSENT_ID&&Number(c.version)===Number(state.consent?.consent_version));
   summary.textContent=`${texts[lang].standardSummary}${standard?` ${standard.title} · v${standard.version} · ${standard.status}`:''}`;
   summary.className='status';
  }
@@ -321,7 +340,7 @@ async function loadQuestionnaireCatalog(){
  try{const visibility=RC.researcherToken()?'all':'active';const data=await RC.requestJson(`/questionnaires?status=${visibility}`);questionnaireCatalog=data.questionnaires||[];const select=document.getElementById('questionnaireSelect');select.innerHTML='';questionnaireCatalog.forEach(q=>select.add(new Option(`${q.title} · ${q.code} v${q.version}`,entityToken(q.questionnaire_id,q.version))));const params=new URLSearchParams(location.search),requested=params.get('questionnaire'),version=params.get('version'),requestedLanguage=params.get('lang'),requestedPackage=params.get('translation_package_id'),requestedTranslationVersion=params.get('translation_version');let exactRequested=false;if(requested&&version&&requestedLanguage){const entityOption=[...select.options].find(candidate=>{const value=parsedToken(candidate.value);return value.id===requested&&Number(value.version)===Number(version);});if(entityOption){select.value=entityOption.value;onSavedQuestionnaireSelection();const target={language:requestedLanguage,isSource:!requestedPackage,translationPackageId:requestedPackage,translationVersion:requestedTranslationVersion?Number(requestedTranslationVersion):null};const languageOption=[...document.getElementById('savedQuestionnaireLanguage').options].find(candidate=>sameExactVariant(parsedToken(candidate.value),target));if(languageOption){document.getElementById('savedQuestionnaireLanguage').value=languageOption.value;exactRequested=true;}}}else onSavedQuestionnaireSelection();if(!initialQuestionnaireOpened&&requested&&exactRequested){initialQuestionnaireOpened=true;await loadSavedQuestionnaire();}else if(requested&&!exactRequested)setStatus('Requested exact Questionnaire variant was not found','error');}catch(e){setStatus(e.message,'error');}
 }
 async function loadConsentCatalog(){
- try{const data=await RC.requestJson('/consents?status=all');consentCatalog=data.consents||[];renderConsentSelection();}catch(e){consentCatalog=[];renderConsentSelection();setStatus(e.message,'error');}
+ try{const data=await RC.requestJson('/consents?status=all');consentCatalog=data.consents||[];if(state?.consent?.mode==='standard'&&!state.name&&!state.items.length){const latest=consentCatalog.filter(c=>c.is_system&&c.status==='active').sort((a,b)=>Number(b.version)-Number(a.version))[0];if(latest)state.consent={mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:Number(latest.version)};}renderConsentSelection();}catch(e){consentCatalog=[];renderConsentSelection();setStatus(e.message,'error');}
 }
 function stateFromQuestionnairePackage(pkg){
  if(pkg?.schema!=='research_os.questionnaire'||pkg?.schema_version!==1||!RC.isUuid(pkg.questionnaire_id)||!Array.isArray(pkg.items)||!pkg.routing?.nodes)throw new Error('research_os.questionnaire schema version 1 is required');
@@ -330,7 +349,7 @@ function stateFromQuestionnairePackage(pkg){
 }
 function applyQuestionnairePackage(pkg){
  const previous=state;
- try{state=stateFromQuestionnairePackage(pkg);renderIdentity();renderItems();buildPackage();RC.writeJson(DRAFT_KEY,state);setStatus(texts[lang].valid,'ok');}
+ try{state=stateFromQuestionnairePackage(pkg);const requestedVisibility=new URLSearchParams(location.search).get('content_visibility');questionnaireContentVisibility=['metadata_only','content_visible'].includes(requestedVisibility)?requestedVisibility:'metadata_only';renderIdentity();renderItems();buildPackage();RC.writeJson(DRAFT_KEY,state);setStatus(texts[lang].valid,'ok');}
  catch(error){state=previous;renderIdentity();renderItems();throw error;}
 }
 async function loadQuestionnaireFile(input){
@@ -370,8 +389,8 @@ function buildPackage(){
 }
 function validateAndShow(){try{buildPackage();setStatus(texts[lang].valid,'ok');}catch(e){setStatus(e.message,'error');}}
 async function exportQuestionnaire(){try{const pkg=buildPackage();await RC.saveTextFile(`${pkg.code.toLowerCase()}_v${pkg.version}.questionnaire.json`,'application/json',JSON.stringify(pkg,null,2),texts[lang].fallback);setStatus(texts[lang].valid,'ok');}catch(e){setStatus(e.message,'error');}}
-async function syncQuestionnaire(){try{const pkg=buildPackage(),token=RC.researcherToken();if(!token)throw new Error('Researcher login is required only for database saving');const result=await RC.requestJson('/questionnaires/save',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify(pkg)});setStatus(`Saved: ${result.questionnaire_id} v${result.questionnaire_version}`,'ok');await loadQuestionnaireCatalog();}catch(e){setStatus(e.message,'error');}}
-function newQuestionnaire(){state=blankState();RC.writeJson(DRAFT_KEY,state);renderIdentity();renderItems();setStatus(texts[lang].draftOnly,'');}
+async function syncQuestionnaire(){try{const pkg=buildPackage(),token=RC.researcherToken();if(!token)throw new Error('Researcher login is required only for database saving');const result=await RC.requestJson('/questionnaires/save',{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify(pkg)});await RC.requestJson(`/questionnaires/${encodeURIComponent(pkg.questionnaire_id)}/content-visibility`,{method:'PATCH',headers:{'Content-Type':'application/json','Authorization':`Bearer ${token}`},body:JSON.stringify({content_visibility:questionnaireContentVisibility})});setStatus(`Saved: ${result.questionnaire_id} v${result.questionnaire_version}`,'ok');await loadQuestionnaireCatalog();}catch(e){setStatus(e.message,'error');}}
+function newQuestionnaire(){state=blankState();questionnaireContentVisibility='metadata_only';RC.writeJson(DRAFT_KEY,state);renderIdentity();renderItems();setStatus(texts[lang].draftOnly,'');}
 function setStatus(message,type){const box=document.getElementById('statusBox');box.textContent=message||'';box.className=`status ${type||''}`;}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 document.addEventListener('DOMContentLoaded',()=>{state=RC.readJson(DRAFT_KEY,null)||blankState();state.consent=state.consent||{mode:'standard',consent_id:STANDARD_CONSENT_ID,consent_version:1};lang=(localStorage.getItem('app_language')||'es').replace('-MX','').replace('-US','');if(!texts[lang])lang='es';setLanguage(lang);renderIdentity();renderItems();consumeImportedBank();Promise.all([loadBankCatalog(),loadQuestionnaireCatalog(),loadConsentCatalog()]);});

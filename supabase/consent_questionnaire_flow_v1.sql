@@ -203,15 +203,17 @@ declare
     v_id uuid;
     v_version integer;
     v_primary_language text;
+    v_latest_version integer;
     v_existing public.consent_documents%rowtype;
 begin
     if consent_data ->> 'schema' is distinct from 'research_os.consent_document'
        or (consent_data ->> 'schema_version')::integer is distinct from 1 then
         raise exception 'research_os.consent_document schema version 1 is required';
     end if;
-    if consent_data ->> 'consent_kind' is distinct from 'special'
-       or coalesce((consent_data ->> 'is_system')::boolean, false) then
-        raise exception 'Researchers may create only special consent documents';
+    if consent_data ->> 'consent_kind' not in ('standard', 'special')
+       or ((consent_data ->> 'consent_kind') = 'standard')
+          is distinct from coalesce((consent_data ->> 'is_system')::boolean, false) then
+        raise exception 'Consent kind and system identity are inconsistent';
     end if;
     if consent_data ->> 'status' not in ('draft', 'trial', 'active')
        or nullif(btrim(consent_data ->> 'title'), '') is null
@@ -231,9 +233,16 @@ begin
         raise exception 'Active consent requires non-empty text in its primary language';
     end if;
 
-    perform public.claim_research_os_entity(
-        'consent_document', v_id, p_researcher_account_id
-    );
+    if consent_data ->> 'consent_kind' = 'standard' then
+        if v_id is distinct from '00000000-0000-4000-8000-000000000001'::uuid
+           or consent_data ->> 'code' is distinct from 'STANDARD_CONSENT' then
+            raise exception 'The standard consent has one permanent identity and code';
+        end if;
+    else
+        perform public.claim_research_os_entity(
+            'consent_document', v_id, p_researcher_account_id
+        );
+    end if;
 
     select * into v_existing
       from public.consent_documents
@@ -248,6 +257,15 @@ begin
         raise exception 'Active consent version is immutable; create a new version';
     end if;
 
+    if not found and consent_data ->> 'consent_kind' = 'standard' then
+        select coalesce(max(c.version), 0) into v_latest_version
+          from public.consent_documents c
+         where c.consent_id = v_id;
+        if v_version is distinct from v_latest_version + 1 then
+            raise exception 'A new standard consent must use the next consecutive version';
+        end if;
+    end if;
+
     insert into public.consent_documents (
         consent_id, version, code, title, consent_kind, status, schema_version,
         primary_language, texts, is_system, package_data, updated_at
@@ -256,12 +274,12 @@ begin
         v_version,
         consent_data ->> 'code',
         consent_data ->> 'title',
-        'special',
+        consent_data ->> 'consent_kind',
         consent_data ->> 'status',
         1,
         v_primary_language,
         consent_data -> 'texts',
-        false,
+        (consent_data ->> 'consent_kind') = 'standard',
         consent_data,
         now()
     )
