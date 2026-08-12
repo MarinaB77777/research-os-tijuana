@@ -69,7 +69,7 @@ test('study save keeps study and questionnaire identities independent', async ()
   const originalFetch = globalThis.fetch;
   let rpcBody;
   globalThis.fetch = researcherAccessThen(async (url, options) => {
-    assert.match(url, /rpc\/save_owned_study_package$/);
+    assert.match(url, /rpc\/save_owned_study_package_with_visibility$/);
     rpcBody = JSON.parse(options.body);
     return jsonFetch({
       study_id: '9e37af31-acde-4ba9-83c3-f7fe77958322',
@@ -117,6 +117,8 @@ test('study save keeps study and questionnaire identities independent', async ()
     await handler(researcherRequest('/studies/save', study), res);
     assert.equal(res.statusCode, 200);
     assert.equal(rpcBody.study_data.study_id, study.study_id);
+    assert.equal(rpcBody.p_catalog_visibility, 'existence_only');
+    assert.equal(Object.hasOwn(rpcBody.study_data, 'catalog_visibility'), false);
     assert.notEqual(
       rpcBody.study_data.study_id,
       rpcBody.study_data.questionnaire_assignments[0].questionnaire_id

@@ -226,6 +226,8 @@ const RESEARCH_OS_CRITICAL_RPC_CONTRACT = Object.freeze([
     'list_question_translation_catalog', 'load_exact_question_translation_package',
     'list_research_catalog', 'manage_research_catalog_item',
     'list_studies_for_account', 'load_study_package_for_account',
+    'save_owned_study_package_with_visibility',
+    'set_owned_study_catalog_visibility',
     'list_respondent_study_sessions', 'load_respondent_collection_session'
 ]);
 const TRANSLATABLE_QUESTION_FIELDS = Object.freeze([
@@ -2343,7 +2345,12 @@ export default async function handler(req, res) {
         }
         const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
         if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
-        const study = req.body;
+        const requestedStudy = req.body;
+        const catalogVisibility = requestedStudy?.catalog_visibility || 'existence_only';
+        const study = requestedStudy && typeof requestedStudy === 'object'
+            ? { ...requestedStudy }
+            : requestedStudy;
+        if (study && typeof study === 'object') delete study.catalog_visibility;
         const groups = study?.groups;
         const timepoints = study?.timepoints;
         const assignments = study?.questionnaire_assignments;
@@ -2358,7 +2365,8 @@ export default async function handler(req, res) {
             !study?.global_time_reference || !study?.generated_at ||
             !Array.isArray(groups) || groups.length === 0 ||
             !Array.isArray(timepoints) || timepoints.length === 0 ||
-            !Array.isArray(assignments)) {
+            !Array.isArray(assignments) ||
+            !['listed', 'existence_only'].includes(catalogVisibility)) {
             return res.status(400).json({
                 ok: false,
                 error: 'Complete research_os.study schema version 1 is required'
@@ -2397,10 +2405,11 @@ export default async function handler(req, res) {
             const saved = await callSupabaseRpc(
                 supabaseUrl,
                 supabaseAdminKey,
-                'save_owned_study_package',
+                'save_owned_study_package_with_visibility',
                 {
                     study_data: study,
-                    p_researcher_account_id: access.principal.account_id
+                    p_researcher_account_id: access.principal.account_id,
+                    p_catalog_visibility: catalogVisibility
                 }
             );
             const result = Array.isArray(saved) ? saved[0] : saved;
@@ -2444,6 +2453,39 @@ export default async function handler(req, res) {
             ok: false,
             error: 'Manual participant enrollment is retired. Respondents join through a study invitation link or QR code.'
         });
+    }
+
+    const studyVisibilityMatch = path.match(/^\/studies\/([0-9a-f-]+)\/visibility$/i);
+    if (studyVisibilityMatch && method === 'PATCH') {
+        if (!supabaseUrl || !supabaseAdminKey) {
+            return res.status(503).json({ ok: false, error: 'Supabase credentials missing' });
+        }
+        const access = await verifyResearcher(req, supabaseUrl, supabaseAdminKey);
+        if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+        const catalogVisibility = req.body?.catalog_visibility;
+        if (!UUID_V4.test(studyVisibilityMatch[1]) ||
+            !['listed', 'existence_only'].includes(catalogVisibility)) {
+            return res.status(400).json({
+                ok: false,
+                error: 'Valid study UUID and catalog visibility are required'
+            });
+        }
+        try {
+            const changed = await callSupabaseRpc(
+                supabaseUrl,
+                supabaseAdminKey,
+                'set_owned_study_catalog_visibility',
+                {
+                    p_study_id: studyVisibilityMatch[1],
+                    p_researcher_account_id: access.principal.account_id,
+                    p_catalog_visibility: catalogVisibility
+                }
+            );
+            const result = Array.isArray(changed) ? changed[0] : changed;
+            return res.status(200).json({ ok: true, ...result });
+        } catch (error) {
+            return res.status(error.status || 500).json({ ok: false, error: error.message });
+        }
     }
 
     const studyLoadMatch = path.match(/^\/studies\/([0-9a-f-]+)$/i);
