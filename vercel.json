@@ -14,6 +14,8 @@
     { "source": "/research-catalog/(.*)", "destination": "/api/index.js" },
     { "source": "/parameters", "destination": "/api/index.js" },
     { "source": "/parameters/(.*)", "destination": "/api/index.js" },
+    { "source": "/studies", "destination": "/api/index.js" },
+    { "source": "/studies/(.*)", "destination": "/api/index.js" },
     { "source": "/questionnaires", "destination": "/api/index.js" },
     { "source": "/questionnaires/(.*)", "destination": "/api/index.js" },
     { "source": "/database/(.*)", "destination": "/api/index.js" }
